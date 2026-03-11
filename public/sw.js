@@ -1,4 +1,4 @@
-const CACHE_NAME = "tech-inventory-v2";
+const CACHE_NAME = "tech-inventory-v3";
 const urlsToCache = ["/manifest.json"];
 
 self.addEventListener("install", (event) => {

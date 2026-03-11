@@ -464,60 +464,6 @@ select {
   position: relative;
 }
 
-/* Sticky columns on mobile for inventory table */
-@media (max-width: 768px) {
-  .table-container table thead th:first-child,
-  .table-container table tbody td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 10;
-    background: #111827;
-  }
-
-  .table-container table thead th:first-child {
-    background: #0f1629;
-    z-index: 11;
-  }
-
-  .table-container table thead th:last-child,
-  .table-container table tbody td:last-child {
-    position: sticky;
-    right: 0;
-    z-index: 10;
-    background: #111827;
-  }
-
-  .table-container table thead th:last-child {
-    background: #0f1629;
-    z-index: 11;
-  }
-
-  /* Add shadow to indicate scrollable content */
-  .table-container table thead th:first-child::after,
-  .table-container table tbody td:first-child::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: -8px;
-    bottom: 0;
-    width: 8px;
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.1), transparent);
-    pointer-events: none;
-  }
-
-  .table-container table thead th:last-child::before,
-  .table-container table tbody td:last-child::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: -8px;
-    bottom: 0;
-    width: 8px;
-    background: linear-gradient(to left, rgba(0, 0, 0, 0.1), transparent);
-    pointer-events: none;
-  }
-}
-
 table {
   width: 100%;
   border-collapse: collapse;
@@ -1211,40 +1157,289 @@ tr:last-child td {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
+  /* Tighter page padding */
   .page-container {
-    padding: 16px;
+    padding: 12px;
+  }
+
+  /* Smaller page header */
+  .page-header h1 {
+    font-size: 20px;
+  }
+  .page-header p {
+    font-size: 12px;
+  }
+
+  /* Navbar compact */
+  .navbar {
+    padding: 0 12px;
   }
   .navbar-links {
     display: none;
   }
   .navbar-inner {
-    height: 56px;
+    height: 52px;
   }
+  .navbar-brand {
+    font-size: 15px;
+    gap: 6px;
+  }
+  .navbar-brand svg,
+  .navbar-brand .brand-icon {
+    font-size: 18px;
+  }
+  .user-menu {
+    font-size: 11px;
+    gap: 5px;
+    padding: 4px 8px;
+  }
+  .user-avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+  }
+  .logout-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  .notification-btn {
+    font-size: 17px;
+    padding: 6px;
+  }
+  .notification-badge {
+    width: 15px;
+    height: 15px;
+    font-size: 9px;
+  }
+
+  /* Stats grid */
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
   .stat-card {
-    padding: 14px;
+    padding: 12px;
   }
   .stat-card .stat-value {
-    font-size: 24px;
+    font-size: 22px;
   }
+  .stat-card .stat-label {
+    font-size: 11px;
+  }
+  .stat-card .stat-icon {
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+
+  /* Cart full width on mobile */
   .cart-panel {
     width: 100vw;
   }
+
+  /* Search bar stacked */
   .search-bar {
     flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
   }
   .search-input-wrap {
     min-width: 100%;
   }
-  .gantt-label {
-    width: 120px;
-    min-width: 120px;
+  .search-input-wrap input {
+    font-size: 13px;
+    padding: 8px 12px 8px 34px;
+  }
+  .search-input-wrap .search-icon {
+    font-size: 14px;
+    left: 10px;
+  }
+  .filter-select {
+    min-width: 100%;
+    font-size: 13px;
+    padding: 8px 30px 8px 10px;
+  }
+
+  /* Tabs smaller */
+  .tabs {
+    margin-bottom: 14px;
+    padding: 3px;
+    gap: 1px;
+  }
+  .tab {
+    padding: 7px 10px;
     font-size: 11px;
   }
 
+  /* ===== Table Mobile Optimizations ===== */
+  table {
+    font-size: 12px;
+  }
+  th {
+    padding: 8px 8px;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+  }
+  td {
+    padding: 8px 8px;
+    font-size: 12px;
+  }
+
+  /* Sticky first and last columns */
+  .table-container table thead th:first-child,
+  .table-container table tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background: #111827;
+    max-width: 130px;
+  }
+  .table-container table thead th:first-child {
+    background: #0f1629;
+    z-index: 11;
+  }
+  .table-container table thead th:last-child,
+  .table-container table tbody td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 10;
+    background: #111827;
+  }
+  .table-container table thead th:last-child {
+    background: #0f1629;
+    z-index: 11;
+  }
+
+  /* Shadow indicators for scrollable content */
+  .table-container table thead th:first-child::after,
+  .table-container table tbody td:first-child::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -8px;
+    bottom: 0;
+    width: 8px;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.15), transparent);
+    pointer-events: none;
+  }
+  .table-container table thead th:last-child::before,
+  .table-container table tbody td:last-child::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -8px;
+    bottom: 0;
+    width: 8px;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.15), transparent);
+    pointer-events: none;
+  }
+
+  /* Smaller buttons on mobile */
+  .btn {
+    padding: 7px 12px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+    gap: 3px;
+  }
+
+  /* Smaller badges on mobile */
+  .badge {
+    padding: 2px 7px;
+    font-size: 10px;
+  }
+
+  /* Type badge compact */
+  .type-badge {
+    font-size: 10px !important;
+    padding: 2px 7px !important;
+  }
+
+  /* Gantt chart compact */
+  .gantt-label {
+    width: 100px;
+    min-width: 100px;
+    font-size: 10px;
+  }
+
+  /* Loan cards compact */
+  .loan-card {
+    padding: 14px;
+  }
+  .loan-card-header {
+    margin-bottom: 8px;
+  }
+  .loan-item-chip {
+    font-size: 10px;
+    padding: 2px 7px;
+  }
+  .loan-card-meta {
+    font-size: 11px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* Notification dropdown mobile */
+  .notification-dropdown {
+    width: 300px;
+    right: -40px;
+  }
+  .notification-item p {
+    font-size: 12px;
+  }
+  .notification-item .notif-time {
+    font-size: 10px;
+  }
+
+  /* Modal mobile */
+  .modal-overlay {
+    padding: 12px;
+  }
+  .modal-header {
+    padding: 14px 16px;
+  }
+  .modal-header h2 {
+    font-size: 16px;
+  }
+  .modal-body {
+    padding: 16px;
+  }
+  .modal-footer {
+    padding: 12px 16px;
+  }
+
+  /* Input sizing */
+  .input,
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="date"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  .input-group label {
+    font-size: 12px;
+  }
+
+  /* Cart FAB above bottom nav */
+  .cart-fab {
+    bottom: 72px;
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+  .cart-fab .cart-count {
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+  }
+
+  /* Mobile bottom nav */
   .mobile-nav {
     position: fixed;
     bottom: 0;
@@ -1255,23 +1450,66 @@ tr:last-child td {
     border-top: 1px solid var(--border);
     display: flex;
     justify-content: space-around;
-    padding: 8px 0;
+    padding: 6px 0 env(safe-area-inset-bottom, 6px);
     z-index: 100;
   }
 
   .mobile-nav .nav-link {
     flex-direction: column;
-    font-size: 10px;
+    font-size: 9px;
     gap: 2px;
-    padding: 6px 12px;
+    padding: 4px 10px;
   }
 
   .mobile-nav .nav-link svg {
-    font-size: 20px;
+    font-size: 18px;
   }
 
-  .cart-fab {
-    bottom: 80px;
+  /* Auth pages compact */
+  .auth-card {
+    padding: 28px 20px;
+  }
+  .auth-card h1 {
+    font-size: 20px;
+  }
+  .auth-card .auth-subtitle {
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  /* Empty state compact */
+  .empty-state {
+    padding: 40px 16px;
+  }
+  .empty-state .empty-icon {
+    font-size: 36px;
+  }
+  .empty-state h3 {
+    font-size: 15px;
+  }
+
+  /* Cart panel mobile tweaks */
+  .cart-header {
+    padding: 14px 16px;
+  }
+  .cart-header h2 {
+    font-size: 16px;
+  }
+  .cart-items {
+    padding: 12px;
+  }
+  .cart-item {
+    padding: 10px;
+    gap: 8px;
+  }
+  .cart-item-info h4 {
+    font-size: 12px;
+  }
+  .cart-item-info p {
+    font-size: 10px;
+  }
+  .cart-footer {
+    padding: 12px 16px;
   }
 }
 
