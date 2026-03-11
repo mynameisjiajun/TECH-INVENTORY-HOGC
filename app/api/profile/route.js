@@ -66,7 +66,7 @@ export async function POST(request) {
       .get(user.id);
     if (!dbUser)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
-    const valid = verifyPassword(current_password, dbUser.password_hash);
+    const valid = await verifyPassword(current_password, dbUser.password_hash);
     if (!valid) {
       return NextResponse.json(
         { error: "Current password is incorrect" },
@@ -74,7 +74,7 @@ export async function POST(request) {
       );
     }
 
-    const newHash = hashPassword(new_password);
+    const newHash = await hashPassword(new_password);
     db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
       newHash,
       user.id,
