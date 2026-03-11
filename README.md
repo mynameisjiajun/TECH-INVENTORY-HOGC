@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tech Inventory - HOGC
 
-## Getting Started
+Equipment inventory and loan management system for church tech ministry.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Browse inventory across Storage Spare, Deployed, and summary tabs
+- Request temporary or permanent equipment loans via a cart system
+- Admin panel for loan approvals, user management, and audit logging
+- Two-way Google Sheets sync (reads from and writes back to Sheets)
+- Permanent loans auto-deploy items to the Deployed tab + Google Sheets
+- Real-time notifications for loan status updates and overdue warnings
+- PWA support with offline fallback
+- Role-based access control (admin / user) with invite code registration
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech Stack
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+- **Frontend**: Next.js 16 (App Router), React 19
+- **Database**: SQLite via better-sqlite3
+- **Auth**: JWT with httpOnly cookies
+- **Sheets**: Google Sheets API via googleapis
+- **Styling**: Custom CSS (dark theme)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup
 
-## Learn More
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+2. Create `.env.local` with your credentials:
+   ```
+   JWT_SECRET=<random-64-char-hex>
+   INVITE_CODE=<registration-invite-code>
+   GOOGLE_SERVICE_ACCOUNT_EMAIL=<service-account-email>
+   GOOGLE_PRIVATE_KEY="<service-account-private-key>"
+   GOOGLE_SHEETS_ID=<spreadsheet-id>
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. Seed the database from Google Sheets:
+   ```bash
+   npm run seed
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+4. Start the dev server:
+   ```bash
+   npm run dev
+   ```
 
-## Deploy on Vercel
+5. Open [http://localhost:3000](http://localhost:3000) and log in with the seeded admin account.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run start` | Start production server |
+| `npm run seed` | Seed database from Google Sheets |
