@@ -1247,11 +1247,11 @@ tr:last-child td {
   }
   .search-input-wrap input {
     font-size: 13px;
-    padding: 8px 12px 8px 34px;
+    padding: 8px 12px 8px 36px;
   }
   .search-input-wrap .search-icon {
     font-size: 14px;
-    left: 10px;
+    left: 12px;
   }
   .filter-select {
     min-width: 100%;

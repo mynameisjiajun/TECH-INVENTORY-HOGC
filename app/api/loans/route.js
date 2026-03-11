@@ -130,9 +130,22 @@ export async function POST(request) {
         { status: 400 },
       );
     }
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(start_date) || isNaN(Date.parse(start_date))) {
+      return NextResponse.json(
+        { error: "Invalid start date format" },
+        { status: 400 },
+      );
+    }
     if (loan_type === "temporary" && !end_date) {
       return NextResponse.json(
         { error: "End date is required for temporary loans" },
+        { status: 400 },
+      );
+    }
+    if (end_date && (!dateRegex.test(end_date) || isNaN(Date.parse(end_date)))) {
+      return NextResponse.json(
+        { error: "Invalid end date format" },
         { status: 400 },
       );
     }

@@ -39,6 +39,12 @@ export async function POST(request) {
       );
     }
     const cleanEmail = email ? email.trim() : null;
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return NextResponse.json(
+        { error: "Invalid email format" },
+        { status: 400 },
+      );
+    }
     db.prepare("UPDATE users SET display_name = ?, email = ? WHERE id = ?").run(
       display_name.trim(),
       cleanEmail,

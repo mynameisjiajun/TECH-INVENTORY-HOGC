@@ -1,16 +1,20 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { RiServerLine, RiKeyLine } from 'react-icons/ri';
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, user } = useAuth();
   const router = useRouter();
   const [formData, setFormData] = useState({ username: '', password: '', confirm_password: '', display_name: '', invite_code: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user) router.replace('/inventory');
+  }, [user, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
