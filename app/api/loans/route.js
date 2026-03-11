@@ -1,4 +1,4 @@
-import { getDb, waitForSync } from "@/lib/db";
+import { getDb, waitForSync, ensureUserExists } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
@@ -10,6 +10,7 @@ export async function GET(request) {
 
   await waitForSync();
   const db = getDb();
+  ensureUserExists(user);
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") || "";
   const view = searchParams.get("view") || "my"; // 'my' or 'all' (admin)
@@ -144,6 +145,7 @@ export async function POST(request) {
 
     await waitForSync();
     const db = getDb();
+    ensureUserExists(user);
 
     const createLoanTx = db.transaction(() => {
       for (const item of items) {
