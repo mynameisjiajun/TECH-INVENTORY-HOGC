@@ -6,11 +6,11 @@ import { useEffect, useState, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import { TypeBadge } from "@/lib/typeColors";
-import { RiSearchLine, RiAddLine, RiRefreshLine } from "react-icons/ri";
+import { RiSearchLine, RiAddLine, RiRefreshLine, RiBookmarkLine } from "react-icons/ri";
 
 export default function InventoryPage() {
   const { user, loading } = useAuth();
-  const { addItem } = useCart();
+  const { addItem, updateQuantity } = useCart();
   const router = useRouter();
   const [tab, setTab] = useState("storage");
   const [items, setItems] = useState([]);
@@ -21,6 +21,9 @@ export default function InventoryPage() {
   const [fetching, setFetching] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+  const [templates, setTemplates] = useState([]);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [overdueCount, setOverdueCount] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -57,6 +60,27 @@ export default function InventoryPage() {
     const timer = setTimeout(fetchItems, 300);
     return () => clearTimeout(timer);
   }, [fetchItems]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/admin/templates').then(r => r.ok ? r.json() : null).then(d => { if (d) setTemplates(d.templates); }).catch(() => {});
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(d => { if (d?.overdueCount) setOverdueCount(d.overdueCount); }).catch(() => {});
+  }, [user]);
+
+  const handleTemplateRequest = useCallback((template) => {
+    let added = 0;
+    template.items.forEach(ti => {
+      const match = items.find(i => i.id === ti.item_id);
+      if (match && match.current > 0) {
+        addItem(match); // adds with qty 1
+        const qty = Math.min(ti.quantity, match.current);
+        if (qty > 1) updateQuantity(match.id, qty);
+        added++;
+      }
+    });
+    setShowTemplates(false);
+    if (added === 0) setError('None of the template items are currently in stock');
+  }, [items, addItem, updateQuantity]);
 
   const handleRefresh = useCallback(async () => {
     setSyncing(true);
@@ -100,10 +124,59 @@ export default function InventoryPage() {
             <h1>Inventory</h1>
             <p>Browse and manage tech equipment</p>
           </div>
-          <button className="btn btn-sm btn-outline" onClick={handleRefresh} disabled={syncing} title="Sync from Google Sheets" style={{ marginTop: 8 }}>
-            <RiRefreshLine style={{ fontSize: 16, animation: syncing ? 'spin 1s linear infinite' : 'none' }} /> {syncing ? 'Syncing...' : 'Refresh'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            {templates.length > 0 && (
+              <button className="btn btn-sm btn-outline" onClick={() => setShowTemplates(p => !p)} title="Quick request from templates">
+                <RiBookmarkLine /> Templates
+              </button>
+            )}
+            <button className="btn btn-sm btn-outline" onClick={handleRefresh} disabled={syncing} title="Sync from Google Sheets">
+              <RiRefreshLine style={{ fontSize: 16, animation: syncing ? 'spin 1s linear infinite' : 'none' }} /> {syncing ? 'Syncing...' : 'Refresh'}
+            </button>
+          </div>
         </div>
+
+        {/* Template quick-request panel */}
+        {showTemplates && templates.length > 0 && (
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <RiBookmarkLine /> Quick Request Templates
+              </h3>
+              <button onClick={() => setShowTemplates(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {templates.map(t => (
+                <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'rgba(99,102,241,0.05)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                    {t.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{t.description}</div>}
+                    <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {t.items.map(item => (
+                        <span key={item.item_id} className="loan-item-chip" style={{ fontSize: 11 }}>{item.item_name} × {item.quantity}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <button className="btn btn-sm btn-primary" style={{ flexShrink: 0, marginLeft: 12 }}
+                    onClick={() => { setTab('storage'); handleTemplateRequest(t); }}>
+                    <RiAddLine /> Add to Cart
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Overdue banner */}
+        {overdueCount > 0 && (
+          <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ color: 'var(--error)', fontWeight: 700 }}>🚨 You have {overdueCount} overdue loan{overdueCount > 1 ? 's' : ''}! Please return items as soon as possible.</span>
+            <button className="btn btn-sm" style={{ borderColor: 'var(--error)', color: 'var(--error)', background: 'none', flexShrink: 0 }}
+              onClick={() => router.push('/loans')}>
+              View Loans
+            </button>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="tabs">
@@ -203,50 +276,26 @@ export default function InventoryPage() {
                       return (
                         <tr key={item.id}>
                           <td style={{ fontWeight: 500 }}>{item.item}</td>
-                          <td>
-                            <TypeBadge type={item.type} />
-                          </td>
+                          <td><TypeBadge type={item.type} /></td>
                           <td>{item.brand}</td>
                           <td>{item.model}</td>
                           <td>{item.quantity_spare}</td>
                           <td>
-                            <span
-                              style={{
-                                fontWeight: 600,
-                                color:
-                                  item.current <= 2
-                                    ? "var(--error)"
-                                    : item.current <= 5
-                                      ? "var(--warning)"
-                                      : "var(--success)",
-                              }}
-                            >
+                            <span style={{
+                              fontWeight: 600,
+                              color: item.current <= 2 ? "var(--error)" : item.current <= 5 ? "var(--warning)" : "var(--success)",
+                            }}>
                               {item.current}
                             </span>
                           </td>
                           <td>
                             {loaned > 0 ? (
-                              <span style={{ color: "var(--warning)" }}>
-                                {loaned}
-                              </span>
-                            ) : (
-                              "0"
-                            )}
+                              <span style={{ color: "var(--warning)" }}>{loaned}</span>
+                            ) : "0"}
                           </td>
-                          <td
-                            style={{
-                              fontSize: 12,
-                              color: "var(--text-secondary)",
-                            }}
-                          >
-                            {item.location}
-                          </td>
+                          <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{item.location}</td>
                           <td>
-                            {item.status && (
-                              <span className="badge badge-success">
-                                {item.status}
-                              </span>
-                            )}
+                            {item.status && <span className="badge badge-success">{item.status}</span>}
                           </td>
                           <td>
                             {item.current > 0 && (
@@ -294,27 +343,16 @@ export default function InventoryPage() {
                     {items.map((item) => (
                       <tr key={item.id}>
                         <td style={{ fontWeight: 500 }}>{item.item}</td>
-                        <td>
-                          <TypeBadge type={item.type} />
-                        </td>
+                        <td><TypeBadge type={item.type} /></td>
                         <td>{item.brand}</td>
                         <td>{item.model}</td>
                         <td>{item.quantity}</td>
                         <td>{item.location}</td>
                         <td>{item.allocation}</td>
                         <td>
-                          <span className="badge badge-success">
-                            {item.status}
-                          </span>
+                          {item.status && <span className="badge badge-success">{item.status}</span>}
                         </td>
-                        <td
-                          style={{
-                            fontSize: 12,
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          {item.remarks}
-                        </td>
+                        <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{item.remarks}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -345,21 +383,8 @@ export default function InventoryPage() {
                       <tr key={item.type}>
                         <td style={{ fontWeight: 600 }}>{item.type}</td>
                         <td>{item.total_spare}</td>
-                        <td
-                          style={{ color: "var(--success)", fontWeight: 600 }}
-                        >
-                          {item.total_current}
-                        </td>
-                        <td
-                          style={{
-                            color:
-                              item.total_loaned > 0
-                                ? "var(--warning)"
-                                : "var(--text-muted)",
-                          }}
-                        >
-                          {item.total_loaned}
-                        </td>
+                        <td style={{ color: "var(--success)", fontWeight: 600 }}>{item.total_current}</td>
+                        <td style={{ color: item.total_loaned > 0 ? "var(--warning)" : "var(--text-muted)" }}>{item.total_loaned}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -386,27 +411,12 @@ export default function InventoryPage() {
                     {items.map((item, i) => (
                       <tr key={`${item.item}-${item.type}-${item.brand}-${i}`}>
                         <td style={{ fontWeight: 500 }}>{item.item}</td>
-                        <td>
-                          <TypeBadge type={item.type} />
-                        </td>
+                        <td><TypeBadge type={item.type} /></td>
                         <td>{item.brand}</td>
                         <td>{item.model}</td>
                         <td>{item.quantity_spare}</td>
-                        <td
-                          style={{ color: "var(--success)", fontWeight: 600 }}
-                        >
-                          {item.current}
-                        </td>
-                        <td
-                          style={{
-                            color:
-                              item.loaned_out > 0
-                                ? "var(--warning)"
-                                : "var(--text-muted)",
-                          }}
-                        >
-                          {item.loaned_out}
-                        </td>
+                        <td style={{ color: "var(--success)", fontWeight: 600 }}>{item.current}</td>
+                        <td style={{ color: item.loaned_out > 0 ? "var(--warning)" : "var(--text-muted)" }}>{item.loaned_out}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -426,44 +436,23 @@ export default function InventoryPage() {
                       <th>Total</th>
                       <th>Available</th>
                       <th>Location</th>
-                      <th>Status</th>
+                      <th>Remarks</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((item, i) => (
                       <tr key={`${item.id}-${i}`}>
                         <td style={{ fontWeight: 500 }}>{item.item}</td>
-                        <td>
-                          <TypeBadge type={item.type} />
-                        </td>
+                        <td><TypeBadge type={item.type} /></td>
                         <td>{item.brand}</td>
                         <td>{item.quantity_spare}</td>
                         <td>
-                          <span
-                            style={{
-                              fontWeight: 700,
-                              color:
-                                item.current === 0
-                                  ? "var(--error)"
-                                  : "var(--warning)",
-                            }}
-                          >
+                          <span style={{ fontWeight: 700, color: item.current === 0 ? "var(--error)" : "var(--warning)" }}>
                             {item.current} {item.current === 0 ? "(OUT!)" : ""}
                           </span>
                         </td>
                         <td>{item.location}</td>
-                        <td>
-                          {item.remarks && (
-                            <span
-                              style={{
-                                fontSize: 12,
-                                color: "var(--text-muted)",
-                              }}
-                            >
-                              {item.remarks}
-                            </span>
-                          )}
-                        </td>
+                        <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{item.remarks}</td>
                       </tr>
                     ))}
                   </tbody>

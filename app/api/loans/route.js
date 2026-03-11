@@ -11,6 +11,9 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status') || '';
   const view = searchParams.get('view') || 'my'; // 'my' or 'all' (admin)
+  const search = searchParams.get('search') || '';
+  const dateFrom = searchParams.get('date_from') || '';
+  const dateTo = searchParams.get('date_to') || '';
 
   let query = `
     SELECT lr.*, u.display_name as requester_name, u.username as requester_username
@@ -28,9 +31,17 @@ export async function GET(request) {
     query += ' AND lr.status = ?';
     params.push(status);
   }
+  if (dateFrom) {
+    query += ' AND lr.start_date >= ?';
+    params.push(dateFrom);
+  }
+  if (dateTo) {
+    query += ' AND lr.start_date <= ?';
+    params.push(dateTo);
+  }
   query += ' ORDER BY lr.created_at DESC';
 
-  const loans = db.prepare(query).all(...params);
+  let loans = db.prepare(query).all(...params);
 
   // Get items for each loan
   for (const loan of loans) {
@@ -40,6 +51,15 @@ export async function GET(request) {
       JOIN storage_items si ON li.item_id = si.id
       WHERE li.loan_request_id = ?
     `).all(loan.id);
+  }
+
+  // Filter by item name or purpose in JS
+  if (search) {
+    const s = search.toLowerCase();
+    loans = loans.filter(loan =>
+      loan.purpose.toLowerCase().includes(s) ||
+      loan.items.some(item => item.item.toLowerCase().includes(s))
+    );
   }
 
   return NextResponse.json({ loans });

@@ -77,6 +77,11 @@ export async function POST(request) {
     const target = db.prepare('SELECT id, username FROM users WHERE id = ?').get(user_id);
     if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
+    // Delete related records first to avoid FK constraint violations
+    db.prepare('DELETE FROM notifications WHERE user_id = ?').run(user_id);
+    db.prepare('DELETE FROM loan_items WHERE loan_request_id IN (SELECT id FROM loan_requests WHERE user_id = ?)').run(user_id);
+    db.prepare('DELETE FROM loan_requests WHERE user_id = ?').run(user_id);
+    db.prepare('DELETE FROM audit_log WHERE user_id = ?').run(user_id);
     db.prepare('DELETE FROM users WHERE id = ?').run(user_id);
 
     db.prepare('INSERT INTO audit_log (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)').run(

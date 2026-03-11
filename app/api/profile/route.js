@@ -8,7 +8,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = getDb();
-  const profile = db.prepare('SELECT id, username, display_name, role, created_at FROM users WHERE id = ?').get(user.id);
+  const profile = db.prepare('SELECT id, username, display_name, role, email, created_at FROM users WHERE id = ?').get(user.id);
   if (!profile) return NextResponse.json({ error: 'User not found' }, { status: 404 });
   return NextResponse.json({ profile });
 }
@@ -19,13 +19,14 @@ export async function POST(request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = getDb();
-  const { action, display_name, current_password, new_password } = await request.json();
+  const { action, display_name, email, current_password, new_password } = await request.json();
 
   if (action === 'update_profile') {
     if (!display_name || display_name.trim().length < 2) {
       return NextResponse.json({ error: 'Display name must be at least 2 characters' }, { status: 400 });
     }
-    db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(display_name.trim(), user.id);
+    const cleanEmail = email ? email.trim() : null;
+    db.prepare('UPDATE users SET display_name = ?, email = ? WHERE id = ?').run(display_name.trim(), cleanEmail, user.id);
     return NextResponse.json({ message: 'Profile updated!' });
   }
 

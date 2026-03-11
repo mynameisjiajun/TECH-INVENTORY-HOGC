@@ -31,7 +31,7 @@ export default function RegisterPage() {
 
     const result = await register(formData.username, formData.password, formData.display_name, formData.invite_code);
     if (result.ok) {
-      router.push('/dashboard');
+      router.push('/inventory');
     } else {
       setError(result.error);
     }

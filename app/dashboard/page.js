@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
 import CartPanel from '@/components/CartPanel';
-import { RiArchiveLine, RiHandHeartLine, RiAlertLine, RiTimeLine, RiArrowLeftLine, RiArrowRightLine, RiCheckboxCircleLine, RiErrorWarningLine, RiCalendarLine, RiCloseLine } from 'react-icons/ri';
+import { RiArchiveLine, RiHandHeartLine, RiAlertLine, RiTimeLine, RiArrowLeftLine, RiArrowRightLine, RiCheckboxCircleLine, RiErrorWarningLine, RiCalendarLine, RiCloseLine, RiDeleteBinLine, RiCheckLine, RiArrowGoBackLine } from 'react-icons/ri';
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -19,36 +19,97 @@ export default function DashboardPage() {
   });
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [error, setError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // User-only state
+  const [myLoans, setMyLoans] = useState([]);
+  const [myFetching, setMyFetching] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [user, loading, router]);
 
+  // Admin: fetch full dashboard
+  const fetchDashboard = async () => {
+    setError('');
+    try {
+      const res = await fetch('/api/admin');
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data.stats);
+        setActiveLoans(data.activeLoans);
+        setOverdueCount(data.overdueCount || 0);
+        setDueSoonCount(data.dueSoonCount || 0);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || `Failed to load dashboard data (${res.status})`);
+      }
+    } catch (err) {
+      setError('Network error — could not load dashboard data');
+    }
+  };
+
+  // Normal user: fetch own loans
+  const fetchMyLoans = async () => {
+    setMyFetching(true);
+    setError('');
+    try {
+      const res = await fetch('/api/loans');
+      if (res.ok) {
+        const data = await res.json();
+        setMyLoans(data.loans || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed to load your loans');
+      }
+    } catch {
+      setError('Network error — could not load your loans');
+    } finally {
+      setMyFetching(false);
+    }
+  };
+
   useEffect(() => {
     if (!user) return;
-    const fetchData = async () => {
-      setError('');
-      try {
-        const res = await fetch('/api/admin');
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data.stats);
-          setActiveLoans(data.activeLoans);
-          setOverdueCount(data.overdueCount || 0);
-          setDueSoonCount(data.dueSoonCount || 0);
-        } else {
-          const data = await res.json().catch(() => ({}));
-          setError(data.error || `Failed to load dashboard data (${res.status})`);
-        }
-      } catch (err) {
-        setError('Network error — could not load dashboard data');
-      }
-    };
-    fetchData();
+    if (user.role === 'admin') {
+      fetchDashboard();
+    } else {
+      fetchMyLoans();
+    }
   }, [user]);
 
-  // Build calendar grid with continuous bars
+  const handleDeleteLoan = async (loanId) => {
+    if (!confirm('Delete this loan? Stock will be restored if it was approved.')) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loan_id: loanId, action: 'delete' }),
+      });
+      if (res.ok) {
+        setSelectedLoan(null);
+        fetchDashboard();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed to delete loan');
+      }
+    } catch {
+      setError('Network error — could not delete loan');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const isAdmin = user?.role === 'admin';
+
+  // Build calendar grid with continuous bars (all users)
   const calendarData = useMemo(() => {
+    // Admins see all active loans; normal users see only their own (non-permanent)
+    const loansForCalendar = isAdmin
+      ? activeLoans.filter(l => l.loan_type !== 'permanent')
+      : myLoans.filter(l => l.loan_type !== 'permanent' && ['approved', 'pending'].includes(l.status));
+
     const year = calendarMonth.getFullYear();
     const month = calendarMonth.getMonth();
     const firstDay = new Date(year, month, 1);
@@ -58,7 +119,6 @@ export default function DashboardPage() {
     const totalWeeks = Math.ceil(totalCells / 7);
     const totalDays = totalWeeks * 7;
 
-    // Build flat array of dates
     const cells = [];
     for (let i = 0; i < totalDays; i++) {
       const dayNum = i - startOffset + 1;
@@ -69,25 +129,22 @@ export default function DashboardPage() {
       }
     }
 
-    // Split into weeks
     const weeks = [];
     for (let w = 0; w < totalWeeks; w++) {
       weeks.push(cells.slice(w * 7, (w + 1) * 7));
     }
 
-    // Build loan bars that span across the calendar as continuous blocks
     const loanBars = [];
-    activeLoans.forEach(loan => {
+    loansForCalendar.forEach(loan => {
       const start = new Date(loan.start_date);
-      const end = loan.end_date ? new Date(loan.end_date) : new Date(year, month + 1, 0); // end of month if ongoing
+      const end = loan.end_date ? new Date(loan.end_date) : new Date(year, month + 1, 0);
 
-      // Clamp to this month
       const monthStart = firstDay;
       const monthEnd = lastDay;
       const clampedStart = start < monthStart ? monthStart : start;
       const clampedEnd = end > monthEnd ? monthEnd : end;
 
-      if (clampedStart > monthEnd || clampedEnd < monthStart) return; // not visible
+      if (clampedStart > monthEnd || clampedEnd < monthStart) return;
 
       const startDay = clampedStart.getDate();
       const endDay = clampedEnd.getDate();
@@ -96,7 +153,6 @@ export default function DashboardPage() {
 
       const isOverdue = loan.status === 'approved' && loan.end_date && new Date(loan.end_date) < new Date();
 
-      // Break into week segments
       const startWeek = Math.floor(startCell / 7);
       const endWeek = Math.floor(endCell / 7);
 
@@ -119,7 +175,7 @@ export default function DashboardPage() {
     });
 
     return { weeks, loanBars, totalWeeks };
-  }, [calendarMonth, activeLoans]);
+  }, [calendarMonth, activeLoans, myLoans, isAdmin]);
 
   if (loading || !user) return <div className="loading-spinner"><div className="spinner" /></div>;
 
@@ -142,10 +198,212 @@ export default function DashboardPage() {
   const barColor = (bar) => {
     if (bar.isOverdue) return { bg: 'rgba(239,68,68,0.35)', color: '#fca5a5', border: '#ef4444' };
     if (bar.status === 'pending') return { bg: 'rgba(245,158,11,0.3)', color: '#fde68a', border: '#f59e0b' };
-    if (bar.type === 'permanent') return { bg: 'rgba(168,85,247,0.3)', color: '#d8b4fe', border: '#a855f7' };
     return { bg: 'rgba(59,130,246,0.3)', color: '#bfdbfe', border: '#3b82f6' };
   };
 
+  const statusBadge = (status) => {
+    const map = {
+      pending: { cls: 'badge-warning', icon: <RiTimeLine />, text: 'Pending' },
+      approved: { cls: 'badge-success', icon: <RiCheckLine />, text: 'Approved' },
+      rejected: { cls: 'badge-error', icon: <RiCloseLine />, text: 'Rejected' },
+      returned: { cls: 'badge-info', icon: <RiArrowGoBackLine />, text: 'Returned' },
+    };
+    const s = map[status] || { cls: '', text: status };
+    return <span className={`badge ${s.cls}`}>{s.icon} {s.text}</span>;
+  };
+
+  // ====== NORMAL USER DASHBOARD ======
+  if (!isAdmin) {
+    const loanedOut = myLoans.filter(l => l.status === 'approved');
+    const pending = myLoans.filter(l => l.status === 'pending');
+
+    return (
+      <>
+        <Navbar />
+        <CartPanel />
+        <div className="page-container">
+          <div className="page-header">
+            <h1>My Dashboard</h1>
+            <p>Your active loans and pending requests</p>
+          </div>
+
+          {error && (
+            <div style={{ padding: '12px 16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--error)', fontSize: 13 }}>{error}</span>
+              <button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>✕</button>
+            </div>
+          )}
+
+          {myFetching ? (
+            <div className="loading-spinner"><div className="spinner" /></div>
+          ) : (
+            <>
+              {/* Summary cards */}
+              <div className="stats-grid" style={{ marginBottom: 24 }}>
+                <div className="stat-card">
+                  <div className="stat-icon" style={{ color: 'var(--warning)' }}><RiHandHeartLine /></div>
+                  <div className="stat-value" style={{ color: 'var(--warning)' }}>{loanedOut.length}</div>
+                  <div className="stat-label">Items Loaned Out</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon" style={{ color: 'var(--info)' }}><RiTimeLine /></div>
+                  <div className="stat-value" style={{ color: 'var(--info)' }}>{pending.length}</div>
+                  <div className="stat-label">Pending Requests</div>
+                </div>
+              </div>
+
+              {/* Loaned Out Section */}
+              <div style={{ marginBottom: 32 }}>
+                <h2 style={{ fontSize: 16, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <RiHandHeartLine style={{ color: 'var(--warning)' }} /> Items Currently Loaned Out
+                </h2>
+                {loanedOut.length === 0 ? (
+                  <div className="empty-state" style={{ padding: 32 }}>
+                    <h3>No active loans</h3>
+                    <p>You don&apos;t have any items loaned out right now</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {loanedOut.map(loan => (
+                      <div key={loan.id} className="loan-card">
+                        <div className="loan-card-header">
+                          <div>
+                            <span className={`badge ${loan.loan_type === 'permanent' ? 'badge-permanent' : 'badge-temporary'}`} style={{ fontSize: 11 }}>
+                              {loan.loan_type === 'permanent' ? '📌 Permanent' : '⏱️ Temporary'}
+                            </span>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>#{loan.id}</span>
+                          </div>
+                          {statusBadge(loan.status)}
+                        </div>
+                        <div className="loan-card-items">
+                          {loan.items.map(item => (
+                            <span key={item.id} className="loan-item-chip">{item.item} × {item.quantity}</span>
+                          ))}
+                        </div>
+                        <div className="loan-card-meta">
+                          <span>📝 {loan.purpose}</span>
+                          <span>📅 {loan.start_date}{loan.end_date ? ` → ${loan.end_date}` : ' → Ongoing'}</span>
+                        </div>
+                        {loan.end_date && new Date(loan.end_date) < new Date() && (
+                          <div style={{ marginTop: 8, padding: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, textAlign: 'center', fontSize: 12 }}>
+                            <span style={{ color: 'var(--error)', fontWeight: 700 }}>🚨 OVERDUE — Please return items!</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Pending Requests Section */}
+              <div style={{ marginBottom: 32 }}>
+                <h2 style={{ fontSize: 16, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <RiTimeLine style={{ color: 'var(--info)' }} /> Pending Requests
+                </h2>
+                {pending.length === 0 ? (
+                  <div className="empty-state" style={{ padding: 32 }}>
+                    <h3>No pending requests</h3>
+                    <p>All your loan requests have been processed</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {pending.map(loan => (
+                      <div key={loan.id} className="loan-card">
+                        <div className="loan-card-header">
+                          <div>
+                            <span className={`badge ${loan.loan_type === 'permanent' ? 'badge-permanent' : 'badge-temporary'}`} style={{ fontSize: 11 }}>
+                              {loan.loan_type === 'permanent' ? '📌 Permanent' : '⏱️ Temporary'}
+                            </span>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>#{loan.id}</span>
+                          </div>
+                          {statusBadge(loan.status)}
+                        </div>
+                        <div className="loan-card-items">
+                          {loan.items.map(item => (
+                            <span key={item.id} className="loan-item-chip">{item.item} × {item.quantity}</span>
+                          ))}
+                        </div>
+                        <div className="loan-card-meta">
+                          <span>📝 {loan.purpose}</span>
+                          <span>📅 {loan.start_date}{loan.end_date ? ` → ${loan.end_date}` : ' → Permanent'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Loan Calendar (user's own loans) */}
+              <div className="gantt-container">
+                <div className="gantt-header">
+                  <h3><RiCalendarLine style={{ verticalAlign: 'middle' }} /> My Loan Calendar — {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}</h3>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button className="btn btn-sm btn-outline" onClick={prevMonth}><RiArrowLeftLine /></button>
+                    <button className="btn btn-sm btn-outline" onClick={goToday}>Today</button>
+                    <button className="btn btn-sm btn-outline" onClick={nextMonth}><RiArrowRightLine /></button>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <div style={{ minWidth: 700 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
+                      {dayNames.map(d => (
+                        <div key={d} style={{ padding: '8px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center' }}>{d}</div>
+                      ))}
+                    </div>
+                    {calendarData.weeks.map((week, wi) => (
+                      <div key={wi} style={{ position: 'relative', minHeight: 90 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
+                          {week.map((cell, ci) => (
+                            <div key={ci} style={{ padding: '6px 8px', minHeight: 80, borderRight: ci < 6 ? '1px solid rgba(255,255,255,0.03)' : 'none', background: cell && isToday(cell) ? 'rgba(99,102,241,0.06)' : 'transparent' }}>
+                              {cell && (
+                                <div style={{ fontSize: 12, fontWeight: isToday(cell) ? 700 : 400, color: isToday(cell) ? 'var(--accent)' : 'var(--text-muted)', textAlign: 'right' }}>
+                                  {isToday(cell) ? (
+                                    <span style={{ background: 'var(--accent)', color: 'white', borderRadius: '50%', width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>{cell.day}</span>
+                                  ) : cell.day}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {calendarData.loanBars.filter(b => b.week === wi).map((bar, bi) => {
+                          const c = barColor(bar);
+                          const leftPct = (bar.startCol / 7) * 100;
+                          const widthPct = ((bar.endCol - bar.startCol + 1) / 7) * 100;
+                          return (
+                            <div key={`${bar.loanId}-${wi}-${bi}`}
+                              style={{ position: 'absolute', top: 28 + bi * 24, left: `calc(${leftPct}% + 4px)`, width: `calc(${widthPct}% - 8px)`, height: 20, background: c.bg, borderLeft: `3px solid ${c.border}`, borderRadius: 4, display: 'flex', alignItems: 'center', padding: '0 6px', fontSize: 10, fontWeight: 600, color: c.color, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', zIndex: 2 }}
+                              title={`#${bar.loanId} — ${bar.loan.purpose}`}
+                            >
+                              {bar.isOverdue ? '🚨 ' : ''}{bar.loan.purpose}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 16, padding: '12px 0', flexWrap: 'wrap', fontSize: 11, color: 'var(--text-secondary)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(59,130,246,0.3)', borderLeft: '3px solid #3b82f6' }} /> Approved
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(245,158,11,0.3)', borderLeft: '3px solid #f59e0b' }} /> Pending
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(239,68,68,0.35)', borderLeft: '3px solid #ef4444' }} /> Overdue
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  // ====== ADMIN DASHBOARD ======
   return (
     <>
       <Navbar />
@@ -309,9 +567,6 @@ export default function DashboardPage() {
               <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(59,130,246,0.3)', borderLeft: '3px solid #3b82f6' }} /> Temporary
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(168,85,247,0.3)', borderLeft: '3px solid #a855f7' }} /> Permanent
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(245,158,11,0.3)', borderLeft: '3px solid #f59e0b' }} /> Pending
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -388,6 +643,14 @@ export default function DashboardPage() {
                 <span style={{ color: 'var(--error)', fontWeight: 700 }}>🚨 This loan is OVERDUE!</span>
               </div>
             )}
+
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button disabled={deleteLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: 'var(--error)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                onClick={() => handleDeleteLoan(selectedLoan.id)}>
+                <RiDeleteBinLine /> {deleteLoading ? 'Deleting...' : 'Delete Loan'}
+              </button>
+            </div>
           </div>
         </div>
       )}

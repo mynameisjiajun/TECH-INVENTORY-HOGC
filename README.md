@@ -49,6 +49,24 @@ Equipment inventory and loan management system for church tech ministry.
 
 5. Open [http://localhost:3000](http://localhost:3000) and log in with the seeded admin account.
 
+## Deploy on Vercel
+
+1. Push this repo to GitHub.
+2. Import the repo at [vercel.com/new](https://vercel.com/new).
+3. Add these **Environment Variables** in the Vercel dashboard:
+   - `JWT_SECRET` — a random 64-char hex string
+   - `INVITE_CODE` — registration invite code
+   - `GOOGLE_SERVICE_ACCOUNT_EMAIL` — service account email
+   - `GOOGLE_PRIVATE_KEY` — the full PEM private key (include `-----BEGIN...` and `-----END...`)
+   - `GOOGLE_SHEETS_ID` — the spreadsheet ID from the Google Sheets URL
+   - `ADMIN_USERNAME` — admin login username (default: `admin`)
+   - `ADMIN_PASSWORD` — admin login password (default: `admin123`)
+   - `ADMIN_DISPLAY_NAME` — admin display name (default: `Admin`)
+4. Deploy. The admin account is auto-created on first request.
+5. Log in and click **Refresh** on the Inventory page to sync data from Google Sheets.
+
+> **Note:** On Vercel, the SQLite database lives in `/tmp` and is ephemeral. Data persists as long as the serverless function stays warm (~15 min of inactivity). Inventory data is always recoverable via the Refresh button (syncs from Google Sheets). For fully persistent storage, consider migrating to [Turso](https://turso.tech) (hosted SQLite).
+
 ## Scripts
 
 | Command | Description |
@@ -56,4 +74,4 @@ Equipment inventory and loan management system for church tech ministry.
 | `npm run dev` | Start development server |
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
-| `npm run seed` | Seed database from Google Sheets |
+| `npm run seed` | Seed database from Google Sheets (local dev) |

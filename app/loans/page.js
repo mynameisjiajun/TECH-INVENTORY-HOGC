@@ -4,13 +4,16 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import CartPanel from '@/components/CartPanel';
-import { RiTimeLine, RiCheckLine, RiCloseLine, RiArrowGoBackLine } from 'react-icons/ri';
+import { RiTimeLine, RiCheckLine, RiCloseLine, RiArrowGoBackLine, RiSearchLine, RiFilterLine } from 'react-icons/ri';
 
 export default function LoansPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [loans, setLoans] = useState([]);
   const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState('');
 
@@ -24,7 +27,7 @@ export default function LoansPage() {
       setFetching(true);
       setError('');
       try {
-        const params = new URLSearchParams({ status: statusFilter });
+        const params = new URLSearchParams({ status: statusFilter, search, date_from: dateFrom, date_to: dateTo });
         const res = await fetch(`/api/loans?${params}`);
         if (res.ok) {
           const data = await res.json();
@@ -40,7 +43,7 @@ export default function LoansPage() {
       }
     };
     fetchLoans();
-  }, [user, statusFilter]);
+  }, [user, statusFilter, search, dateFrom, dateTo]);
 
   if (loading || !user) return <div className="loading-spinner"><div className="spinner" /></div>;
 
@@ -71,7 +74,16 @@ export default function LoansPage() {
           <p>Track your loan requests and history</p>
         </div>
 
-        <div className="search-bar" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24, alignItems: 'center' }}>
+          <div className="search-input-wrap" style={{ flex: '1 1 200px' }}>
+            <RiSearchLine className="search-icon" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by item or purpose..."
+            />
+          </div>
           <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
@@ -79,6 +91,21 @@ export default function LoansPage() {
             <option value="rejected">Rejected</option>
             <option value="returned">Returned</option>
           </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <RiFilterLine style={{ color: 'var(--text-muted)', fontSize: 14 }} />
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              title="Start date from"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', fontSize: 13 }} />
+            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>to</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              title="Start date to"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', fontSize: 13 }} />
+          </div>
+          {(search || dateFrom || dateTo || statusFilter) && (
+            <button className="btn btn-sm btn-outline" onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setStatusFilter(''); }}>
+              Clear
+            </button>
+          )}
         </div>
 
         {error && (

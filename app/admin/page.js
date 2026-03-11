@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import Navbar from '@/components/Navbar';
 import CartPanel from '@/components/CartPanel';
-import { RiCheckLine, RiCloseLine, RiArrowGoBackLine, RiShieldUserLine, RiHistoryLine, RiUserSettingsLine, RiLockLine, RiDeleteBinLine, RiKeyLine } from 'react-icons/ri';
+import { RiCheckLine, RiCloseLine, RiArrowGoBackLine, RiShieldUserLine, RiHistoryLine, RiUserSettingsLine, RiLockLine, RiDeleteBinLine, RiKeyLine, RiBookmarkLine, RiAddLine } from 'react-icons/ri';
 
 export default function AdminPage() {
   const { user, loading } = useAuth();
@@ -26,6 +26,13 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [inviteCodeInput, setInviteCodeInput] = useState('');
+  const [templates, setTemplates] = useState([]);
+  const [templatesFetching, setTemplatesFetching] = useState(false);
+  const [templateForm, setTemplateForm] = useState({ name: '', description: '', loan_type: 'temporary', items: [] });
+  const [templateItemSearch, setTemplateItemSearch] = useState('');
+  const [allItems, setAllItems] = useState([]);
+  const [templateMsg, setTemplateMsg] = useState('');
+  const [editingTemplate, setEditingTemplate] = useState(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -92,11 +99,35 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchTemplates = async () => {
+    setTemplatesFetching(true);
+    try {
+      const res = await fetch('/api/admin/templates');
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data.templates);
+      }
+    } catch { /* silent */ } finally {
+      setTemplatesFetching(false);
+    }
+  };
+
+  const fetchAllItems = async () => {
+    try {
+      const res = await fetch('/api/items?tab=storage');
+      if (res.ok) {
+        const data = await res.json();
+        setAllItems(data.items || []);
+      }
+    } catch { /* silent */ }
+  };
+
   useEffect(() => {
     if (user?.role === 'admin') {
       if (activeTab === 'loans') fetchLoans();
       if (activeTab === 'audit') fetchAuditLogs();
       if (activeTab === 'users') fetchUsers();
+      if (activeTab === 'templates') { fetchTemplates(); fetchAllItems(); }
     }
   }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers]);
 
@@ -289,6 +320,9 @@ export default function AdminPage() {
           <button className={`tab ${activeTab === 'audit' ? 'active' : ''}`} onClick={() => setActiveTab('audit')}>
             <RiHistoryLine style={{ verticalAlign: 'middle', marginRight: 4 }} /> Audit Log
           </button>
+          <button className={`tab ${activeTab === 'templates' ? 'active' : ''}`} onClick={() => setActiveTab('templates')}>
+            <RiBookmarkLine style={{ verticalAlign: 'middle', marginRight: 4 }} /> Templates
+          </button>
         </div>
 
         {error && (
@@ -395,6 +429,17 @@ export default function AdminPage() {
                     <strong>Admin notes:</strong> {loan.admin_notes}
                   </div>
                 )}
+                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-sm" disabled={actionLoading === loan.id}
+                    style={{ color: 'var(--error)', background: 'none', border: '1px solid rgba(239,68,68,0.3)', fontSize: 11, padding: '4px 10px' }}
+                    onClick={() => {
+                      if (confirm(`Delete loan #${loan.id}?${loan.status === 'approved' ? ' Stock will be restored.' : ''}`)) {
+                        handleAction(loan.id, 'delete');
+                      }
+                    }}>
+                    <RiDeleteBinLine /> Delete
+                  </button>
+                </div>
               </div>
             ))}
           </>
@@ -537,6 +582,144 @@ export default function AdminPage() {
             )}
           </>
         )}
+        {/* ====== TEMPLATES TAB ====== */}
+        {activeTab === 'templates' && (
+          <>
+            {templateMsg && (
+              <div style={{ padding: '10px 16px', background: 'rgba(99,102,241,0.08)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 16, fontSize: 13, color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between' }}>
+                {templateMsg}
+                <button onClick={() => setTemplateMsg('')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
+              </div>
+            )}
+
+            {/* Create / Edit form */}
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, marginBottom: 24 }}>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <RiBookmarkLine /> {editingTemplate ? 'Edit Template' : 'New Template'}
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <input value={templateForm.name} onChange={e => setTemplateForm(p => ({ ...p, name: e.target.value }))}
+                  placeholder="Template name (e.g. Sunday Setup Kit)"
+                  style={{ padding: '9px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 13 }} />
+                <select value={templateForm.loan_type} onChange={e => setTemplateForm(p => ({ ...p, loan_type: e.target.value }))}
+                  style={{ padding: '9px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 13 }}>
+                  <option value="temporary">⏱️ Temporary</option>
+                  <option value="permanent">📌 Permanent</option>
+                </select>
+              </div>
+              <input value={templateForm.description} onChange={e => setTemplateForm(p => ({ ...p, description: e.target.value }))}
+                placeholder="Description (optional)"
+                style={{ width: '100%', padding: '9px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 13, marginBottom: 12, boxSizing: 'border-box' }} />
+
+              {/* Item picker */}
+              <div style={{ marginBottom: 10 }}>
+                <input value={templateItemSearch} onChange={e => setTemplateItemSearch(e.target.value)}
+                  placeholder="Search items to add..."
+                  style={{ width: '100%', padding: '9px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              {templateItemSearch && (
+                <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, maxHeight: 160, overflowY: 'auto', marginBottom: 10 }}>
+                  {allItems.filter(i => i.item.toLowerCase().includes(templateItemSearch.toLowerCase()) && !templateForm.items.find(ti => ti.item_id === i.id)).slice(0, 8).map(i => (
+                    <div key={i.id} onClick={() => {
+                      setTemplateForm(p => ({ ...p, items: [...p.items, { item_id: i.id, item_name: i.item, quantity: 1 }] }));
+                      setTemplateItemSearch('');
+                    }} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border)' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.08)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      {i.item} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({i.type})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Selected items */}
+              {templateForm.items.length > 0 && (
+                <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {templateForm.items.map((ti, idx) => (
+                    <div key={ti.item_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(99,102,241,0.06)', borderRadius: 8, fontSize: 13 }}>
+                      <span style={{ flex: 1 }}>{ti.item_name}</span>
+                      <input type="number" min={1} value={ti.quantity}
+                        onChange={e => setTemplateForm(p => ({ ...p, items: p.items.map((x, i) => i === idx ? { ...x, quantity: parseInt(e.target.value) || 1 } : x) }))}
+                        style={{ width: 60, padding: '4px 8px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', fontSize: 12, textAlign: 'center' }} />
+                      <button onClick={() => setTemplateForm(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))}
+                        style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: 14 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-sm btn-primary"
+                  onClick={async () => {
+                    if (!templateForm.name.trim() || templateForm.items.length === 0) { setTemplateMsg('Name and at least one item are required'); return; }
+                    const res = await fetch('/api/admin/templates', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: editingTemplate ? 'update' : 'create', id: editingTemplate, ...templateForm }),
+                    });
+                    const data = await res.json();
+                    setTemplateMsg(data.message || data.error);
+                    if (res.ok) { setTemplateForm({ name: '', description: '', loan_type: 'temporary', items: [] }); setEditingTemplate(null); fetchTemplates(); }
+                  }}>
+                  <RiAddLine /> {editingTemplate ? 'Save Changes' : 'Create Template'}
+                </button>
+                {editingTemplate && (
+                  <button className="btn btn-sm btn-outline" onClick={() => { setEditingTemplate(null); setTemplateForm({ name: '', description: '', loan_type: 'temporary', items: [] }); }}>
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Template list */}
+            {templatesFetching ? (
+              <div className="loading-spinner"><div className="spinner" /></div>
+            ) : templates.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">📋</div>
+                <h3>No templates yet</h3>
+                <p>Create preset item bundles users can request in one click</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {templates.map(t => (
+                  <div key={t.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 15 }}>{t.name}</span>
+                        <span className={`badge ${t.loan_type === 'permanent' ? 'badge-permanent' : 'badge-temporary'}`} style={{ fontSize: 10, marginLeft: 8 }}>
+                          {t.loan_type === 'permanent' ? '📌 Permanent' : '⏱️ Temporary'}
+                        </span>
+                        {t.description && <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>{t.description}</p>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn btn-sm btn-outline" onClick={() => {
+                          setEditingTemplate(t.id);
+                          setTemplateForm({ name: t.name, description: t.description, loan_type: t.loan_type, items: t.items });
+                        }}>Edit</button>
+                        <button className="btn btn-sm" style={{ color: 'var(--error)', background: 'none', border: '1px solid rgba(239,68,68,0.3)', fontSize: 11 }}
+                          onClick={async () => {
+                            if (!confirm(`Delete template "${t.name}"?`)) return;
+                            await fetch('/api/admin/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: t.id }) });
+                            fetchTemplates();
+                          }}>
+                          <RiDeleteBinLine />
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {t.items.map(item => (
+                        <span key={item.item_id} className="loan-item-chip">{item.item_name} × {item.quantity}</span>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '8px 0 0' }}>Created by {t.created_by_name}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
       </div>
     </>
   );

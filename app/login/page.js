@@ -19,7 +19,7 @@ export default function LoginPage() {
     setError('');
     const result = await login(username, password);
     if (result.ok) {
-      router.push('/dashboard');
+      router.push('/inventory');
     } else {
       setError(result.error);
     }

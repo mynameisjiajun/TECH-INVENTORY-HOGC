@@ -1,6 +1,7 @@
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { applyDeltasToCells, appendRows } from '@/lib/sheets';
+import { sendOverdueEmail, sendDueSoonEmail, sendLoanStatusEmail } from '@/lib/email';
 import { NextResponse } from 'next/server';
 
 const SHEETS_ENABLED = !!(process.env.GOOGLE_SHEETS_ID && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY);
@@ -163,7 +164,7 @@ export async function POST(request) {
               quantity: li.quantity,
               location: loan.location || item.location,
               allocation: loan.department || loan.purpose,
-              status: 'Deployed',
+              status: 'DEPLOYED',
               remarks: `Perm loan #${loan_id} — ${loan.purpose}`,
             };
             db.prepare(`
@@ -197,6 +198,12 @@ export async function POST(request) {
         if (deployedRows.length > 0) {
           syncDeployedToSheets(deployedRows);
         }
+        // Send approval email
+        const loanUser = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(loan.user_id);
+        if (loanUser?.email) {
+          const loanItems = db.prepare(`SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`).all(loan_id);
+          sendLoanStatusEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan_id, status: 'approved', adminNotes: admin_notes, items: loanItems }).catch(() => {});
+        }
         return NextResponse.json({ message: 'Loan approved' });
       } catch (txErr) {
         return NextResponse.json({ error: txErr.message }, { status: 400 });
@@ -218,6 +225,12 @@ export async function POST(request) {
       );
 
       logAudit(db, user.id, 'reject', 'loan', loan_id, `Rejected ${loan.loan_type} loan. ${admin_notes || ''}`);
+      // Send rejection email
+      const rejectUser = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(loan.user_id);
+      if (rejectUser?.email) {
+        const rejectItems = db.prepare(`SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`).all(loan_id);
+        sendLoanStatusEmail({ to: rejectUser.email, displayName: rejectUser.display_name, loanId: loan_id, status: 'rejected', adminNotes: admin_notes, items: rejectItems }).catch(() => {});
+      }
       return NextResponse.json({ message: 'Loan rejected' });
     }
 
@@ -252,6 +265,41 @@ export async function POST(request) {
       return NextResponse.json({ message: 'Items returned to stock' });
     }
 
+    if (action === 'delete') {
+      const deleteTx = db.transaction(() => {
+        const loanItems = db.prepare('SELECT * FROM loan_items WHERE loan_request_id = ?').all(loan_id);
+        const restoreChanges = [];
+
+        // If loan was approved, restore stock
+        if (loan.status === 'approved') {
+          for (const li of loanItems) {
+            db.prepare('UPDATE storage_items SET current = current + ? WHERE id = ?').run(li.quantity, li.item_id);
+            restoreChanges.push({ itemId: li.item_id, delta: li.quantity });
+          }
+        }
+
+        // Remove deployed items created by this permanent loan
+        if (loan.loan_type === 'permanent') {
+          db.prepare('DELETE FROM deployed_items WHERE loan_request_id = ?').run(loan_id);
+        }
+
+        // Delete loan items, then the loan itself
+        db.prepare('DELETE FROM loan_items WHERE loan_request_id = ?').run(loan_id);
+        db.prepare('DELETE FROM loan_requests WHERE id = ?').run(loan_id);
+
+        logAudit(db, user.id, 'delete', 'loan', loan_id,
+          `Deleted ${loan.loan_type} loan (was ${loan.status}). ${admin_notes || ''}`);
+
+        return restoreChanges;
+      });
+
+      const restoreChanges = deleteTx();
+      if (restoreChanges.length > 0) {
+        syncStockToSheets(db, restoreChanges);
+      }
+      return NextResponse.json({ message: 'Loan deleted' });
+    }
+
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('Admin action error:', error);
@@ -263,6 +311,7 @@ export async function POST(request) {
 export async function GET(request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
   const db = getDb();
   const stats = {
@@ -321,6 +370,16 @@ export async function GET(request) {
         db.prepare('INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)').run(
           loan.user_id, `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.`, '/loans'
         );
+        // Send email reminder
+        const loanUser = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(loan.user_id);
+        const loanItems = db.prepare(`
+          SELECT li.quantity, si.item FROM loan_items li
+          JOIN storage_items si ON li.item_id = si.id
+          WHERE li.loan_request_id = ?
+        `).all(loan.id);
+        if (loanUser?.email) {
+          sendOverdueEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan.id, items: loanItems, endDate: loan.end_date }).catch(() => {});
+        }
       }
     }
 
@@ -332,6 +391,16 @@ export async function GET(request) {
         db.prepare('INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)').run(
           loan.user_id, `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.`, '/loans'
         );
+        // Send email reminder
+        const loanUser = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(loan.user_id);
+        const loanItems = db.prepare(`
+          SELECT li.quantity, si.item FROM loan_items li
+          JOIN storage_items si ON li.item_id = si.id
+          WHERE li.loan_request_id = ?
+        `).all(loan.id);
+        if (loanUser?.email) {
+          sendDueSoonEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan.id, items: loanItems, endDate: loan.end_date }).catch(() => {});
+        }
       }
     }
   }

@@ -3,13 +3,14 @@ import { useAuth } from '@/lib/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { RiUserLine, RiLockLine, RiCheckLine } from 'react-icons/ri';
+import { RiUserLine, RiLockLine, RiCheckLine, RiMailLine } from 'react-icons/ri';
 
 export default function ProfilePage() {
   const { user, loading, checkAuth } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState(null);
   const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -32,6 +33,7 @@ export default function ProfilePage() {
       .then(data => {
         setProfile(data.profile);
         setDisplayName(data.profile.display_name);
+        setEmail(data.profile.email || '');
       })
       .catch((err) => {
         setProfileErr(err.message || 'Could not load profile');
@@ -45,7 +47,7 @@ export default function ProfilePage() {
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_profile', display_name: displayName }),
+        body: JSON.stringify({ action: 'update_profile', display_name: displayName, email: email.trim() || null }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -126,6 +128,14 @@ export default function ProfilePage() {
               <label style={{ display: 'block', marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Display Name</label>
               <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)}
                 placeholder="Your display name" required minLength={2}
+                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>
+                <RiMailLine style={{ verticalAlign: 'middle', marginRight: 6 }} />Email for Notifications <span style={{ fontWeight: 400, fontSize: 12 }}>(optional)</span>
+              </label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="your@email.com — for loan reminders"
                 style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             {profileMsg && <p style={{ color: 'var(--success)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(34,197,94,0.08)', borderRadius: 10 }}>✅ {profileMsg}</p>}

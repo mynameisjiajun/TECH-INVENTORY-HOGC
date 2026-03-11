@@ -38,7 +38,7 @@ export async function GET(request) {
       query += ' AND brand = ?';
       params.push(brand);
     }
-    query += ' ORDER BY type, item';
+    query += ' ORDER BY sheet_row ASC, id ASC';
     let items = db.prepare(query).all(...params);
 
     // Apply fuzzy search in JS for smart matching
@@ -108,7 +108,7 @@ export async function GET(request) {
       SELECT item, type, brand, model, quantity_spare,
              current, (quantity_spare - current) as loaned_out
       FROM storage_items
-      ORDER BY type, item
+      ORDER BY sheet_row ASC, id ASC
     `).all();
     return NextResponse.json({ items });
   }
