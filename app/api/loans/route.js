@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db";
+import { getDb, waitForSync } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
@@ -8,6 +8,7 @@ export async function GET(request) {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  await waitForSync();
   const db = getDb();
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") || "";
@@ -141,6 +142,7 @@ export async function POST(request) {
       );
     }
 
+    await waitForSync();
     const db = getDb();
 
     const createLoanTx = db.transaction(() => {
