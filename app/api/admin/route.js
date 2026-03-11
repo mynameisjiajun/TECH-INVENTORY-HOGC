@@ -1,16 +1,24 @@
-import { getDb } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
-import { applyDeltasToCells, appendRows } from '@/lib/sheets';
-import { sendOverdueEmail, sendDueSoonEmail, sendLoanStatusEmail } from '@/lib/email';
-import { NextResponse } from 'next/server';
+import { getDb, waitForSync } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+import { applyDeltasToCells, appendRows } from "@/lib/sheets";
+import {
+  sendOverdueEmail,
+  sendDueSoonEmail,
+  sendLoanStatusEmail,
+} from "@/lib/email";
+import { NextResponse } from "next/server";
 
-const SHEETS_ENABLED = !!(process.env.GOOGLE_SHEETS_ID && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY);
-const CURRENT_COL = 'G';
+const SHEETS_ENABLED = !!(
+  process.env.GOOGLE_SHEETS_ID &&
+  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+  process.env.GOOGLE_PRIVATE_KEY
+);
+const CURRENT_COL = "G";
 
 function logAudit(db, userId, action, targetType, targetId, details) {
-  db.prepare('INSERT INTO audit_log (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)').run(
-    userId, action, targetType, targetId, details
-  );
+  db.prepare(
+    "INSERT INTO audit_log (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)",
+  ).run(userId, action, targetType, targetId, details);
 }
 
 /**
@@ -23,27 +31,29 @@ function logAudit(db, userId, action, targetType, targetId, details) {
 function syncStockToSheets(db, changes) {
   if (!SHEETS_ENABLED || changes.length === 0) return;
   try {
-    const itemIds = changes.map(c => c.itemId);
-    const placeholders = itemIds.map(() => '?').join(',');
-    const rows = db.prepare(
-      `SELECT id, sheet_row FROM storage_items WHERE id IN (${placeholders}) AND sheet_row IS NOT NULL`
-    ).all(...itemIds);
+    const itemIds = changes.map((c) => c.itemId);
+    const placeholders = itemIds.map(() => "?").join(",");
+    const rows = db
+      .prepare(
+        `SELECT id, sheet_row FROM storage_items WHERE id IN (${placeholders}) AND sheet_row IS NOT NULL`,
+      )
+      .all(...itemIds);
 
     if (rows.length === 0) return;
 
-    const rowMap = Object.fromEntries(rows.map(r => [r.id, r.sheet_row]));
+    const rowMap = Object.fromEntries(rows.map((r) => [r.id, r.sheet_row]));
     const sheetChanges = changes
-      .filter(c => rowMap[c.itemId])
-      .map(c => ({
+      .filter((c) => rowMap[c.itemId])
+      .map((c) => ({
         cell: `${CURRENT_COL}${rowMap[c.itemId]}`,
         delta: c.delta,
       }));
 
-    applyDeltasToCells('Storage Spare', sheetChanges).catch(err => {
-      console.error('Google Sheets write-back failed:', err.message);
+    applyDeltasToCells("Storage Spare", sheetChanges).catch((err) => {
+      console.error("Google Sheets write-back failed:", err.message);
     });
   } catch (err) {
-    console.error('Google Sheets sync error:', err.message);
+    console.error("Google Sheets sync error:", err.message);
   }
 }
 
@@ -55,23 +65,34 @@ function syncStockToSheets(db, changes) {
 function syncDeployedToSheets(deployedRows) {
   if (!SHEETS_ENABLED || deployedRows.length === 0) return;
   try {
-    const sheetRows = deployedRows.map(r => [
-      '', r.item, r.type, r.brand, r.model,
-      r.quantity, r.location, r.allocation, r.status, r.remarks,
+    const sheetRows = deployedRows.map((r) => [
+      "",
+      r.item,
+      r.type,
+      r.brand,
+      r.model,
+      r.quantity,
+      r.location,
+      r.allocation,
+      r.status,
+      r.remarks,
     ]);
-    appendRows('DEPLOYED', sheetRows).catch(err => {
-      console.error('Google Sheets deployed write-back failed:', err.message);
+    appendRows("DEPLOYED", sheetRows).catch((err) => {
+      console.error("Google Sheets deployed write-back failed:", err.message);
     });
   } catch (err) {
-    console.error('Google Sheets deployed sync error:', err.message);
+    console.error("Google Sheets deployed sync error:", err.message);
   }
 }
 
 // POST: approve, reject, return, or bulk_return a loan
 export async function POST(request) {
   const user = await getCurrentUser();
-  if (!user || user.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  if (!user || user.role !== "admin") {
+    return NextResponse.json(
+      { error: "Admin access required" },
+      { status: 403 },
+    );
   }
 
   try {
@@ -80,82 +101,126 @@ export async function POST(request) {
     const db = getDb();
 
     // ===== BULK RETURN =====
-    if (action === 'bulk_return') {
+    if (action === "bulk_return") {
       const { loan_ids, admin_notes } = body;
       if (!loan_ids || !Array.isArray(loan_ids) || loan_ids.length === 0) {
-        return NextResponse.json({ error: 'No loans selected' }, { status: 400 });
+        return NextResponse.json(
+          { error: "No loans selected" },
+          { status: 400 },
+        );
       }
 
       const bulkReturnTx = db.transaction(() => {
         let returned = 0;
         const bulkDeltaMap = new Map();
         for (const loanId of loan_ids) {
-          const loan = db.prepare('SELECT * FROM loan_requests WHERE id = ? AND status = ?').get(loanId, 'approved');
+          const loan = db
+            .prepare("SELECT * FROM loan_requests WHERE id = ? AND status = ?")
+            .get(loanId, "approved");
           if (!loan) continue;
 
-          const loanItems = db.prepare('SELECT * FROM loan_items WHERE loan_request_id = ?').all(loanId);
+          const loanItems = db
+            .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
+            .all(loanId);
           for (const li of loanItems) {
-            db.prepare('UPDATE storage_items SET current = current + ? WHERE id = ?').run(li.quantity, li.item_id);
-            bulkDeltaMap.set(li.item_id, (bulkDeltaMap.get(li.item_id) || 0) + li.quantity);
+            db.prepare(
+              "UPDATE storage_items SET current = current + ? WHERE id = ?",
+            ).run(li.quantity, li.item_id);
+            bulkDeltaMap.set(
+              li.item_id,
+              (bulkDeltaMap.get(li.item_id) || 0) + li.quantity,
+            );
           }
 
-          db.prepare(`
+          db.prepare(
+            `
             UPDATE loan_requests SET status = 'returned', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-          `).run(admin_notes || 'Bulk return', loanId);
+          `,
+          ).run(admin_notes || "Bulk return", loanId);
 
-          db.prepare('INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)').run(
-            loan.user_id, 'Your loaned items have been marked as returned.', '/loans'
+          db.prepare(
+            "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+          ).run(
+            loan.user_id,
+            "Your loaned items have been marked as returned.",
+            "/loans",
           );
 
-          logAudit(db, user.id, 'bulk_return', 'loan', loanId, `Returned via bulk action. ${admin_notes || ''}`);
+          logAudit(
+            db,
+            user.id,
+            "bulk_return",
+            "loan",
+            loanId,
+            `Returned via bulk action. ${admin_notes || ""}`,
+          );
           returned++;
         }
         return { returned, bulkDeltaMap };
       });
 
       const { returned, bulkDeltaMap } = bulkReturnTx();
-      const bulkChanges = [...bulkDeltaMap.entries()].map(([itemId, delta]) => ({ itemId, delta }));
+      const bulkChanges = [...bulkDeltaMap.entries()].map(
+        ([itemId, delta]) => ({ itemId, delta }),
+      );
       syncStockToSheets(db, bulkChanges);
-      return NextResponse.json({ message: `${returned} loan(s) returned to stock` });
+      return NextResponse.json({
+        message: `${returned} loan(s) returned to stock`,
+      });
     }
 
     // ===== SINGLE LOAN ACTIONS =====
     const { loan_id, admin_notes } = body;
-    const loan = db.prepare('SELECT * FROM loan_requests WHERE id = ?').get(loan_id);
+    const loan = db
+      .prepare("SELECT * FROM loan_requests WHERE id = ?")
+      .get(loan_id);
     if (!loan) {
-      return NextResponse.json({ error: 'Loan not found' }, { status: 404 });
+      return NextResponse.json({ error: "Loan not found" }, { status: 404 });
     }
 
-    if (action === 'approve') {
-      if (loan.status !== 'pending') {
-        return NextResponse.json({ error: 'Loan already processed' }, { status: 400 });
+    if (action === "approve") {
+      if (loan.status !== "pending") {
+        return NextResponse.json(
+          { error: "Loan already processed" },
+          { status: 400 },
+        );
       }
 
-      const loanItems = db.prepare('SELECT * FROM loan_items WHERE loan_request_id = ?').all(loan_id);
+      const loanItems = db
+        .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
+        .all(loan_id);
 
       const approveTx = db.transaction(() => {
         for (const li of loanItems) {
-          const item = db.prepare('SELECT * FROM storage_items WHERE id = ?').get(li.item_id);
+          const item = db
+            .prepare("SELECT * FROM storage_items WHERE id = ?")
+            .get(li.item_id);
           if (item.current < li.quantity) {
-            throw new Error(`Not enough stock for "${item.item}". Available: ${item.current}`);
+            throw new Error(
+              `Not enough stock for "${item.item}". Available: ${item.current}`,
+            );
           }
         }
 
         const approveChanges = [];
         const deployedRows = [];
         for (const li of loanItems) {
-          const item = db.prepare('SELECT * FROM storage_items WHERE id = ?').get(li.item_id);
-          const result = db.prepare(
-            'UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?'
-          ).run(li.quantity, li.item_id, li.quantity);
+          const item = db
+            .prepare("SELECT * FROM storage_items WHERE id = ?")
+            .get(li.item_id);
+          const result = db
+            .prepare(
+              "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
+            )
+            .run(li.quantity, li.item_id, li.quantity);
           if (result.changes === 0) {
-            throw new Error('Stock changed during approval — please try again');
+            throw new Error("Stock changed during approval — please try again");
           }
           approveChanges.push({ itemId: li.item_id, delta: -li.quantity });
 
           // For permanent loans, add to deployed_items
-          if (loan.loan_type === 'permanent') {
+          if (loan.loan_type === "permanent") {
             const deployedRow = {
               item: item.item,
               type: item.type,
@@ -164,31 +229,53 @@ export async function POST(request) {
               quantity: li.quantity,
               location: loan.location || item.location,
               allocation: loan.department || loan.purpose,
-              status: 'DEPLOYED',
+              status: "DEPLOYED",
               remarks: `Perm loan #${loan_id} — ${loan.purpose}`,
             };
-            db.prepare(`
+            db.prepare(
+              `
               INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks, loan_request_id)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(
-              deployedRow.item, deployedRow.type, deployedRow.brand, deployedRow.model,
-              deployedRow.quantity, deployedRow.location, deployedRow.allocation,
-              deployedRow.status, deployedRow.remarks, loan_id
+            `,
+            ).run(
+              deployedRow.item,
+              deployedRow.type,
+              deployedRow.brand,
+              deployedRow.model,
+              deployedRow.quantity,
+              deployedRow.location,
+              deployedRow.allocation,
+              deployedRow.status,
+              deployedRow.remarks,
+              loan_id,
             );
             deployedRows.push(deployedRow);
           }
         }
 
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE loan_requests SET status = 'approved', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(admin_notes || '', loan_id);
+        `,
+        ).run(admin_notes || "", loan_id);
 
-        db.prepare('INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)').run(
-          loan.user_id, `Your ${loan.loan_type} loan request has been approved!`, '/loans'
+        db.prepare(
+          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+        ).run(
+          loan.user_id,
+          `Your ${loan.loan_type} loan request has been approved!`,
+          "/loans",
         );
 
-        logAudit(db, user.id, 'approve', 'loan', loan_id, `Approved ${loan.loan_type} loan. ${admin_notes || ''}`);
+        logAudit(
+          db,
+          user.id,
+          "approve",
+          "loan",
+          loan_id,
+          `Approved ${loan.loan_type} loan. ${admin_notes || ""}`,
+        );
         return { approveChanges, deployedRows };
       });
 
@@ -199,96 +286,172 @@ export async function POST(request) {
           syncDeployedToSheets(deployedRows);
         }
         // Send approval email
-        const loanUser = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(loan.user_id);
+        const loanUser = db
+          .prepare("SELECT email, display_name FROM users WHERE id = ?")
+          .get(loan.user_id);
         if (loanUser?.email) {
-          const loanItems = db.prepare(`SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`).all(loan_id);
-          sendLoanStatusEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan_id, status: 'approved', adminNotes: admin_notes, items: loanItems }).catch(() => {});
+          const loanItems = db
+            .prepare(
+              `SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`,
+            )
+            .all(loan_id);
+          sendLoanStatusEmail({
+            to: loanUser.email,
+            displayName: loanUser.display_name,
+            loanId: loan_id,
+            status: "approved",
+            adminNotes: admin_notes,
+            items: loanItems,
+          }).catch(() => {});
         }
-        return NextResponse.json({ message: 'Loan approved' });
+        return NextResponse.json({ message: "Loan approved" });
       } catch (txErr) {
         return NextResponse.json({ error: txErr.message }, { status: 400 });
       }
     }
 
-    if (action === 'reject') {
-      if (loan.status !== 'pending') {
-        return NextResponse.json({ error: 'Loan already processed' }, { status: 400 });
+    if (action === "reject") {
+      if (loan.status !== "pending") {
+        return NextResponse.json(
+          { error: "Loan already processed" },
+          { status: 400 },
+        );
       }
 
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE loan_requests SET status = 'rejected', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(admin_notes || '', loan_id);
+      `,
+      ).run(admin_notes || "", loan_id);
 
-      db.prepare('INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)').run(
-        loan.user_id, `Your ${loan.loan_type} loan request has been rejected. ${admin_notes || ''}`, '/loans'
+      db.prepare(
+        "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+      ).run(
+        loan.user_id,
+        `Your ${loan.loan_type} loan request has been rejected. ${admin_notes || ""}`,
+        "/loans",
       );
 
-      logAudit(db, user.id, 'reject', 'loan', loan_id, `Rejected ${loan.loan_type} loan. ${admin_notes || ''}`);
+      logAudit(
+        db,
+        user.id,
+        "reject",
+        "loan",
+        loan_id,
+        `Rejected ${loan.loan_type} loan. ${admin_notes || ""}`,
+      );
       // Send rejection email
-      const rejectUser = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(loan.user_id);
+      const rejectUser = db
+        .prepare("SELECT email, display_name FROM users WHERE id = ?")
+        .get(loan.user_id);
       if (rejectUser?.email) {
-        const rejectItems = db.prepare(`SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`).all(loan_id);
-        sendLoanStatusEmail({ to: rejectUser.email, displayName: rejectUser.display_name, loanId: loan_id, status: 'rejected', adminNotes: admin_notes, items: rejectItems }).catch(() => {});
+        const rejectItems = db
+          .prepare(
+            `SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`,
+          )
+          .all(loan_id);
+        sendLoanStatusEmail({
+          to: rejectUser.email,
+          displayName: rejectUser.display_name,
+          loanId: loan_id,
+          status: "rejected",
+          adminNotes: admin_notes,
+          items: rejectItems,
+        }).catch(() => {});
       }
-      return NextResponse.json({ message: 'Loan rejected' });
+      return NextResponse.json({ message: "Loan rejected" });
     }
 
-    if (action === 'return') {
-      if (loan.status !== 'approved') {
-        return NextResponse.json({ error: 'Only approved loans can be returned' }, { status: 400 });
+    if (action === "return") {
+      if (loan.status !== "approved") {
+        return NextResponse.json(
+          { error: "Only approved loans can be returned" },
+          { status: 400 },
+        );
       }
 
       const returnTx = db.transaction(() => {
-        const loanItems = db.prepare('SELECT * FROM loan_items WHERE loan_request_id = ?').all(loan_id);
+        const loanItems = db
+          .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
+          .all(loan_id);
         const returnChanges = [];
         for (const li of loanItems) {
-          db.prepare('UPDATE storage_items SET current = current + ? WHERE id = ?').run(li.quantity, li.item_id);
+          db.prepare(
+            "UPDATE storage_items SET current = current + ? WHERE id = ?",
+          ).run(li.quantity, li.item_id);
           returnChanges.push({ itemId: li.item_id, delta: li.quantity });
         }
 
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE loan_requests SET status = 'returned', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(admin_notes || 'Items returned', loan_id);
+        `,
+        ).run(admin_notes || "Items returned", loan_id);
 
-        db.prepare('INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)').run(
-          loan.user_id, 'Your loaned items have been marked as returned.', '/loans'
+        db.prepare(
+          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+        ).run(
+          loan.user_id,
+          "Your loaned items have been marked as returned.",
+          "/loans",
         );
 
-        logAudit(db, user.id, 'return', 'loan', loan_id, `Items returned to stock. ${admin_notes || ''}`);
+        logAudit(
+          db,
+          user.id,
+          "return",
+          "loan",
+          loan_id,
+          `Items returned to stock. ${admin_notes || ""}`,
+        );
         return returnChanges;
       });
 
       const returnChanges = returnTx();
       syncStockToSheets(db, returnChanges);
-      return NextResponse.json({ message: 'Items returned to stock' });
+      return NextResponse.json({ message: "Items returned to stock" });
     }
 
-    if (action === 'delete') {
+    if (action === "delete") {
       const deleteTx = db.transaction(() => {
-        const loanItems = db.prepare('SELECT * FROM loan_items WHERE loan_request_id = ?').all(loan_id);
+        const loanItems = db
+          .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
+          .all(loan_id);
         const restoreChanges = [];
 
         // If loan was approved, restore stock
-        if (loan.status === 'approved') {
+        if (loan.status === "approved") {
           for (const li of loanItems) {
-            db.prepare('UPDATE storage_items SET current = current + ? WHERE id = ?').run(li.quantity, li.item_id);
+            db.prepare(
+              "UPDATE storage_items SET current = current + ? WHERE id = ?",
+            ).run(li.quantity, li.item_id);
             restoreChanges.push({ itemId: li.item_id, delta: li.quantity });
           }
         }
 
         // Remove deployed items created by this permanent loan
-        if (loan.loan_type === 'permanent') {
-          db.prepare('DELETE FROM deployed_items WHERE loan_request_id = ?').run(loan_id);
+        if (loan.loan_type === "permanent") {
+          db.prepare(
+            "DELETE FROM deployed_items WHERE loan_request_id = ?",
+          ).run(loan_id);
         }
 
         // Delete loan items, then the loan itself
-        db.prepare('DELETE FROM loan_items WHERE loan_request_id = ?').run(loan_id);
-        db.prepare('DELETE FROM loan_requests WHERE id = ?').run(loan_id);
+        db.prepare("DELETE FROM loan_items WHERE loan_request_id = ?").run(
+          loan_id,
+        );
+        db.prepare("DELETE FROM loan_requests WHERE id = ?").run(loan_id);
 
-        logAudit(db, user.id, 'delete', 'loan', loan_id,
-          `Deleted ${loan.loan_type} loan (was ${loan.status}). ${admin_notes || ''}`);
+        logAudit(
+          db,
+          user.id,
+          "delete",
+          "loan",
+          loan_id,
+          `Deleted ${loan.loan_type} loan (was ${loan.status}). ${admin_notes || ""}`,
+        );
 
         return restoreChanges;
       });
@@ -297,109 +460,184 @@ export async function POST(request) {
       if (restoreChanges.length > 0) {
         syncStockToSheets(db, restoreChanges);
       }
-      return NextResponse.json({ message: 'Loan deleted' });
+      return NextResponse.json({ message: "Loan deleted" });
     }
 
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error) {
-    console.error('Admin action error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Admin action error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
 // GET: dashboard stats + active loans + due date warnings
 export async function GET(request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (user.role !== "admin")
+    return NextResponse.json(
+      { error: "Admin access required" },
+      { status: 403 },
+    );
 
+  await waitForSync();
   const db = getDb();
   const stats = {
-    totalItems: db.prepare('SELECT SUM(quantity_spare) as total FROM storage_items').get().total || 0,
-    totalCurrent: db.prepare('SELECT SUM(current) as total FROM storage_items').get().total || 0,
+    totalItems:
+      db.prepare("SELECT SUM(quantity_spare) as total FROM storage_items").get()
+        .total || 0,
+    totalCurrent:
+      db.prepare("SELECT SUM(current) as total FROM storage_items").get()
+        .total || 0,
     totalLoaned: 0,
-    pendingRequests: db.prepare("SELECT COUNT(*) as count FROM loan_requests WHERE status = 'pending'").get().count,
-    lowStock: db.prepare('SELECT COUNT(*) as count FROM storage_items WHERE current <= 2 AND quantity_spare > 0').get().count,
-    deployedItems: db.prepare('SELECT SUM(quantity) as total FROM deployed_items').get().total || 0,
+    pendingRequests: db
+      .prepare(
+        "SELECT COUNT(*) as count FROM loan_requests WHERE status = 'pending'",
+      )
+      .get().count,
+    lowStock: db
+      .prepare(
+        "SELECT COUNT(*) as count FROM storage_items WHERE current <= 2 AND quantity_spare > 0",
+      )
+      .get().count,
+    deployedItems:
+      db.prepare("SELECT SUM(quantity) as total FROM deployed_items").get()
+        .total || 0,
   };
   stats.totalLoaned = stats.totalItems - stats.totalCurrent;
 
   // Active loans for calendar
-  const activeLoans = db.prepare(`
+  const activeLoans = db
+    .prepare(
+      `
     SELECT lr.*, u.display_name as requester_name, u.username as requester_username
     FROM loan_requests lr
     JOIN users u ON lr.user_id = u.id
     WHERE lr.status IN ('approved', 'pending')
     ORDER BY lr.start_date
-  `).all();
+  `,
+    )
+    .all();
 
   for (const loan of activeLoans) {
-    loan.items = db.prepare(`
+    loan.items = db
+      .prepare(
+        `
       SELECT li.*, si.item, si.type
       FROM loan_items li
       JOIN storage_items si ON li.item_id = si.id
       WHERE li.loan_request_id = ?
-    `).all(loan.id);
+    `,
+      )
+      .all(loan.id);
   }
 
   // Due date warnings: loans due within 1 day or overdue
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const today = new Date().toISOString().split("T")[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
-  const overdueLoans = db.prepare(`
+  const overdueLoans = db
+    .prepare(
+      `
     SELECT lr.id, lr.end_date, lr.user_id, u.display_name
     FROM loan_requests lr
     JOIN users u ON lr.user_id = u.id
     WHERE lr.status = 'approved' AND lr.loan_type = 'temporary' AND lr.end_date IS NOT NULL AND lr.end_date < ?
-  `).all(today);
+  `,
+    )
+    .all(today);
 
-  const dueSoonLoans = db.prepare(`
+  const dueSoonLoans = db
+    .prepare(
+      `
     SELECT lr.id, lr.end_date, lr.user_id, u.display_name
     FROM loan_requests lr
     JOIN users u ON lr.user_id = u.id
     WHERE lr.status = 'approved' AND lr.loan_type = 'temporary' AND lr.end_date = ?
-  `).all(tomorrow);
+  `,
+    )
+    .all(tomorrow);
 
   // Only admins trigger reminder notifications to avoid duplicate sends
-  if (user.role === 'admin') {
+  if (user.role === "admin") {
     for (const loan of overdueLoans) {
-      const existing = db.prepare(
-        "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%overdue%' AND message LIKE ? AND created_at >= date('now')"
-      ).get(loan.user_id, `%#${loan.id}%`);
+      const existing = db
+        .prepare(
+          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%overdue%' AND message LIKE ? AND created_at >= date('now')",
+        )
+        .get(loan.user_id, `%#${loan.id}%`);
       if (!existing) {
-        db.prepare('INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)').run(
-          loan.user_id, `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.`, '/loans'
+        db.prepare(
+          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+        ).run(
+          loan.user_id,
+          `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.`,
+          "/loans",
         );
         // Send email reminder
-        const loanUser = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(loan.user_id);
-        const loanItems = db.prepare(`
+        const loanUser = db
+          .prepare("SELECT email, display_name FROM users WHERE id = ?")
+          .get(loan.user_id);
+        const loanItems = db
+          .prepare(
+            `
           SELECT li.quantity, si.item FROM loan_items li
           JOIN storage_items si ON li.item_id = si.id
           WHERE li.loan_request_id = ?
-        `).all(loan.id);
+        `,
+          )
+          .all(loan.id);
         if (loanUser?.email) {
-          sendOverdueEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan.id, items: loanItems, endDate: loan.end_date }).catch(() => {});
+          sendOverdueEmail({
+            to: loanUser.email,
+            displayName: loanUser.display_name,
+            loanId: loan.id,
+            items: loanItems,
+            endDate: loan.end_date,
+          }).catch(() => {});
         }
       }
     }
 
     for (const loan of dueSoonLoans) {
-      const existing = db.prepare(
-        "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%due tomorrow%' AND message LIKE ? AND created_at >= date('now')"
-      ).get(loan.user_id, `%#${loan.id}%`);
+      const existing = db
+        .prepare(
+          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%due tomorrow%' AND message LIKE ? AND created_at >= date('now')",
+        )
+        .get(loan.user_id, `%#${loan.id}%`);
       if (!existing) {
-        db.prepare('INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)').run(
-          loan.user_id, `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.`, '/loans'
+        db.prepare(
+          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+        ).run(
+          loan.user_id,
+          `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.`,
+          "/loans",
         );
         // Send email reminder
-        const loanUser = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(loan.user_id);
-        const loanItems = db.prepare(`
+        const loanUser = db
+          .prepare("SELECT email, display_name FROM users WHERE id = ?")
+          .get(loan.user_id);
+        const loanItems = db
+          .prepare(
+            `
           SELECT li.quantity, si.item FROM loan_items li
           JOIN storage_items si ON li.item_id = si.id
           WHERE li.loan_request_id = ?
-        `).all(loan.id);
+        `,
+          )
+          .all(loan.id);
         if (loanUser?.email) {
-          sendDueSoonEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan.id, items: loanItems, endDate: loan.end_date }).catch(() => {});
+          sendDueSoonEmail({
+            to: loanUser.email,
+            displayName: loanUser.display_name,
+            loanId: loan.id,
+            items: loanItems,
+            endDate: loan.end_date,
+          }).catch(() => {});
         }
       }
     }

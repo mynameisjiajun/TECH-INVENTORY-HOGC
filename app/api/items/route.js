@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db';
+import { getDb, waitForSync } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
@@ -20,6 +20,7 @@ export async function GET(request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  await waitForSync();
   const db = getDb();
   const { searchParams } = new URL(request.url);
   const tab = searchParams.get('tab') || 'storage';
