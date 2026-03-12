@@ -1,4 +1,4 @@
-import { getDb, ensureUserExists } from "@/lib/db";
+import { getDb, ensureUserExists, syncUsersToSheet } from "@/lib/db";
 import { getCurrentUser, hashPassword, verifyPassword } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
@@ -50,6 +50,7 @@ export async function POST(request) {
       cleanEmail,
       user.id,
     );
+    syncUsersToSheet().catch(() => {});
     return NextResponse.json({ message: "Profile updated!" });
   }
 
@@ -85,6 +86,7 @@ export async function POST(request) {
       newHash,
       user.id,
     );
+    syncUsersToSheet().catch(() => {});
     return NextResponse.json({ message: "Password changed successfully!" });
   }
 

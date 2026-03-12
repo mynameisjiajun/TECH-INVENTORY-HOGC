@@ -1,11 +1,11 @@
-import { getDb, getSetting } from "@/lib/db";
+import { getDb, getSetting, syncUsersToSheet } from "@/lib/db";
 import {
   hashPassword,
   verifyPassword,
   createToken,
   getTokenCookieOptions,
 } from "@/lib/auth";
-import { checkRateLimit } from "@/lib/rateLimit";
+import { checkRateLimit, resetRateLimit } from "@/lib/rateLimit";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
@@ -24,7 +24,7 @@ export async function POST(request) {
       );
     }
 
-    const { action, username, password, display_name, invite_code } =
+    const { action, username, password, display_name, invite_code, email } =
       await request.json();
 
     const db = getDb();
@@ -66,17 +66,27 @@ export async function POST(request) {
         );
       }
 
+      // Validate email
+      const cleanEmail = email ? email.trim() : null;
+      if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return NextResponse.json(
+          { error: "Invalid email format" },
+          { status: 400 },
+        );
+      }
+
       // Create user
       const hash = await hashPassword(password);
       const result = db
         .prepare(
-          "INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)",
+          "INSERT INTO users (username, password_hash, display_name, role, email) VALUES (?, ?, ?, ?, ?)",
         )
         .run(
           normalizedUsername,
           hash,
           display_name || normalizedUsername,
           "user",
+          cleanEmail,
         );
 
       const user = {
@@ -86,6 +96,9 @@ export async function POST(request) {
         display_name: display_name || normalizedUsername,
       };
       const token = createToken(user);
+
+      // Persist users to Google Sheets (fire-and-forget)
+      syncUsersToSheet().catch(() => {});
 
       const response = NextResponse.json({ user });
       const cookieOpts = getTokenCookieOptions();
@@ -110,6 +123,9 @@ export async function POST(request) {
           { status: 401 },
         );
       }
+
+      // Successful login — reset rate limit so correct logins aren't penalised
+      resetRateLimit(ip);
 
       const token = createToken(user);
       const response = NextResponse.json({

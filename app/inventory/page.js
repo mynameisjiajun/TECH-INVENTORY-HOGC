@@ -604,8 +604,8 @@ export default function InventoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item) => (
-                      <tr key={item.type}>
+                    {items.map((item, i) => (
+                      <tr key={`${item.type}-${i}`}>
                         <td style={{ fontWeight: 600 }}>{item.type}</td>
                         <td>{item.total_spare}</td>
                         <td

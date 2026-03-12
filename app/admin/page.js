@@ -887,26 +887,53 @@ export default function AdminPage() {
                           @{u.username}
                         </td>
                         <td>
-                          <select
-                            value={u.role}
-                            onChange={(e) =>
-                              handleChangeRole(u.id, e.target.value)
+                          <button
+                            onClick={() =>
+                              u.id !== user.id &&
+                              handleChangeRole(
+                                u.id,
+                                u.role === "admin" ? "user" : "admin",
+                              )
                             }
                             disabled={u.id === user.id}
+                            title={
+                              u.id === user.id
+                                ? "Cannot change own role"
+                                : `Change to ${u.role === "admin" ? "user" : "admin"}`
+                            }
                             style={{
-                              background: "var(--bg-card)",
-                              color: "var(--text-primary)",
-                              border: "1px solid var(--border)",
+                              background:
+                                u.role === "admin"
+                                  ? "rgba(245,158,11,0.15)"
+                                  : "rgba(99,102,241,0.1)",
+                              border:
+                                "1px solid " +
+                                (u.role === "admin"
+                                  ? "rgba(245,158,11,0.3)"
+                                  : "var(--border)"),
                               borderRadius: 6,
                               padding: "4px 8px",
-                              fontSize: 12,
+                              fontSize: 16,
                               cursor:
                                 u.id === user.id ? "not-allowed" : "pointer",
+                              opacity: u.id === user.id ? 0.5 : 1,
+                              lineHeight: 1,
+                              minWidth: 32,
+                              textAlign: "center",
                             }}
                           >
-                            <option value="user">👤 User</option>
-                            <option value="admin">🛡️ Admin</option>
-                          </select>
+                            {u.role === "admin" ? "🛡️" : "👤"}
+                            <span
+                              className="hide-mobile"
+                              style={{
+                                marginLeft: 4,
+                                fontSize: 13,
+                                color: "#fff",
+                              }}
+                            >
+                              {u.role === "admin" ? "Admin" : "User"}
+                            </span>
+                          </button>
                         </td>
                         <td
                           style={{ fontSize: 12, color: "var(--text-muted)" }}

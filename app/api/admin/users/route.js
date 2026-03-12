@@ -1,4 +1,4 @@
-import { getDb, getSetting, setSetting } from "@/lib/db";
+import { getDb, getSetting, setSetting, syncUsersToSheet } from "@/lib/db";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
@@ -73,6 +73,7 @@ export async function POST(request) {
       `Reset password for @${target.username}`,
     );
 
+    syncUsersToSheet().catch(() => {});
     return NextResponse.json({
       message: `Password reset for @${target.username}`,
     });
@@ -113,6 +114,7 @@ export async function POST(request) {
       `Changed @${target.username} role to ${new_role}`,
     );
 
+    syncUsersToSheet().catch(() => {});
     return NextResponse.json({
       message: `Role updated for @${target.username}`,
     });
@@ -152,6 +154,7 @@ export async function POST(request) {
       `Deleted user @${target.username}`,
     );
 
+    syncUsersToSheet().catch(() => {});
     return NextResponse.json({ message: `User @${target.username} deleted` });
   }
 

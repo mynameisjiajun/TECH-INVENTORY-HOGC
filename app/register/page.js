@@ -13,6 +13,7 @@ export default function RegisterPage() {
     password: "",
     confirm_password: "",
     display_name: "",
+    email: "",
     invite_code: "",
   });
   const [error, setError] = useState("");
@@ -44,6 +45,7 @@ export default function RegisterPage() {
       formData.password,
       formData.display_name,
       formData.invite_code,
+      formData.email,
     );
     if (result.ok) {
       router.push("/inventory");
@@ -90,6 +92,26 @@ export default function RegisterPage() {
               placeholder="Your name (e.g., Jia Jun)"
               required
             />
+          </div>
+          <div className="input-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={update("email")}
+              placeholder="your.email@example.com"
+              required
+            />
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                marginTop: 4,
+                display: "block",
+              }}
+            >
+              Used for password reset emails
+            </span>
           </div>
           <div className="input-group">
             <label>Username</label>

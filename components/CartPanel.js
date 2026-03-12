@@ -141,17 +141,11 @@ export default function CartPanel() {
                       </button>
                     </div>
                     <button
-                      className="btn btn-icon btn-outline"
-                      style={{
-                        color: "var(--error)",
-                        borderColor: "var(--error)",
-                        flexShrink: 0,
-                        width: 28,
-                        height: 28,
-                      }}
+                      className="cart-delete-btn"
                       onClick={() => removeItem(item.id)}
+                      title="Remove item"
                     >
-                      <RiDeleteBinLine size={14} />
+                      <RiDeleteBinLine size={16} />
                     </button>
                   </div>
                 ))
@@ -163,28 +157,26 @@ export default function CartPanel() {
                 <p style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>
                   {totalItems} item{totalItems !== 1 ? "s" : ""} selected
                 </p>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div className="cart-checkout-buttons">
                   <button
-                    className="btn btn-primary"
+                    className="btn btn-primary cart-checkout-btn"
                     style={{
-                      flex: 1,
                       background:
                         "linear-gradient(135deg, var(--temporary), #60a5fa)",
                     }}
                     onClick={() => handleCheckout("temporary")}
                   >
-                    ⏱️ Temporary Loan
+                    ⏱️ Temp Loan
                   </button>
                   <button
-                    className="btn btn-primary"
+                    className="btn btn-primary cart-checkout-btn"
                     style={{
-                      flex: 1,
                       background:
                         "linear-gradient(135deg, var(--permanent), #c084fc)",
                     }}
                     onClick={() => handleCheckout("permanent")}
                   >
-                    📌 Permanent Loan
+                    📌 Perm Loan
                   </button>
                 </div>
                 <button

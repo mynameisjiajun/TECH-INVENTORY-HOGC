@@ -2,18 +2,47 @@ import { getDb, waitForSync } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
-// Fuzzy search: normalize search term and target by removing spaces,
-// dashes, and converting to lowercase for comparison
+// Fuzzy search: handles word reordering, partial matches, and normalized comparisons.
+// e.g. "type c to HDMI cable" will match "HDMI to Type C Cable"
 function fuzzyMatch(text, search) {
   if (!text || !search) return false;
   const normalize = (s) => s.toLowerCase().replace(/[\s\-_\/\.]+/g, "");
-  const normalizedText = normalize(String(text));
+  const textStr = String(text);
+  const normalizedText = normalize(textStr);
   const normalizedSearch = normalize(search);
-  // Check if the normalized search is a substring of normalized text
+
+  // Direct normalized substring match
   if (normalizedText.includes(normalizedSearch)) return true;
-  // Also check each word in the search against the text
-  const words = search.toLowerCase().split(/\s+/).filter(Boolean);
-  return words.every((word) => normalizedText.includes(normalize(word)));
+
+  // Split search into words and check all appear in text (any order)
+  // Also normalize text dashes/hyphens to spaces so "type-C" is searchable as "type c"
+  const textLower = textStr.toLowerCase().replace(/[\-_\/\.]+/g, " ");
+  const words = search
+    .toLowerCase()
+    .replace(/[\-_\/\.]+/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
+  if (words.length > 0 && words.every((word) => textLower.includes(word)))
+    return true;
+
+  // Try with normalized words against normalized text (handles "type-c" vs "type c")
+  if (
+    words.length > 0 &&
+    words.every((word) => normalizedText.includes(normalize(word)))
+  )
+    return true;
+
+  // Combine adjacent word pairs and try matching (handles "typec" matching "type c")
+  for (let i = 0; i < words.length - 1; i++) {
+    const pair = words[i] + words[i + 1];
+    if (normalizedText.includes(pair)) {
+      const remaining = [...words.slice(0, i), ...words.slice(i + 2)];
+      if (remaining.every((w) => normalizedText.includes(normalize(w))))
+        return true;
+    }
+  }
+
+  return false;
 }
 
 export async function GET(request) {

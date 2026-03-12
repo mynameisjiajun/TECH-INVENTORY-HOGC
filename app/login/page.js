@@ -61,6 +61,20 @@ export default function LoginPage() {
               required
             />
           </div>
+          <div
+            style={{
+              textAlign: "right",
+              marginBottom: 8,
+              marginTop: -8,
+            }}
+          >
+            <Link
+              href="/reset-password"
+              style={{ fontSize: 12, color: "var(--accent)" }}
+            >
+              Forgot password?
+            </Link>
+          </div>
           <button
             type="submit"
             className="btn btn-primary"
