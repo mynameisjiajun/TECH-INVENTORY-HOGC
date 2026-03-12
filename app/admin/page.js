@@ -383,9 +383,9 @@ export default function AdminPage() {
       <div className="page-container">
         <div className="page-header">
           <h1>
-            <RiShieldUserLine style={{ verticalAlign: "middle" }} /> Admin Panel
+            <RiShieldUserLine style={{ verticalAlign: "middle" }} /> Admin
           </h1>
-          <p>Manage loans, users, and audit trail</p>
+          <p>Manage loans, users & audit trail</p>
         </div>
 
         {/* Main Tabs */}
@@ -778,26 +778,25 @@ export default function AdminPage() {
             >
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 600,
-                  marginBottom: 8,
+                  marginBottom: 4,
                   color: "var(--text-primary)",
                 }}
               >
                 <RiKeyLine
                   style={{ verticalAlign: "middle", marginRight: 6 }}
                 />
-                Registration Invite Code
+                Invite Code
               </div>
               <p
                 style={{
-                  fontSize: 12,
+                  fontSize: 11,
                   color: "var(--text-secondary)",
-                  marginBottom: 10,
+                  marginBottom: 8,
                 }}
               >
-                New users need this code to register. Change it anytime to
-                control access.
+                Required for new registrations.
               </p>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input
@@ -807,12 +806,12 @@ export default function AdminPage() {
                   placeholder="Enter invite code"
                   style={{
                     flex: 1,
-                    padding: "8px 12px",
+                    padding: "7px 10px",
                     background: "var(--bg-secondary)",
                     border: "1px solid var(--border)",
                     borderRadius: 8,
                     color: "var(--text-primary)",
-                    fontSize: 14,
+                    fontSize: 13,
                   }}
                 />
                 <button
@@ -835,10 +834,10 @@ export default function AdminPage() {
                   <thead>
                     <tr>
                       <th>User</th>
-                      <th>Username</th>
+                      <th className="hide-mobile">Username</th>
                       <th>Role</th>
                       <th>Joined</th>
-                      <th>Reset Password</th>
+                      <th>Reset Pass</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -855,8 +854,8 @@ export default function AdminPage() {
                           >
                             <div
                               style={{
-                                width: 32,
-                                height: 32,
+                                width: 26,
+                                height: 26,
                                 borderRadius: "50%",
                                 background:
                                   u.role === "admin"
@@ -865,7 +864,7 @@ export default function AdminPage() {
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                fontSize: 14,
+                                fontSize: 11,
                                 fontWeight: 700,
                                 color: "white",
                                 flexShrink: 0,
@@ -873,13 +872,16 @@ export default function AdminPage() {
                             >
                               {u.display_name[0].toUpperCase()}
                             </div>
-                            {u.display_name}
+                            <span style={{ fontSize: 12 }}>
+                              {u.display_name}
+                            </span>
                           </div>
                         </td>
                         <td
+                          className="hide-mobile"
                           style={{
                             color: "var(--text-secondary)",
-                            fontSize: 13,
+                            fontSize: 12,
                           }}
                         >
                           @{u.username}
@@ -921,7 +923,7 @@ export default function AdminPage() {
                           >
                             <input
                               type="password"
-                              placeholder="New password"
+                              placeholder="New pass"
                               value={resetPasswords[u.id] || ""}
                               onChange={(e) =>
                                 setResetPasswords((p) => ({
@@ -933,10 +935,10 @@ export default function AdminPage() {
                                 background: "var(--bg-card)",
                                 border: "1px solid var(--border)",
                                 borderRadius: 6,
-                                padding: "4px 8px",
-                                fontSize: 12,
+                                padding: "3px 6px",
+                                fontSize: 11,
                                 color: "var(--text-primary)",
-                                width: 120,
+                                width: 90,
                               }}
                             />
                             <button

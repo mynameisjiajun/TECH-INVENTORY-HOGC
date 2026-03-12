@@ -1,51 +1,88 @@
-const CACHE_NAME = "tech-inventory-v3";
-const urlsToCache = ["/manifest.json"];
+const CACHE_NAME = "tech-inventory-v4";
+const API_CACHE = "tech-inventory-api-v1";
+
+// App shell — pages & assets to pre-cache on install
+const APP_SHELL = ["/manifest.json", "/offline"];
+
+// API routes we want to cache for offline browsing
+const CACHEABLE_API = ["/api/items"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    }),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)),
   );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name)),
-      );
-    }),
+    caches
+      .keys()
+      .then((names) =>
+        Promise.all(
+          names
+            .filter((n) => n !== CACHE_NAME && n !== API_CACHE)
+            .map((n) => caches.delete(n)),
+        ),
+      ),
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+  if (event.request.method !== "GET") return;
 
-  // Never cache API routes — always go to network
-  if (url.pathname.startsWith("/api/")) {
-    event.respondWith(fetch(event.request));
+  // --- Cacheable API routes: network-first, fall back to cache ---
+  if (CACHEABLE_API.some((p) => url.pathname.startsWith(p))) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(API_CACHE).then((c) => c.put(event.request, clone));
+          }
+          return res;
+        })
+        .catch(() =>
+          caches.match(event.request).then(
+            (cached) =>
+              cached ||
+              new Response(
+                JSON.stringify({
+                  items: [],
+                  filters: { types: [], brands: [] },
+                  offline: true,
+                }),
+                {
+                  headers: { "Content-Type": "application/json" },
+                },
+              ),
+          ),
+        ),
+    );
     return;
   }
 
-  // Network-first for static assets only
+  // --- Other API routes: network only ---
+  if (url.pathname.startsWith("/api/")) {
+    return;
+  }
+
+  // --- Pages & static assets: network-first, cache fallback, offline page ---
   event.respondWith(
     fetch(event.request)
-      .then((response) => {
-        if (response.status === 200 && event.request.method === "GET") {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+      .then((res) => {
+        if (res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
         }
-        return response;
+        return res;
       })
-      .catch(() => {
-        return caches.match(event.request);
-      }),
+      .catch(() =>
+        caches
+          .match(event.request)
+          .then((cached) => cached || caches.match("/offline")),
+      ),
   );
 });

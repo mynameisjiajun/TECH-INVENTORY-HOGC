@@ -143,7 +143,10 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    if (end_date && (!dateRegex.test(end_date) || isNaN(Date.parse(end_date)))) {
+    if (
+      end_date &&
+      (!dateRegex.test(end_date) || isNaN(Date.parse(end_date)))
+    ) {
       return NextResponse.json(
         { error: "Invalid end date format" },
         { status: 400 },
