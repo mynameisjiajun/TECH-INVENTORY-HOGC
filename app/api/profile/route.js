@@ -1,9 +1,15 @@
-import { getDb, ensureUserExists, syncUsersToSheet } from "@/lib/db";
+import {
+  getDb,
+  ensureUserExists,
+  syncUsersToSheet,
+  ensureUsersRestored,
+} from "@/lib/db";
 import { getCurrentUser, hashPassword, verifyPassword } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 // GET: get profile info
 export async function GET() {
+  await ensureUsersRestored();
   const user = await getCurrentUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -22,6 +28,7 @@ export async function GET() {
 
 // POST: update profile or change password
 export async function POST(request) {
+  await ensureUsersRestored();
   const user = await getCurrentUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

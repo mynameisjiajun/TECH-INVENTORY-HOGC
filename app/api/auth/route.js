@@ -1,4 +1,9 @@
-import { getDb, getSetting, syncUsersToSheet } from "@/lib/db";
+import {
+  getDb,
+  getSetting,
+  syncUsersToSheet,
+  ensureUsersRestored,
+} from "@/lib/db";
 import {
   hashPassword,
   verifyPassword,
@@ -23,6 +28,9 @@ export async function POST(request) {
         { status: 429 },
       );
     }
+
+    // Ensure users are restored from Google Sheets on cold start
+    await ensureUsersRestored();
 
     const { action, username, password, display_name, invite_code, email } =
       await request.json();

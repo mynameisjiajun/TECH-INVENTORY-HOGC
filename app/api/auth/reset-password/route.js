@@ -1,4 +1,4 @@
-import { getDb, syncUsersToSheet } from "@/lib/db";
+import { getDb, syncUsersToSheet, ensureUsersRestored } from "@/lib/db";
 import { hashPassword, createResetToken, verifyResetToken } from "@/lib/auth";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rateLimit";
@@ -8,6 +8,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export async function POST(request) {
   try {
+    await ensureUsersRestored();
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       "unknown";

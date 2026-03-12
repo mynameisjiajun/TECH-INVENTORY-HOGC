@@ -1,8 +1,9 @@
 import { getCurrentUser } from "@/lib/auth";
-import { getDb, ensureUserExists } from "@/lib/db";
+import { getDb, ensureUserExists, ensureUsersRestored } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  await ensureUsersRestored();
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ user: null });
 

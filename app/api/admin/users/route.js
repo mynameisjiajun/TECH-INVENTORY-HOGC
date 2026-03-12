@@ -1,9 +1,16 @@
-import { getDb, getSetting, setSetting, syncUsersToSheet } from "@/lib/db";
+import {
+  getDb,
+  getSetting,
+  setSetting,
+  syncUsersToSheet,
+  ensureUsersRestored,
+} from "@/lib/db";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 // GET: list all users (admin only)
 export async function GET() {
+  await ensureUsersRestored();
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
     return NextResponse.json(
@@ -24,6 +31,7 @@ export async function GET() {
 
 // POST: admin user management actions
 export async function POST(request) {
+  await ensureUsersRestored();
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
     return NextResponse.json(
