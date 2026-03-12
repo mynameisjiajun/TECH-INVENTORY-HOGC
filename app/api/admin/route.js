@@ -1,4 +1,4 @@
-import { getDb, waitForSync } from "@/lib/db";
+import { getDb, waitForSync, syncLoansToSheet, logActivity } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { applyDeltasToCells, appendRows } from "@/lib/sheets";
 import {
@@ -165,6 +165,7 @@ export async function POST(request) {
         ([itemId, delta]) => ({ itemId, delta }),
       );
       syncStockToSheets(db, bulkChanges);
+      syncLoansToSheet();
       return NextResponse.json({
         message: `${returned} loan(s) returned to stock`,
       });
@@ -304,6 +305,9 @@ export async function POST(request) {
             items: loanItems,
           }).catch(() => {});
         }
+        syncLoansToSheet();
+        const requester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
+        logActivity(db, user.id, "approve", `Approved ${loan.loan_type} loan #${loan_id} for ${requester?.display_name || "user"}`);
         return NextResponse.json({ message: "Loan approved" });
       } catch (txErr) {
         return NextResponse.json({ error: txErr.message }, { status: 400 });
@@ -360,6 +364,9 @@ export async function POST(request) {
           items: rejectItems,
         }).catch(() => {});
       }
+      syncLoansToSheet();
+      const rejectRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
+      logActivity(db, user.id, "reject", `Rejected loan #${loan_id} from ${rejectRequester?.display_name || "user"}`);
       return NextResponse.json({ message: "Loan rejected" });
     }
 
@@ -411,6 +418,9 @@ export async function POST(request) {
 
       const returnChanges = returnTx();
       syncStockToSheets(db, returnChanges);
+      syncLoansToSheet();
+      const returnRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
+      logActivity(db, user.id, "return", `Returned items from loan #${loan_id} (${returnRequester?.display_name || "user"})`);
       return NextResponse.json({ message: "Items returned to stock" });
     }
 
@@ -460,6 +470,7 @@ export async function POST(request) {
       if (restoreChanges.length > 0) {
         syncStockToSheets(db, restoreChanges);
       }
+      syncLoansToSheet();
       return NextResponse.json({ message: "Loan deleted" });
     }
 
@@ -643,10 +654,64 @@ export async function GET(request) {
     }
   }
 
+  // -- Chart Analytics Data --
+
+  // 1. Loans over the past 30 days
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Using substr/date logic works mostly, but we can just group by substring if created_at is an ISO string
+  const recentLoans = db.prepare(`
+    SELECT substr(created_at, 1, 10) as day, COUNT(*) as count 
+    FROM loan_requests 
+    WHERE created_at >= ?
+    GROUP BY day 
+    ORDER BY day ASC
+  `).all(thirtyDaysAgo);
+
+  // Format into {date: 'Mar 10', loans: 5}
+  const loansTrend = recentLoans.map(row => {
+    const d = new Date(row.day);
+    return {
+      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      loans: row.count
+    };
+  });
+
+  // 2. Top 5 borrowed items
+  const topItems = db.prepare(`
+    SELECT si.item as name, SUM(li.quantity) as value
+    FROM loan_items li
+    JOIN storage_items si ON li.item_id = si.id
+    GROUP BY li.item_id
+    ORDER BY value DESC
+    LIMIT 5
+  `).all();
+
+  // 3. Inventory distribution
+  const inventoryDistribution = [
+    { name: 'Available Storage', value: stats.totalCurrent },
+    { name: 'Currently Loaned', value: stats.totalLoaned },
+    { name: 'Perm Deployed', value: stats.deployedItems }
+  ].filter(d => d.value > 0);
+
+  // Recent activity feed
+  const recentActivity = db.prepare(`
+    SELECT af.*, u.display_name
+    FROM activity_feed af
+    JOIN users u ON af.user_id = u.id
+    ORDER BY af.created_at DESC
+    LIMIT 20
+  `).all();
+
   return NextResponse.json({
     stats,
     activeLoans,
     overdueCount: overdueLoans.length,
     dueSoonCount: dueSoonLoans.length,
+    charts: {
+      loansTrend,
+      topItems,
+      inventoryDistribution
+    },
+    recentActivity
   });
 }

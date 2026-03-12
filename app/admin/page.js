@@ -2,6 +2,7 @@
 import { useAuth } from "@/lib/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import { useToast } from "@/lib/ToastContext";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import {
@@ -16,11 +17,126 @@ import {
   RiKeyLine,
   RiBookmarkLine,
   RiAddLine,
+  RiDragMove2Fill,
 } from "react-icons/ri";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+function SortableTemplateItem({ t, onEdit, onDelete }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: t.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: 12,
+    padding: 16,
+    opacity: isDragging ? 0.5 : 1,
+    boxShadow: isDragging ? "0 5px 15px rgba(0,0,0,0.15)" : "none",
+    position: "relative",
+    zIndex: isDragging ? 10 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div
+            {...attributes}
+            {...listeners}
+            style={{
+              cursor: "grab",
+              color: "var(--text-muted)",
+              display: "flex",
+              alignItems: "center",
+              padding: "4px",
+            }}
+          >
+            <RiDragMove2Fill size={18} />
+          </div>
+          <div>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>{t.name}</span>
+            <span
+              className={`badge ${t.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
+              style={{ fontSize: 10, marginLeft: 8 }}
+            >
+              {t.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
+            </span>
+            {t.description && (
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  fontSize: 12,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                {t.description}
+              </p>
+            )}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="btn btn-sm btn-outline" onClick={() => onEdit(t)}>
+            Edit
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{
+              color: "var(--error)",
+              background: "none",
+              border: "1px solid rgba(239,68,68,0.3)",
+              fontSize: 11,
+            }}
+            onClick={() => onDelete(t)}
+          >
+            <RiDeleteBinLine />
+          </button>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingLeft: 34 }}>
+        {t.items.map((item) => (
+          <span key={item.item_id} className="loan-item-chip">
+            {item.item_name} × {item.quantity}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const [loans, setLoans] = useState([]);
   const [statusFilter, setStatusFilter] = useState("pending");
   const [fetching, setFetching] = useState(true);
@@ -122,12 +238,49 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/templates");
       if (res.ok) {
         const data = await res.json();
+        // Templates come back ordered correctly from the DB
         setTemplates(data.templates);
       }
     } catch {
       /* silent */
     } finally {
       setTemplatesFetching(false);
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+
+    if (active.id !== over.id) {
+      setTemplates((items) => {
+        const oldIndex = items.findIndex((t) => t.id === active.id);
+        const newIndex = items.findIndex((t) => t.id === over.id);
+
+        const newTemplates = arrayMove(items, oldIndex, newIndex);
+        
+        // Fire async request to save ordering
+        fetch("/api/admin/templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "reorder",
+            orderedIds: newTemplates.map((t) => t.id),
+          }),
+        }).catch(() => {});
+
+        return newTemplates;
+      });
     }
   };
 
@@ -178,12 +331,13 @@ export default function AdminPage() {
       if (res.ok) {
         fetchLoans();
         setAdminNotes((p) => ({ ...p, [loanId]: "" }));
+        toast.success(`Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "return" ? "returned" : action + "d"} successfully`);
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || `Action failed (${res.status})`);
+        toast.error(data.error || `Action failed (${res.status})`);
       }
     } catch (err) {
-      setError("Network error — action could not be completed");
+      toast.error("Network error — action could not be completed");
     } finally {
       setActionLoading(null);
     }
@@ -205,12 +359,13 @@ export default function AdminPage() {
       if (res.ok) {
         setSelectedLoans(new Set());
         fetchLoans();
+        toast.success(`${selectedLoans.size} loan(s) returned successfully`);
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || `Bulk return failed (${res.status})`);
+        toast.error(data.error || `Bulk return failed (${res.status})`);
       }
     } catch (err) {
-      setError("Network error — bulk return could not be completed");
+      toast.error("Network error — bulk return could not be completed");
     } finally {
       setBulkLoading(false);
     }
@@ -528,8 +683,10 @@ export default function AdminPage() {
               )}
 
             {fetching ? (
-              <div className="loading-spinner">
-                <div className="spinner" />
+              <div>
+                {[1,2,3,4].map((i) => (
+                  <div key={i} className="skeleton skeleton-row" />
+                ))}
               </div>
             ) : loans.length === 0 ? (
               <div className="empty-state">
@@ -1394,111 +1551,48 @@ export default function AdminPage() {
                 <p>Create preset item bundles users can request in one click</p>
               </div>
             ) : (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 12 }}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
               >
-                {templates.map((t) => (
+                <SortableContext
+                  items={templates.map((t) => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
                   <div
-                    key={t.id}
-                    style={{
-                      background: "var(--bg-card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 12,
-                      padding: 16,
-                    }}
+                    style={{ display: "flex", flexDirection: "column", gap: 12 }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <div>
-                        <span style={{ fontWeight: 600, fontSize: 15 }}>
-                          {t.name}
-                        </span>
-                        <span
-                          className={`badge ${t.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
-                          style={{ fontSize: 10, marginLeft: 8 }}
-                        >
-                          {t.loan_type === "permanent"
-                            ? "📌 Permanent"
-                            : "⏱️ Temporary"}
-                        </span>
-                        {t.description && (
-                          <p
-                            style={{
-                              margin: "4px 0 0",
-                              fontSize: 12,
-                              color: "var(--text-secondary)",
-                            }}
-                          >
-                            {t.description}
-                          </p>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn btn-sm btn-outline"
-                          onClick={() => {
-                            setEditingTemplate(t.id);
-                            setTemplateForm({
-                              name: t.name,
-                              description: t.description,
-                              loan_type: t.loan_type,
-                              items: t.items,
-                            });
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn btn-sm"
-                          style={{
-                            color: "var(--error)",
-                            background: "none",
-                            border: "1px solid rgba(239,68,68,0.3)",
-                            fontSize: 11,
-                          }}
-                          onClick={async () => {
-                            if (!confirm(`Delete template "${t.name}"?`))
-                              return;
-                            await fetch("/api/admin/templates", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                action: "delete",
-                                id: t.id,
-                              }),
-                            });
-                            fetchTemplates();
-                          }}
-                        >
-                          <RiDeleteBinLine />
-                        </button>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {t.items.map((item) => (
-                        <span key={item.item_id} className="loan-item-chip">
-                          {item.item_name} × {item.quantity}
-                        </span>
-                      ))}
-                    </div>
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: "var(--text-muted)",
-                        margin: "8px 0 0",
-                      }}
-                    >
-                      Created by {t.created_by_name}
-                    </p>
+                    {templates.map((t) => (
+                      <SortableTemplateItem
+                        key={t.id}
+                        t={t}
+                        onEdit={(t) => {
+                          setEditingTemplate(t.id);
+                          setTemplateForm({
+                            name: t.name,
+                            description: t.description,
+                            loan_type: t.loan_type,
+                            items: t.items,
+                          });
+                        }}
+                        onDelete={async (t) => {
+                          if (!confirm(`Delete template "${t.name}"?`)) return;
+                          await fetch("/api/admin/templates", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "delete",
+                              id: t.id,
+                            }),
+                          });
+                          fetchTemplates();
+                        }}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
             )}
           </>
         )}

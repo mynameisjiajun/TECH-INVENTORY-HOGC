@@ -183,5 +183,10 @@ export async function GET(request) {
     return NextResponse.json({ items });
   }
 
+  if (tab === "presets") {
+    // Templates are fetched separately via /api/admin/templates on the frontend
+    return NextResponse.json({ items: [] });
+  }
+
   return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
 }

@@ -2,6 +2,7 @@
 import { useAuth } from "@/lib/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
+import { useToast } from "@/lib/ToastContext";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import {
@@ -19,11 +20,31 @@ import {
   RiCheckLine,
   RiArrowGoBackLine,
 } from "react-icons/ri";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+} from "recharts";
+
+const COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"];
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   const [stats, setStats] = useState(null);
+  const [charts, setCharts] = useState(null);
+  const [showCharts, setShowCharts] = useState(false);
   const [activeLoans, setActiveLoans] = useState([]);
   const [overdueCount, setOverdueCount] = useState(0);
   const [dueSoonCount, setDueSoonCount] = useState(0);
@@ -38,6 +59,7 @@ export default function DashboardPage() {
   // User-only state
   const [myLoans, setMyLoans] = useState([]);
   const [myFetching, setMyFetching] = useState(true);
+  const [recentActivity, setRecentActivity] = useState([]);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -54,6 +76,8 @@ export default function DashboardPage() {
         setActiveLoans(data.activeLoans);
         setOverdueCount(data.overdueCount || 0);
         setDueSoonCount(data.dueSoonCount || 0);
+        setCharts(data.charts || null);
+        setRecentActivity(data.recentActivity || []);
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || `Failed to load dashboard data (${res.status})`);
@@ -115,12 +139,13 @@ export default function DashboardPage() {
       if (res.ok) {
         setSelectedLoan(null);
         fetchDashboard();
+        toast.success("Loan deleted successfully");
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to delete loan");
+        toast.error(data.error || "Failed to delete loan");
       }
     } catch {
-      setError("Network error — could not delete loan");
+      toast.error("Network error — could not delete loan");
     } finally {
       setDeleteLoading(false);
     }
@@ -340,9 +365,16 @@ export default function DashboardPage() {
           )}
 
           {myFetching ? (
-            <div className="loading-spinner">
-              <div className="spinner" />
-            </div>
+            <>
+              <div className="stats-grid" style={{ marginBottom: 24 }}>
+                {[1,2].map((i) => (
+                  <div key={i} className="skeleton skeleton-stat" />
+                ))}
+              </div>
+              {[1,2,3].map((i) => (
+                <div key={i} className="skeleton skeleton-row" />
+              ))}
+            </>
           ) : (
             <>
               {/* Summary cards */}
@@ -853,6 +885,13 @@ export default function DashboardPage() {
         )}
 
         {/* Stats Cards */}
+        {!stats && (
+          <div className="stats-grid">
+            {[1,2,3,4,5].map((i) => (
+              <div key={i} className="skeleton skeleton-stat" />
+            ))}
+          </div>
+        )}
         {stats && (
           <div className="stats-grid">
             <div className="stat-card">
@@ -900,6 +939,151 @@ export default function DashboardPage() {
               </div>
               <div className="stat-label">Deployed Items</div>
             </div>
+          </div>
+        )}
+
+        {/* Analytics Charts */}
+        {charts && (
+          <div style={{ marginTop: 24, marginBottom: 32 }}>
+            <button
+              onClick={() => setShowCharts((p) => !p)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: "rgba(99,102,241,0.08)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: "8px 16px",
+                color: "var(--text-primary)",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                fontFamily: "inherit",
+                width: "100%",
+                justifyContent: "center",
+                transition: "var(--transition)",
+              }}
+            >
+              {showCharts ? "▲ Hide Analytics" : "▼ Show Analytics"}
+            </button>
+            {showCharts && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+                  gap: 20,
+                  marginTop: 16,
+                }}
+              >
+            <div className="admin-chart-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, outline: "none" }}>
+              <h3 style={{ fontSize: 16, marginBottom: 16 }}>Top 5 Borrowed Items</h3>
+              <div style={{ width: "100%", height: 300 }}>
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={charts.topItems}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      paddingAngle={5}
+                      dataKey="value"
+                      label={({ name, percent }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                      labelLine={false}
+                      fontSize={10}
+                    >
+                      {charts.topItems.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        color: "white",
+                        fontSize: 12,
+                        padding: "6px 10px",
+                      }}
+                      itemStyle={{ color: "white", fontSize: 12 }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="admin-chart-card" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, outline: "none" }}>
+              <h3 style={{ fontSize: 16, marginBottom: 16 }}>Storage vs Deployed</h3>
+              <div style={{ width: "100%", height: 300 }}>
+                <ResponsiveContainer>
+                  <BarChart data={charts.inventoryDistribution} margin={{ top: 25, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff1a" />
+                    <XAxis
+                      dataKey="name"
+                      stroke="var(--text-muted)"
+                      tick={{ fontSize: 12 }}
+                      tickMargin={10}
+                    />
+                    <YAxis
+                      stroke="var(--text-muted)"
+                      tick={{ fontSize: 12 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        color: "white",
+                      }}
+                      itemStyle={{ color: "white" }}
+                      cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    />
+                    <Bar
+                      dataKey="value"
+                      name="Count"
+                      radius={[6, 6, 0, 0]}
+                      label={{ fill: "white", fontSize: 13, fontWeight: "bold", position: "top" }}
+                    >
+                      {charts.inventoryDistribution.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+            )}
+          </div>
+        )}
+
+        {/* Activity Feed */}
+        {recentActivity.length > 0 && (
+          <div className="activity-feed">
+            <h3 style={{ fontSize: 16, marginBottom: 12 }}>Recent Activity</h3>
+            {recentActivity.map((a) => (
+              <div key={a.id} className="activity-item">
+                <div className={`activity-dot ${a.action}`} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: "var(--text-primary)" }}>
+                    {a.description}
+                  </div>
+                  <div className="activity-time">
+                    {new Date(a.created_at + "Z").toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

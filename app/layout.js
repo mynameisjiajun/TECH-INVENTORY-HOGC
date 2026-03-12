@@ -1,6 +1,7 @@
 import './globals.css';
 import { AuthProvider } from '@/lib/AuthContext';
 import { CartProvider } from '@/lib/CartContext';
+import { ToastProvider } from '@/lib/ToastContext';
 
 export const metadata = {
   title: 'Tech Inventory | Church Tech Ministry',
@@ -29,7 +30,9 @@ export default function RootLayout({ children }) {
       <body>
         <AuthProvider>
           <CartProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </CartProvider>
         </AuthProvider>
         <script

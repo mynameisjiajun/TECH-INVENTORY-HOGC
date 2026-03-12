@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RiServerLine } from "react-icons/ri";
+import FluidBackground from "@/components/FluidBackground";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -29,8 +30,10 @@ export default function LoginPage() {
   };
 
   return (
+    <>
+    <FluidBackground />
     <div className="auth-container">
-      <div className="auth-card">
+      <div className="auth-card glass-panel">
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           <RiServerLine style={{ fontSize: 40, color: "var(--accent)" }} />
         </div>
@@ -90,5 +93,6 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+    </>
   );
 }

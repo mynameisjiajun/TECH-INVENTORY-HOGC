@@ -24,16 +24,34 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [notifPermission, setNotifPermission] = useState("default");
   const notifRef = useRef(null);
+  const prevUnreadRef = useRef(0);
 
   useEffect(() => {
     if (!user) return;
+    // Check initial permission
+    if (typeof Notification !== "undefined") {
+      setNotifPermission(Notification.permission);
+    }
     const fetchNotifs = async () => {
       try {
         const res = await fetch("/api/notifications");
         if (res.ok) {
           const data = await res.json();
           setNotifications(data.notifications);
+          // Show browser notification when new unreads arrive
+          if (data.unreadCount > prevUnreadRef.current && prevUnreadRef.current > 0 && Notification.permission === "granted") {
+            const newest = data.notifications.find(n => !n.read);
+            if (newest) {
+              new Notification("Tech Inventory", {
+                body: newest.message,
+                icon: "/icons/icon-192.png",
+                tag: `notif-${newest.id}`,
+              });
+            }
+          }
+          prevUnreadRef.current = data.unreadCount;
           setUnreadCount(data.unreadCount);
         }
       } catch (err) {
@@ -41,7 +59,7 @@ export default function Navbar() {
       }
     };
     fetchNotifs();
-    const interval = setInterval(fetchNotifs, 60000);
+    const interval = setInterval(fetchNotifs, 30000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -178,6 +196,29 @@ export default function Navbar() {
                         </div>
                       </div>
                     ))
+                  )}
+                  {notifPermission !== "granted" && typeof Notification !== "undefined" && (
+                    <button
+                      onClick={async () => {
+                        const perm = await Notification.requestPermission();
+                        setNotifPermission(perm);
+                      }}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        padding: "10px",
+                        background: "rgba(99,102,241,0.1)",
+                        border: "none",
+                        borderTop: "1px solid var(--border)",
+                        color: "var(--accent)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      🔔 Enable Push Notifications
+                    </button>
                   )}
                 </div>
               )}

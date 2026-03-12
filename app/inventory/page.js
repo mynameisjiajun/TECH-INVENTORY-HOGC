@@ -27,7 +27,6 @@ export default function InventoryPage() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [templates, setTemplates] = useState([]);
-  const [showTemplates, setShowTemplates] = useState(false);
   const [overdueCount, setOverdueCount] = useState(0);
   const [offline, setOffline] = useState(false);
 
@@ -96,7 +95,6 @@ export default function InventoryPage() {
           added++;
         }
       });
-      setShowTemplates(false);
       if (added === 0)
         setError("None of the template items are currently in stock");
     },
@@ -128,6 +126,7 @@ export default function InventoryPage() {
     );
 
   const tabs = [
+    { id: "presets", label: "Presets" },
     { id: "storage", label: "Storage Spare" },
     { id: "deployed", label: "Deployed" },
     { id: "total_quantity", label: "Total Quantity" },
@@ -153,15 +152,6 @@ export default function InventoryPage() {
             <p>Browse and manage tech equipment</p>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            {templates.length > 0 && (
-              <button
-                className="btn btn-sm btn-outline"
-                onClick={() => setShowTemplates((p) => !p)}
-                title="Quick request from templates"
-              >
-                <RiBookmarkLine /> Templates
-              </button>
-            )}
             <button
               className="btn btn-sm btn-outline"
               onClick={handleRefresh}
@@ -178,114 +168,6 @@ export default function InventoryPage() {
             </button>
           </div>
         </div>
-
-        {/* Template quick-request panel */}
-        {showTemplates && templates.length > 0 && (
-          <div
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              padding: 16,
-              marginBottom: 20,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <RiBookmarkLine /> Quick Request Templates
-              </h3>
-              <button
-                onClick={() => setShowTemplates(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  fontSize: 18,
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {templates.map((t) => (
-                <div
-                  key={t.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "10px 14px",
-                    background: "rgba(99,102,241,0.05)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>
-                      {t.name}
-                    </div>
-                    {t.description && (
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "var(--text-secondary)",
-                          marginTop: 2,
-                        }}
-                      >
-                        {t.description}
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        marginTop: 6,
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 4,
-                      }}
-                    >
-                      {t.items.map((item) => (
-                        <span
-                          key={item.item_id}
-                          className="loan-item-chip"
-                          style={{ fontSize: 11 }}
-                        >
-                          {item.item_name} × {item.quantity}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    style={{ flexShrink: 0, marginLeft: 12 }}
-                    onClick={() => {
-                      setTab("storage");
-                      handleTemplateRequest(t);
-                    }}
-                  >
-                    <RiAddLine /> Add to Cart
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Overdue banner */}
         {overdueCount > 0 && (
@@ -440,6 +322,67 @@ export default function InventoryPage() {
           </div>
         ) : (
           <>
+            {/* Presets Grid */}
+            {tab === "presets" && (
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                gap: "16px",
+                marginTop: "16px",
+              }}>
+                {templates.length === 0 ? (
+                  <div className="empty-state" style={{ gridColumn: "1 / -1" }}>
+                    <h3>No presets found</h3>
+                    <p>Admins can create presets in the Admin -{'>'} Templates page to allow requesting a group of items quickly.</p>
+                  </div>
+                ) : (
+                  templates.map((t) => (
+                    <div
+                      key={t.id}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        padding: "16px",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "12px",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <span className={`badge \${t.loan_type === 'permanent' ? 'badge-permanent' : 'badge-temporary'}`}>
+                            {t.loan_type === 'permanent' ? '📌 Permanent' : '⏱️ Temporary'}
+                          </span>
+                          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{t.name}</h3>
+                        </div>
+                        {t.description && (
+                          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                            {t.description}
+                          </p>
+                        )}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+                          {t.items.map((item) => (
+                            <span key={item.item_id} className="loan-item-chip">
+                              {item.item_name} × {item.quantity}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-primary"
+                        style={{ width: "100%", justifyContent: "center" }}
+                        onClick={() => handleTemplateRequest(t)}
+                      >
+                        <RiAddLine /> Add Preset to Cart
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
             {/* Storage Spare Table */}
             {tab === "storage" && (
               <div className="table-container">

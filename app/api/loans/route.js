@@ -1,4 +1,4 @@
-import { getDb, waitForSync, ensureUserExists } from "@/lib/db";
+import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
@@ -223,6 +223,8 @@ export async function POST(request) {
 
     try {
       const loanId = createLoanTx();
+      syncLoansToSheet();
+      logActivity(db, user.id, "request", `${user.display_name || user.username} submitted a new ${body.loan_type || "temporary"} loan request #${loanId}`);
       return NextResponse.json({
         loan_id: loanId,
         message: "Loan request submitted!",

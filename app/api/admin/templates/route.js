@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db';
+import { getDb, syncTemplatesToSheet } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
@@ -11,7 +11,7 @@ export async function GET() {
     SELECT lt.*, u.display_name as created_by_name
     FROM loan_templates lt
     JOIN users u ON lt.created_by = u.id
-    ORDER BY lt.created_at DESC
+    ORDER BY lt.order_idx ASC, lt.created_at DESC
   `).all();
 
   return NextResponse.json({
@@ -49,12 +49,14 @@ export async function POST(request) {
         INSERT INTO loan_templates (name, description, loan_type, items_json, created_by)
         VALUES (?, ?, ?, ?, ?)
       `).run(name.trim(), description || '', loan_type || 'temporary', itemsJson, user.id);
+      syncTemplatesToSheet();
       return NextResponse.json({ message: 'Template created', id: result.lastInsertRowid });
     } else {
       if (!id) return NextResponse.json({ error: 'Template ID required' }, { status: 400 });
       db.prepare(`
         UPDATE loan_templates SET name=?, description=?, loan_type=?, items_json=? WHERE id=?
       `).run(name.trim(), description || '', loan_type || 'temporary', itemsJson, id);
+      syncTemplatesToSheet();
       return NextResponse.json({ message: 'Template updated' });
     }
   }
@@ -62,7 +64,22 @@ export async function POST(request) {
   if (action === 'delete') {
     if (!id) return NextResponse.json({ error: 'Template ID required' }, { status: 400 });
     db.prepare('DELETE FROM loan_templates WHERE id = ?').run(id);
+    syncTemplatesToSheet();
     return NextResponse.json({ message: 'Template deleted' });
+  }
+
+  if (action === 'reorder') {
+    const { orderedIds } = await request.json().catch(() => ({}));
+    if (!Array.isArray(orderedIds)) return NextResponse.json({ error: 'orderedIds array required' }, { status: 400 });
+    
+    const updateOrder = db.prepare('UPDATE loan_templates SET order_idx = ? WHERE id = ?');
+    db.transaction(() => {
+      orderedIds.forEach((templateId, idx) => {
+        updateOrder.run(idx, templateId);
+      });
+    })();
+    syncTemplatesToSheet();
+    return NextResponse.json({ message: 'Templates reordered' });
   }
 
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

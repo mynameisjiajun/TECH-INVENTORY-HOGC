@@ -86,3 +86,38 @@ self.addEventListener("fetch", (event) => {
       ),
   );
 });
+
+// Push notification handler
+self.addEventListener("push", (event) => {
+  let data = { title: "Tech Inventory", body: "You have a new notification" };
+  try {
+    if (event.data) data = event.data.json();
+  } catch (e) {
+    if (event.data) data.body = event.data.text();
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Tech Inventory", {
+      body: data.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: data.tag || "general",
+      data: { url: data.url || "/dashboard" },
+    })
+  );
+});
+
+// Notification click handler
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/dashboard";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((clients) => {
+      for (const client of clients) {
+        if (client.url.includes(url) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});

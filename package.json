@@ -10,6 +10,9 @@
     "seed": "node lib/seed.js"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
     "googleapis": "^171.4.0",
@@ -19,6 +22,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-icons": "^5.6.0",
+    "recharts": "^3.8.0",
     "resend": "^6.9.3"
   },
   "devDependencies": {
