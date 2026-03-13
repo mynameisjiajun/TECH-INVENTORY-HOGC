@@ -4,7 +4,7 @@ import {
   syncUsersToSheet,
   ensureUsersRestored,
 } from "@/lib/db/db";
-import { getCurrentUser, hashPassword, verifyPassword } from "@/lib/utils/auth";
+import { getCurrentUser, hashPassword, verifyPassword, validatePasswordStrength } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
 // GET: get profile info
@@ -68,9 +68,10 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    if (new_password.length < 6) {
+    const passwordValidation = validatePasswordStrength(new_password);
+    if (!passwordValidation.isValid) {
       return NextResponse.json(
-        { error: "New password must be at least 6 characters" },
+        { error: passwordValidation.error },
         { status: 400 },
       );
     }

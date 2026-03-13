@@ -1,5 +1,5 @@
 import { getDb, syncUsersToSheet, ensureUsersRestored } from "@/lib/db/db";
-import { hashPassword, createResetToken, verifyResetToken } from "@/lib/utils/auth";
+import { hashPassword, createResetToken, verifyResetToken, validatePasswordStrength } from "@/lib/utils/auth";
 import { sendPasswordResetEmail } from "@/lib/services/email";
 import { checkRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
@@ -71,9 +71,10 @@ export async function POST(request) {
           { status: 400 },
         );
       }
-      if (!new_password || new_password.length < 6) {
+      const passwordValidation = validatePasswordStrength(new_password);
+      if (!passwordValidation.isValid) {
         return NextResponse.json(
-          { error: "Password must be at least 6 characters" },
+          { error: passwordValidation.error },
           { status: 400 },
         );
       }

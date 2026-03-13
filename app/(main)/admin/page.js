@@ -404,8 +404,12 @@ export default function AdminPage() {
 
   const handleResetPassword = async (userId) => {
     const pw = resetPasswords[userId];
-    if (!pw || pw.length < 6) {
-      setUserMsg("Password must be at least 6 characters");
+    if (!pw || pw.length < 8) {
+      setUserMsg("Password must be at least 8 characters");
+      return;
+    }
+    if (!/[A-Z]/.test(pw) || !/[a-z]/.test(pw) || !/[0-9]/.test(pw)) {
+      setUserMsg("Password must contain at least one uppercase letter, one lowercase letter, and one number");
       return;
     }
     try {

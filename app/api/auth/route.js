@@ -9,6 +9,7 @@ import {
   verifyPassword,
   createToken,
   getTokenCookieOptions,
+  validatePasswordStrength,
 } from "@/lib/utils/auth";
 import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
@@ -44,9 +45,10 @@ export async function POST(request) {
           { status: 400 },
         );
       }
-      if (!password || password.length < 6) {
+      const passwordValidation = validatePasswordStrength(password);
+      if (!passwordValidation.isValid) {
         return NextResponse.json(
-          { error: "Password must be at least 6 characters" },
+          { error: passwordValidation.error },
           { status: 400 },
         );
       }

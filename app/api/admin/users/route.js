@@ -5,7 +5,7 @@ import {
   syncUsersToSheet,
   ensureUsersRestored,
 } from "@/lib/db/db";
-import { getCurrentUser, hashPassword } from "@/lib/utils/auth";
+import { getCurrentUser, hashPassword, validatePasswordStrength } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
 // GET: list all users (admin only)
@@ -52,9 +52,10 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    if (new_password.length < 6) {
+    const passwordValidation = validatePasswordStrength(new_password);
+    if (!passwordValidation.isValid) {
       return NextResponse.json(
-        { error: "Password must be at least 6 characters" },
+        { error: passwordValidation.error },
         { status: 400 },
       );
     }

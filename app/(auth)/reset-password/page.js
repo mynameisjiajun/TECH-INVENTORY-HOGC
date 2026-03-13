@@ -43,6 +43,17 @@ function ResetPasswordForm() {
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+      setError("Password must contain at least one uppercase letter, one lowercase letter, and one number");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -130,9 +141,9 @@ function ResetPasswordForm() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters, 1 uppercase, 1 lowercase, 1 number"
                 required
-                minLength={6}
+                minLength={8}
                 autoFocus
               />
             </div>
@@ -144,7 +155,7 @@ function ResetPasswordForm() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat your password"
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
             <button
