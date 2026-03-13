@@ -278,10 +278,21 @@ export async function POST(request) {
     ensureUserExists(user);
 
     const createLoanTx = db.transaction(() => {
+      // ⚡ Bolt: Optimized N+1 query by batch-fetching all requested items in a single query.
+      // Used `json_each` to bypass SQLite parameter limits on serverless functions.
+      const itemIds = items.map(i => i.item_id);
+      const storageItems = db
+        .prepare(`
+          SELECT si.*
+          FROM storage_items si
+          JOIN json_each(?) je ON si.id = je.value
+        `)
+        .all(JSON.stringify(itemIds));
+
+      const storageItemMap = new Map(storageItems.map(si => [si.id, si]));
+
       for (const item of items) {
-        const storageItem = db
-          .prepare("SELECT * FROM storage_items WHERE id = ?")
-          .get(item.item_id);
+        const storageItem = storageItemMap.get(item.item_id);
         if (!storageItem) {
           throw new Error(`Item not found: ${item.item_id}`);
         }
