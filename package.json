@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "node lib/seed.js"
+    "seed": "node lib/seed.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -26,7 +27,9 @@
     "resend": "^6.9.3"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6"
+    "eslint-config-next": "16.1.6",
+    "vitest": "^4.1.0"
   }
 }
