@@ -66,14 +66,11 @@ export default function CartPanel() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setSuccess("Loan request submitted! Awaiting admin approval.");
-      setTimeout(() => {
-        clearCart();
-        setShowLoanForm(false);
-        setSuccess("");
-        router.refresh(); // Clear Next.js cache so the loans page fetches new data
-        router.push("/loans");
-      }, 2000);
+      clearCart();
+      setShowLoanForm(false);
+      setSuccess("");
+      // Force a hard cache-bursting reload so they immediately see the new loan
+      window.location.href = "/loans";
     } catch (err) {
       setError(err.message);
     } finally {

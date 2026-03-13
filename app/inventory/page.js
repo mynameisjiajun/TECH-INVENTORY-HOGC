@@ -125,7 +125,7 @@ export default function InventoryPage() {
       </div>
     );
 
-  const tabs = [
+  const allTabs = [
     { id: "presets", label: "Presets" },
     { id: "storage", label: "Storage Spare" },
     { id: "deployed", label: "Deployed" },
@@ -133,6 +133,9 @@ export default function InventoryPage() {
     { id: "total_breakdown", label: "Qty Breakdown" },
     { id: "low_stock", label: "Low in Stock" },
   ];
+  const tabs = user.role === "admin" 
+    ? allTabs 
+    : [{ id: "presets", label: "Presets" }, { id: "storage", label: "Storage Spare" }];
 
   return (
     <>
