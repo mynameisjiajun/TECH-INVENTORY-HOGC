@@ -1,3 +1,3 @@
-## 2026-03-13 - [Avoid N+1 Database queries in SQLite apis]
-**Learning:** Found an N+1 query problem where `activeLoans` was fetching its `loan_items` individually in a `for` loop `(for (const loan of activeLoans))`.
-**Action:** Replace `for` loop queries with an `IN` clause `(WHERE li.loan_request_id IN (...))` to batch load items and then group them in-memory to prevent blocking the event loop and optimize SQLite operations on backends.
+## 2024-05-24 - Non-blocking Sheet Sync API Calls
+**Learning:** In Next.js App Router on Vercel, `await`ing background tasks like Google Sheets synchronization blocks the response to the client. This significantly increases latency for end users performing simple actions like loan approvals. Vercel serverless environments will terminate floating promises when the response is sent, so `after()` from `next/server` must be used.
+**Action:** Use `after(() => task().catch(console.error))` to schedule non-blocking asynchronous tasks after the response has been sent, ensuring fast UI feedback while preserving background execution.

@@ -2,7 +2,7 @@ import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } f
 import { getCurrentUser } from "@/lib/utils/auth";
 import { sendOverdueEmail, sendDueSoonEmail } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 // GET: fetch loan requests
 export async function GET(request) {
@@ -351,7 +351,8 @@ export async function POST(request) {
 
     try {
       const loanId = createLoanTx();
-      await syncLoansToSheet();
+      // ⚡ Bolt: Execute Google Sheets sync asynchronously after sending the response to reduce user latency.
+      after(() => syncLoansToSheet().catch(console.error));
       logActivity(db, user.id, "request", `${user.display_name || user.username} submitted a new ${loan_type || "temporary"} loan request #${loanId}`);
       return NextResponse.json({
         loan_id: loanId,

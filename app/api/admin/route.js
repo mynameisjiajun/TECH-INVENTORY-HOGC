@@ -7,7 +7,7 @@ import {
   sendLoanStatusEmail,
 } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 const SHEETS_ENABLED = !!(
   process.env.GOOGLE_SHEETS_ID &&
@@ -181,7 +181,8 @@ export async function POST(request) {
         ([itemId, delta]) => ({ itemId, delta }),
       );
       await syncStockToSheets(db, bulkChanges);
-      await syncLoansToSheet();
+      // ⚡ Bolt: Execute Google Sheets sync asynchronously after sending the response to reduce user latency.
+      after(() => syncLoansToSheet().catch(console.error));
       return NextResponse.json({
         message: `${returned} loan(s) returned to stock`,
       });
@@ -333,7 +334,8 @@ export async function POST(request) {
         if (adminBackgroundTasks.length > 0) {
           await Promise.all(adminBackgroundTasks);
         }
-        await syncLoansToSheet();
+        // ⚡ Bolt: Execute Google Sheets sync asynchronously after sending the response to reduce user latency.
+        after(() => syncLoansToSheet().catch(console.error));
         const requester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
         logActivity(db, user.id, "approve", `Approved ${loan.loan_type} loan #${loan_id} for ${requester?.display_name || "user"}`);
         return NextResponse.json({ message: "Loan approved" });
@@ -404,7 +406,8 @@ export async function POST(request) {
       if (rejectBackgroundTasks.length > 0) {
         await Promise.all(rejectBackgroundTasks);
       }
-      await syncLoansToSheet();
+      // ⚡ Bolt: Execute Google Sheets sync asynchronously after sending the response to reduce user latency.
+      after(() => syncLoansToSheet().catch(console.error));
       const rejectRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "reject", `Rejected loan #${loan_id} from ${rejectRequester?.display_name || "user"}`);
       return NextResponse.json({ message: "Loan rejected" });
@@ -464,7 +467,8 @@ export async function POST(request) {
         `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`
       );
 
-      await syncLoansToSheet();
+      // ⚡ Bolt: Execute Google Sheets sync asynchronously after sending the response to reduce user latency.
+      after(() => syncLoansToSheet().catch(console.error));
       const returnRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "return", `Returned items from loan #${loan_id} (${returnRequester?.display_name || "user"})`);
       return NextResponse.json({ message: "Items returned to stock" });
@@ -516,7 +520,8 @@ export async function POST(request) {
       if (restoreChanges.length > 0) {
         await syncStockToSheets(db, restoreChanges);
       }
-      await syncLoansToSheet();
+      // ⚡ Bolt: Execute Google Sheets sync asynchronously after sending the response to reduce user latency.
+      after(() => syncLoansToSheet().catch(console.error));
       return NextResponse.json({ message: "Loan deleted" });
     }
 
