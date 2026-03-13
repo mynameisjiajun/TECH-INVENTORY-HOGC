@@ -93,6 +93,7 @@ export default function CartPanel() {
             Cart ({totalItems})
           </h2>
           <button
+            aria-label="Close cart"
             className="btn btn-icon btn-outline"
             onClick={() => setIsOpen(false)}
           >
@@ -123,6 +124,7 @@ export default function CartPanel() {
                     </div>
                     <div className="qty-control">
                       <button
+                        aria-label="Decrease quantity"
                         onClick={() =>
                           updateQuantity(item.id, item.quantity - 1)
                         }
@@ -131,6 +133,7 @@ export default function CartPanel() {
                       </button>
                       <span>{item.quantity}</span>
                       <button
+                        aria-label="Increase quantity"
                         onClick={() =>
                           updateQuantity(item.id, item.quantity + 1)
                         }
@@ -139,6 +142,7 @@ export default function CartPanel() {
                       </button>
                     </div>
                     <button
+                      aria-label="Remove item"
                       className="cart-delete-btn"
                       onClick={() => removeItem(item.id)}
                       title="Remove item"
