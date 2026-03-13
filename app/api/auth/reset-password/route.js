@@ -1,5 +1,5 @@
 import { getDb, syncUsersToSheet, ensureUsersRestored } from "@/lib/db/db";
-import { hashPassword, createResetToken, verifyResetToken } from "@/lib/utils/auth";
+import { hashPassword, createResetToken, verifyResetToken, decodeResetTokenUnsafely } from "@/lib/utils/auth";
 import { sendPasswordResetEmail } from "@/lib/services/email";
 import { checkRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
@@ -37,7 +37,7 @@ export async function POST(request) {
       const normalizedUsername = username.trim().toLowerCase();
       const user = db
         .prepare(
-          "SELECT id, username, display_name, email FROM users WHERE username = ?",
+          "SELECT id, username, display_name, email, password_hash FROM users WHERE username = ?",
         )
         .get(normalizedUsername);
 
@@ -78,8 +78,8 @@ export async function POST(request) {
         );
       }
 
-      const payload = verifyResetToken(token);
-      if (!payload) {
+      const decoded = decodeResetTokenUnsafely(token);
+      if (!decoded || !decoded.id || !decoded.username) {
         return NextResponse.json(
           { error: "Invalid or expired reset link. Please request a new one." },
           { status: 400 },
@@ -87,10 +87,18 @@ export async function POST(request) {
       }
 
       const user = db
-        .prepare("SELECT id FROM users WHERE id = ? AND username = ?")
-        .get(payload.id, payload.username);
+        .prepare("SELECT id, username, password_hash FROM users WHERE id = ? AND username = ?")
+        .get(decoded.id, decoded.username);
       if (!user) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      const payload = verifyResetToken(token, user.password_hash);
+      if (!payload) {
+        return NextResponse.json(
+          { error: "Invalid or expired reset link. Please request a new one." },
+          { status: 400 },
+        );
       }
 
       const hash = await hashPassword(new_password);
