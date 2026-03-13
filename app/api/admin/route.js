@@ -129,35 +129,32 @@ export async function POST(request) {
       const bulkReturnTx = db.transaction(() => {
         let returned = 0;
         const bulkDeltaMap = new Map();
+
+        // ⚡ Bolt: Pre-prepare statements outside the loop to avoid recompiling queries
+        const getLoanStmt = db.prepare("SELECT * FROM loan_requests WHERE id = ? AND status = ?");
+        const getLoanItemsStmt = db.prepare("SELECT * FROM loan_items WHERE loan_request_id = ?");
+        const updateLoanStmt = db.prepare(`
+          UPDATE loan_requests SET status = 'returned', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `);
+        const insertNotificationStmt = db.prepare("INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)");
+
         for (const loanId of loan_ids) {
-          const loan = db
-            .prepare("SELECT * FROM loan_requests WHERE id = ? AND status = ?")
-            .get(loanId, "approved");
+          const loan = getLoanStmt.get(loanId, "approved");
           if (!loan) continue;
 
-          const loanItems = db
-            .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
-            .all(loanId);
+          const loanItems = getLoanItemsStmt.all(loanId);
           for (const li of loanItems) {
-            db.prepare(
-              "UPDATE storage_items SET current = current + ? WHERE id = ?",
-            ).run(li.quantity, li.item_id);
+            // ⚡ Bolt: Aggregate item deltas instead of running an UPDATE query inside the loop
             bulkDeltaMap.set(
               li.item_id,
               (bulkDeltaMap.get(li.item_id) || 0) + li.quantity,
             );
           }
 
-          db.prepare(
-            `
-            UPDATE loan_requests SET status = 'returned', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `,
-          ).run(admin_notes || "Bulk return", loanId);
+          updateLoanStmt.run(admin_notes || "Bulk return", loanId);
 
-          db.prepare(
-            "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-          ).run(
+          insertNotificationStmt.run(
             loan.user_id,
             "Your loaned items have been marked as returned.",
             "/loans",
@@ -173,6 +170,13 @@ export async function POST(request) {
           );
           returned++;
         }
+
+        // ⚡ Bolt: Execute batch update for storage items to fix N+1 query issue
+        const updateStorageStmt = db.prepare("UPDATE storage_items SET current = current + ? WHERE id = ?");
+        for (const [itemId, quantity] of bulkDeltaMap.entries()) {
+          updateStorageStmt.run(quantity, itemId);
+        }
+
         return { returned, bulkDeltaMap };
       });
 

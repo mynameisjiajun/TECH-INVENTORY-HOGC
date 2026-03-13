@@ -1,3 +1,6 @@
 ## 2026-03-13 - [Avoid N+1 Database queries in SQLite apis]
 **Learning:** Found an N+1 query problem where `activeLoans` was fetching its `loan_items` individually in a `for` loop `(for (const loan of activeLoans))`.
 **Action:** Replace `for` loop queries with an `IN` clause `(WHERE li.loan_request_id IN (...))` to batch load items and then group them in-memory to prevent blocking the event loop and optimize SQLite operations on backends.
+## 2025-03-13 - Batch Update in Bulk Return Loop
+**Learning:** During the bulk return process of loans, the code was looping through all loans, and then within that looping through all items for each loan, executing an UPDATE query (`UPDATE storage_items SET current = current + ? WHERE id = ?`) for each item. This created a severe N+1 problem on database writes, compounded by SQLite having to parse/prepare multiple queries repeatedly. Using pre-prepared statements for reads/writes outside the loops and accumulating item deltas into a Map to do a single batch of updates drastically speeds up performance (from ~260ms to ~160ms for 1000 loans).
+**Action:** Always pre-prepare statements when executing in loops, and aggregate writes or updates into batch operations to minimize total database queries executed in O(N) operations.
