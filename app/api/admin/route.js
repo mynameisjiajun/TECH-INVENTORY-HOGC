@@ -306,25 +306,33 @@ export async function POST(request) {
         const loanUser = db
           .prepare("SELECT email, display_name FROM users WHERE id = ?")
           .get(loan.user_id);
+        const adminBackgroundTasks = [];
         if (loanUser?.email) {
           const loanItems = db
             .prepare(
               `SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`,
             )
             .all(loan_id);
-          sendLoanStatusEmail({
-            to: loanUser.email,
-            displayName: loanUser.display_name,
-            loanId: loan_id,
-            status: "approved",
-            adminNotes: admin_notes,
-            items: loanItems,
-          }).catch(() => {});
+          adminBackgroundTasks.push(
+            sendLoanStatusEmail({
+              to: loanUser.email,
+              displayName: loanUser.display_name,
+              loanId: loan_id,
+              status: "approved",
+              adminNotes: admin_notes,
+              items: loanItems,
+            }).catch(() => {})
+          );
         }
-        sendTelegramMessage(
-          loan.user_id,
-          `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan_id} has been approved!${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`
+        adminBackgroundTasks.push(
+          sendTelegramMessage(
+            loan.user_id,
+            `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan_id} has been approved!${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`
+          )
         );
+        if (adminBackgroundTasks.length > 0) {
+          await Promise.all(adminBackgroundTasks);
+        }
         await syncLoansToSheet();
         const requester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
         logActivity(db, user.id, "approve", `Approved ${loan.loan_type} loan #${loan_id} for ${requester?.display_name || "user"}`);
@@ -369,25 +377,33 @@ export async function POST(request) {
       const rejectUser = db
         .prepare("SELECT email, display_name FROM users WHERE id = ?")
         .get(loan.user_id);
+      const rejectBackgroundTasks = [];
       if (rejectUser?.email) {
         const rejectItems = db
           .prepare(
             `SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`,
           )
           .all(loan_id);
-        sendLoanStatusEmail({
-          to: rejectUser.email,
-          displayName: rejectUser.display_name,
-          loanId: loan_id,
-          status: "rejected",
-          adminNotes: admin_notes,
-          items: rejectItems,
-        }).catch(() => {});
+        rejectBackgroundTasks.push(
+          sendLoanStatusEmail({
+            to: rejectUser.email,
+            displayName: rejectUser.display_name,
+            loanId: loan_id,
+            status: "rejected",
+            adminNotes: admin_notes,
+            items: rejectItems,
+          }).catch(() => {})
+        );
       }
-      sendTelegramMessage(
-        loan.user_id,
-        `❌ <b>Loan Rejected</b>\nYour ${loan.loan_type} loan request #${loan_id} has been rejected.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`
+      rejectBackgroundTasks.push(
+        sendTelegramMessage(
+          loan.user_id,
+          `❌ <b>Loan Rejected</b>\nYour ${loan.loan_type} loan request #${loan_id} has been rejected.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`
+        )
       );
+      if (rejectBackgroundTasks.length > 0) {
+        await Promise.all(rejectBackgroundTasks);
+      }
       await syncLoansToSheet();
       const rejectRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "reject", `Rejected loan #${loan_id} from ${rejectRequester?.display_name || "user"}`);
@@ -443,7 +459,7 @@ export async function POST(request) {
       const returnChanges = returnTx();
       await syncStockToSheets(db, returnChanges);
       
-      sendTelegramMessage(
+      await sendTelegramMessage(
         loan.user_id,
         `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`
       );
@@ -622,6 +638,8 @@ export async function GET(request) {
 
   // Only admins trigger reminder notifications to avoid duplicate sends
   if (user.role === "admin") {
+    const adminReminderTasks = [];
+
     for (const loan of overdueLoans) {
       const existing = db
         .prepare(
@@ -649,13 +667,15 @@ export async function GET(request) {
           .prepare("SELECT email, display_name FROM users WHERE id = ?")
           .get(loan.user_id);
         if (loanUser?.email) {
-          sendOverdueEmail({
-            to: loanUser.email,
-            displayName: loanUser.display_name,
-            loanId: loan.id,
-            items: loanItems,
-            endDate: loan.end_date,
-          }).catch(() => {});
+          adminReminderTasks.push(
+            sendOverdueEmail({
+              to: loanUser.email,
+              displayName: loanUser.display_name,
+              loanId: loan.id,
+              items: loanItems,
+              endDate: loan.end_date,
+            }).catch(() => {})
+          );
         }
       }
     }
@@ -687,15 +707,21 @@ export async function GET(request) {
           .prepare("SELECT email, display_name FROM users WHERE id = ?")
           .get(loan.user_id);
         if (loanUser?.email) {
-          sendDueSoonEmail({
-            to: loanUser.email,
-            displayName: loanUser.display_name,
-            loanId: loan.id,
-            items: loanItems,
-            endDate: loan.end_date,
-          }).catch(() => {});
+          adminReminderTasks.push(
+            sendDueSoonEmail({
+              to: loanUser.email,
+              displayName: loanUser.display_name,
+              loanId: loan.id,
+              items: loanItems,
+              endDate: loan.end_date,
+            }).catch(() => {})
+          );
         }
       }
+    }
+
+    if (adminReminderTasks.length > 0) {
+      await Promise.all(adminReminderTasks);
     }
   }
 
