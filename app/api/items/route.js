@@ -1,5 +1,5 @@
-import { getDb, waitForSync } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getDb, waitForSync } from "@/lib/db/db";
+import { getCurrentUser } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
 // Fuzzy search: handles word reordering, partial matches, and normalized comparisons.

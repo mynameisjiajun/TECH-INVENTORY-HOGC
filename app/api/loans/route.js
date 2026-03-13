@@ -1,7 +1,7 @@
-import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
-import { sendOverdueEmail, sendDueSoonEmail } from "@/lib/email";
-import { sendTelegramMessage } from "@/lib/telegram";
+import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db/db";
+import { getCurrentUser } from "@/lib/utils/auth";
+import { sendOverdueEmail, sendDueSoonEmail } from "@/lib/services/email";
+import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
 // GET: fetch loan requests

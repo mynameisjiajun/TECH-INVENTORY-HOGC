@@ -1,5 +1,5 @@
 'use client';
-import { useAuth } from '@/lib/AuthContext';
+import { useAuth } from '@/lib/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
@@ -153,15 +153,23 @@ export default function ProfilePage() {
                     <RiCheckLine size={16} /> Linked & Active
                   </div>
                 ) : (
-                  <a 
-                    href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "HOGC_Tech_Bot"}?start=${user.id}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="btn btn-outline"
-                    style={{ background: 'transparent', borderColor: '#38bdf8', color: '#38bdf8', padding: '10px 18px' }}
-                  >
-                    Link Telegram Account
-                  </a>
+                  <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: 16, borderRadius: 8, marginTop: 12 }}>
+                    <p style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 12, fontWeight: 500 }}>To link your account:</p>
+                    <ol style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px 0', paddingLeft: 20 }}>
+                      <li style={{ marginBottom: 6 }}>Click the button below to open Telegram</li>
+                      <li style={{ marginBottom: 6 }}>Press <strong>Start</strong> at the bottom of the chat</li>
+                      <li>Wait for the confirmation message, then <strong>refresh this page</strong>.</li>
+                    </ol>
+                    <a 
+                      href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "HOGC_Tech_Bot"}?start=${user.id}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="btn btn-outline"
+                      style={{ background: '#38bdf8', color: '#fff', border: 'none', padding: '10px 18px', display: 'inline-block' }}
+                    >
+                      Open Telegram to Link
+                    </a>
+                  </div>
                 )
               )}
             </div>

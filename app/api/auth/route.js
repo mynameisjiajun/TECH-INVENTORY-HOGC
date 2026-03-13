@@ -3,14 +3,14 @@ import {
   getSetting,
   syncUsersToSheet,
   ensureUsersRestored,
-} from "@/lib/db";
+} from "@/lib/db/db";
 import {
   hashPassword,
   verifyPassword,
   createToken,
   getTokenCookieOptions,
-} from "@/lib/auth";
-import { checkRateLimit, resetRateLimit } from "@/lib/rateLimit";
+} from "@/lib/utils/auth";
+import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {

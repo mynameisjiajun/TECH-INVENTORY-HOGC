@@ -29,57 +29,53 @@ export default function FluidBackground() {
 
     let mouse = { x: -1000, y: -1000 };
 
-    class Particle {
-      constructor() {
-        this.x = Math.random() * width;
-        this.y = Math.random() * height;
-        this.vx = (Math.random() - 0.5) * 0.8;
-        this.vy = (Math.random() - 0.5) * 0.8;
-        this.baseX = this.x;
-        this.baseY = this.y;
-        this.size = Math.random() * 2 + 1;
-      }
+    const createParticle = () => {
+      const p = {
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.8,
+        vy: (Math.random() - 0.5) * 0.8,
+        size: Math.random() * 2 + 1
+      };
+      
+      p.update = (w, h) => {
+        p.x += p.vx;
+        p.y += p.vy;
 
-      update(width, height) {
-        // Move
-        this.x += this.vx;
-        this.y += this.vy;
+        if (p.x < 0 || p.x > w) p.vx *= -1;
+        if (p.y < 0 || p.y > h) p.vy *= -1;
 
-        // Bounce off walls
-        if (this.x < 0 || this.x > width) this.vx *= -1;
-        if (this.y < 0 || this.y > height) this.vy *= -1;
-
-        // Antigravity mouse repulsion
-        const dx = mouse.x - this.x;
-        const dy = mouse.y - this.y;
+        const dx = mouse.x - p.x;
+        const dy = mouse.y - p.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < interactionRadius) {
           const forceDirectionX = dx / distance;
           const forceDirectionY = dy / distance;
           
-          // Repel force
           const force = (interactionRadius - distance) / interactionRadius;
           const pushX = forceDirectionX * force * 5;
           const pushY = forceDirectionY * force * 5;
 
-          this.x -= pushX;
-          this.y -= pushY;
+          p.x -= pushX;
+          p.y -= pushY;
         }
-      }
+      };
 
-      draw(ctx) {
+      p.draw = (ctx) => {
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(168, 85, 247, 0.8)"; // Accent color
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(168, 85, 247, 0.8)";
         ctx.fill();
-      }
-    }
+      };
+      
+      return p;
+    };
 
     const initParticles = () => {
       particles = [];
       for (let i = 0; i < particleCount; i++) {
-        particles.push(new Particle());
+        particles.push(createParticle());
       }
     };
 

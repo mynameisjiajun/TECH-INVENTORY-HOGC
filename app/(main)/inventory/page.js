@@ -1,11 +1,11 @@
 "use client";
-import { useAuth } from "@/lib/AuthContext";
-import { useCart } from "@/lib/CartContext";
+import { useAuth } from "@/lib/context/AuthContext";
+import { useCart } from "@/lib/context/CartContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
-import { TypeBadge } from "@/lib/typeColors";
+import { TypeBadge } from "@/lib/utils/typeColors";
 import {
   RiSearchLine,
   RiAddLine,

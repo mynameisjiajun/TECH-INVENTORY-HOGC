@@ -1,8 +1,8 @@
 "use client";
-import { useAuth } from "@/lib/AuthContext";
+import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
-import { useToast } from "@/lib/ToastContext";
+import { useToast } from "@/lib/context/ToastContext";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import {

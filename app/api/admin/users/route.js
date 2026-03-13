@@ -4,8 +4,8 @@ import {
   setSetting,
   syncUsersToSheet,
   ensureUsersRestored,
-} from "@/lib/db";
-import { getCurrentUser, hashPassword } from "@/lib/auth";
+} from "@/lib/db/db";
+import { getCurrentUser, hashPassword } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
 // GET: list all users (admin only)

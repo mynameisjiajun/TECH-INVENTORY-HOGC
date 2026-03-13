@@ -1,5 +1,5 @@
-import { getCurrentUser } from "@/lib/auth";
-import { getDb, ensureUserExists, ensureUsersRestored } from "@/lib/db";
+import { getCurrentUser } from "@/lib/utils/auth";
+import { getDb, ensureUserExists, ensureUsersRestored } from "@/lib/db/db";
 import { NextResponse } from "next/server";
 
 export async function GET() {

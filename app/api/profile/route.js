@@ -3,8 +3,8 @@ import {
   ensureUserExists,
   syncUsersToSheet,
   ensureUsersRestored,
-} from "@/lib/db";
-import { getCurrentUser, hashPassword, verifyPassword } from "@/lib/auth";
+} from "@/lib/db/db";
+import { getCurrentUser, hashPassword, verifyPassword } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
 // GET: get profile info

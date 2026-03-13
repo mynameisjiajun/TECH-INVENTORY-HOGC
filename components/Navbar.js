@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "@/lib/AuthContext";
-import { useCart } from "@/lib/CartContext";
+import { useAuth } from "@/lib/context/AuthContext";
+import { useCart } from "@/lib/context/CartContext";
 import { useState, useEffect, useRef } from "react";
 import {
   RiDashboardLine,
@@ -30,10 +30,7 @@ export default function Navbar() {
 
   useEffect(() => {
     if (!user) return;
-    // Check initial permission
-    if (typeof Notification !== "undefined") {
-      setNotifPermission(Notification.permission);
-    }
+    // Removed setNotifPermission from here to separate effect
     const fetchNotifs = async () => {
       try {
         const res = await fetch("/api/notifications");
@@ -90,6 +87,12 @@ export default function Navbar() {
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  useEffect(() => {
+    if (typeof Notification !== "undefined") {
+      setTimeout(() => setNotifPermission(Notification.permission), 0);
+    }
   }, []);
 
   const handleLogout = async () => {

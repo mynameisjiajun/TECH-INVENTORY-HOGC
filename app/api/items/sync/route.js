@@ -1,6 +1,6 @@
-import { getDb } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
-import { readSheet } from '@/lib/sheets';
+import { getDb } from '@/lib/db/db';
+import { getCurrentUser } from '@/lib/utils/auth';
+import { readSheet } from '@/lib/services/sheets';
 import { NextResponse } from 'next/server';
 
 const SHEETS_ENABLED = !!(process.env.GOOGLE_SHEETS_ID && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY);

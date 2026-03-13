@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, syncUsersToSheet } from "@/lib/db";
+import { getDb, syncUsersToSheet } from "@/lib/db/db";
 
 export async function POST(request) {
   try {

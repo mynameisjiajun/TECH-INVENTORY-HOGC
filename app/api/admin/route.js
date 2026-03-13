@@ -1,12 +1,12 @@
-import { getDb, waitForSync, syncLoansToSheet, logActivity } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
-import { applyDeltasToCells, appendRows } from "@/lib/sheets";
+import { getDb, waitForSync, syncLoansToSheet, logActivity } from "@/lib/db/db";
+import { getCurrentUser } from "@/lib/utils/auth";
+import { applyDeltasToCells, appendRows } from "@/lib/services/sheets";
 import {
   sendOverdueEmail,
   sendDueSoonEmail,
   sendLoanStatusEmail,
-} from "@/lib/email";
-import { sendTelegramMessage } from "@/lib/telegram";
+} from "@/lib/services/email";
+import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
 const SHEETS_ENABLED = !!(

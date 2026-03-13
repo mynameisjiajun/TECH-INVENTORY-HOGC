@@ -1,5 +1,5 @@
-import { getDb } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
+import { getDb } from '@/lib/db/db';
+import { getCurrentUser } from '@/lib/utils/auth';
 import { NextResponse } from 'next/server';
 
 export async function GET(request) {

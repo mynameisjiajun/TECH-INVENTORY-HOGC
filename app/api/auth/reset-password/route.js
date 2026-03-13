@@ -1,7 +1,7 @@
-import { getDb, syncUsersToSheet, ensureUsersRestored } from "@/lib/db";
-import { hashPassword, createResetToken, verifyResetToken } from "@/lib/auth";
-import { sendPasswordResetEmail } from "@/lib/email";
-import { checkRateLimit } from "@/lib/rateLimit";
+import { getDb, syncUsersToSheet, ensureUsersRestored } from "@/lib/db/db";
+import { hashPassword, createResetToken, verifyResetToken } from "@/lib/utils/auth";
+import { sendPasswordResetEmail } from "@/lib/services/email";
+import { checkRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
