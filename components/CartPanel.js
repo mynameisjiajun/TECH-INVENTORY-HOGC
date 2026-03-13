@@ -71,6 +71,7 @@ export default function CartPanel() {
         clearCart();
         setShowLoanForm(false);
         setSuccess("");
+        router.refresh(); // Clear Next.js cache so the loans page fetches new data
         router.push("/loans");
       }, 2000);
     } catch (err) {

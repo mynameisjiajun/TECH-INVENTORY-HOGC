@@ -69,7 +69,7 @@ export default function DashboardPage() {
   const fetchDashboard = async () => {
     setError("");
     try {
-      const res = await fetch("/api/admin");
+      const res = await fetch("/api/admin", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setStats(data.stats);
@@ -92,7 +92,7 @@ export default function DashboardPage() {
     setMyFetching(true);
     setError("");
     try {
-      const res = await fetch("/api/loans");
+      const res = await fetch("/api/loans", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setMyLoans(data.loans || []);

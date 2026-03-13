@@ -28,7 +28,7 @@ export default function LoansPage() {
       setError('');
       try {
         const params = new URLSearchParams({ status: statusFilter, search, date_from: dateFrom, date_to: dateTo });
-        const res = await fetch(`/api/loans?${params}`);
+        const res = await fetch(`/api/loans?${params}`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           setLoans(data.loans);

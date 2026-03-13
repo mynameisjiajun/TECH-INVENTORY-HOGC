@@ -119,9 +119,9 @@ export async function GET(request) {
     for (const loan of overdueLoans) {
       const existing = db
         .prepare(
-          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%overdue%' AND message LIKE ? AND created_at >= date('now')",
+          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%overdue%' AND message LIKE ? AND created_at >= ?",
         )
-        .get(user.id, `%#${loan.id}%`);
+        .get(user.id, `%#${loan.id}%`, today);
       if (!existing) {
         const loanItems = db
           .prepare(
@@ -153,9 +153,9 @@ export async function GET(request) {
     for (const loan of dueSoonLoans) {
       const existing = db
         .prepare(
-          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%due tomorrow%' AND message LIKE ? AND created_at >= date('now')",
+          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%due tomorrow%' AND message LIKE ? AND created_at >= ?",
         )
-        .get(user.id, `%#${loan.id}%`);
+        .get(user.id, `%#${loan.id}%`, today);
       if (!existing) {
         const loanItems = db
           .prepare(
