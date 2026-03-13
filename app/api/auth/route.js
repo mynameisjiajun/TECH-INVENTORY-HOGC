@@ -11,14 +11,13 @@ import {
   getTokenCookieOptions,
 } from "@/lib/utils/auth";
 import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
+import { getClientIp } from "@/lib/utils/ip";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
   try {
-    // Rate limit by IP
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    // Rate limit securely by IP
+    const ip = getClientIp(request);
     const { limited, retryAfterSeconds } = checkRateLimit(ip);
     if (limited) {
       return NextResponse.json(

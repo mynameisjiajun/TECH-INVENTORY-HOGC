@@ -2,6 +2,7 @@ import { getDb, syncUsersToSheet, ensureUsersRestored } from "@/lib/db/db";
 import { hashPassword, createResetToken, verifyResetToken } from "@/lib/utils/auth";
 import { sendPasswordResetEmail } from "@/lib/services/email";
 import { checkRateLimit } from "@/lib/utils/rateLimit";
+import { getClientIp } from "@/lib/utils/ip";
 import { NextResponse } from "next/server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -9,9 +10,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 export async function POST(request) {
   try {
     await ensureUsersRestored();
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    const ip = getClientIp(request);
     const { limited, retryAfterSeconds } = checkRateLimit(ip);
     if (limited) {
       return NextResponse.json(
