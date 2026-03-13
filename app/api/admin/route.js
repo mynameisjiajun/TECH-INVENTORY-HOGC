@@ -4,7 +4,6 @@ import { applyDeltasToCells, appendRows } from "@/lib/sheets";
 import {
   sendOverdueEmail,
   sendDueSoonEmail,
-  sendDueSoonEmail,
   sendLoanStatusEmail,
 } from "@/lib/email";
 import { sendTelegramMessage } from "@/lib/telegram";
