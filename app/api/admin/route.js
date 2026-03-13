@@ -209,10 +209,22 @@ export async function POST(request) {
         .all(loan_id);
 
       const approveTx = db.transaction(() => {
+        // ⚡ Bolt: Batch fetch all storage items using a JOIN to prevent N+1 query bottleneck
+        // ⚡ Bolt: Use a JOIN on loan_items instead of an IN clause to avoid SQLite parameter limits on Vercel
+        const items = db.prepare(`
+          SELECT si.*
+          FROM storage_items si
+          JOIN loan_items li ON si.id = li.item_id
+          WHERE li.loan_request_id = ?
+        `).all(loan_id);
+
+        const itemMap = new Map();
+        for (const item of items) {
+          itemMap.set(item.id, item);
+        }
+
         for (const li of loanItems) {
-          const item = db
-            .prepare("SELECT * FROM storage_items WHERE id = ?")
-            .get(li.item_id);
+          const item = itemMap.get(li.item_id);
           if (item.current < li.quantity) {
             throw new Error(
               `Not enough stock for "${item.item}". Available: ${item.current}`,
@@ -223,9 +235,7 @@ export async function POST(request) {
         const approveChanges = [];
         const deployedRows = [];
         for (const li of loanItems) {
-          const item = db
-            .prepare("SELECT * FROM storage_items WHERE id = ?")
-            .get(li.item_id);
+          const item = itemMap.get(li.item_id);
           const result = db
             .prepare(
               "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
