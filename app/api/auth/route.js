@@ -16,9 +16,10 @@ import { NextResponse } from "next/server";
 export async function POST(request) {
   try {
     // Rate limit by IP
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    // Ensure we do not trust spoofable headers like x-forwarded-for or x-real-ip
+    // natively unless we are behind a trusted proxy. Next.js provides request.ip
+    // in Vercel and edge environments securely.
+    const ip = request.ip || "unknown";
     const { limited, retryAfterSeconds } = checkRateLimit(ip);
     if (limited) {
       return NextResponse.json(
