@@ -138,6 +138,34 @@ export default function ProfilePage() {
                 placeholder="your@email.com — for loan reminders"
                 style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
             </div>
+
+            <div style={{ marginBottom: 24, padding: 20, background: 'rgba(56, 189, 248, 0.05)', borderRadius: 12, border: '1px solid rgba(56, 189, 248, 0.15)' }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>
+                Telegram Notifications
+              </label>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                Receive instant alerts for loan approvals, returns, and overdue items.
+              </p>
+              
+              {profileErr && profileErr.includes("Telegram") ? null : (
+                profile?.telegram_chat_id ? (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500 }}>
+                    <RiCheckLine size={16} /> Linked & Active
+                  </div>
+                ) : (
+                  <a 
+                    href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "HOGC_Tech_Bot"}?start=${user.id}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="btn btn-outline"
+                    style={{ background: 'transparent', borderColor: '#38bdf8', color: '#38bdf8', padding: '10px 18px' }}
+                  >
+                    Link Telegram Account
+                  </a>
+                )
+              )}
+            </div>
+
             {profileMsg && <p style={{ color: 'var(--success)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(34,197,94,0.08)', borderRadius: 10 }}>✅ {profileMsg}</p>}
             {profileErr && <p style={{ color: 'var(--error)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(239,68,68,0.08)', borderRadius: 10 }}>❌ {profileErr}</p>}
             <button type="submit" className="btn btn-primary" style={{ padding: '14px 28px', fontSize: 14, marginTop: 4 }}>

@@ -1,6 +1,7 @@
 import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { sendOverdueEmail, sendDueSoonEmail } from "@/lib/email";
+import { sendTelegramMessage } from "@/lib/telegram";
 import { NextResponse } from "next/server";
 
 // GET: fetch loan requests
@@ -147,6 +148,10 @@ export async function GET(request) {
             endDate: loan.end_date,
           }).catch(() => {});
         }
+        sendTelegramMessage(
+          user.id,
+          `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`
+        );
       }
     }
 
@@ -181,6 +186,10 @@ export async function GET(request) {
             endDate: loan.end_date,
           }).catch(() => {});
         }
+        sendTelegramMessage(
+          user.id,
+          `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`
+        );
       }
     }
   } catch (err) {

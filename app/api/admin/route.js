@@ -4,8 +4,10 @@ import { applyDeltasToCells, appendRows } from "@/lib/sheets";
 import {
   sendOverdueEmail,
   sendDueSoonEmail,
+  sendDueSoonEmail,
   sendLoanStatusEmail,
 } from "@/lib/email";
+import { sendTelegramMessage } from "@/lib/telegram";
 import { NextResponse } from "next/server";
 
 const SHEETS_ENABLED = !!(
@@ -320,6 +322,10 @@ export async function POST(request) {
             items: loanItems,
           }).catch(() => {});
         }
+        sendTelegramMessage(
+          loan.user_id,
+          `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan_id} has been approved!${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`
+        );
         await syncLoansToSheet();
         const requester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
         logActivity(db, user.id, "approve", `Approved ${loan.loan_type} loan #${loan_id} for ${requester?.display_name || "user"}`);
@@ -379,6 +385,10 @@ export async function POST(request) {
           items: rejectItems,
         }).catch(() => {});
       }
+      sendTelegramMessage(
+        loan.user_id,
+        `❌ <b>Loan Rejected</b>\nYour ${loan.loan_type} loan request #${loan_id} has been rejected.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`
+      );
       await syncLoansToSheet();
       const rejectRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "reject", `Rejected loan #${loan_id} from ${rejectRequester?.display_name || "user"}`);
@@ -433,6 +443,12 @@ export async function POST(request) {
 
       const returnChanges = returnTx();
       await syncStockToSheets(db, returnChanges);
+      
+      sendTelegramMessage(
+        loan.user_id,
+        `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`
+      );
+
       await syncLoansToSheet();
       const returnRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "return", `Returned items from loan #${loan_id} (${returnRequester?.display_name || "user"})`);
