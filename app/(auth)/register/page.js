@@ -28,8 +28,8 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (formData.password.length < 8) {
+      setError("Password must be at least 8 characters");
       setLoading(false);
       return;
     }
@@ -129,7 +129,7 @@ export default function RegisterPage() {
               type="password"
               value={formData.password}
               onChange={update("password")}
-              placeholder="Choose a password (min 6 chars)"
+              placeholder="Choose a password (min 8 chars)"
               required
             />
           </div>
