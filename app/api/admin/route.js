@@ -30,6 +30,7 @@ function logAudit(db, userId, action, targetType, targetId, details) {
  */
 async function syncStockToSheets(db, changes) {
   if (!SHEETS_ENABLED || changes.length === 0) return;
+  console.log(`[SYNC STOCK] Start targeting ${changes.length} items`);
   try {
     const itemIds = changes.map((c) => c.itemId);
     const placeholders = itemIds.map(() => "?").join(",");
@@ -39,7 +40,10 @@ async function syncStockToSheets(db, changes) {
       )
       .all(...itemIds);
 
-    if (rows.length === 0) return;
+    if (rows.length === 0) {
+      console.warn("[SYNC STOCK] Target items have no sheet_row mapping in DB");
+      return;
+    }
 
     const rowMap = Object.fromEntries(rows.map((r) => [r.id, r.sheet_row]));
     const sheetChanges = changes
@@ -49,8 +53,15 @@ async function syncStockToSheets(db, changes) {
         delta: c.delta,
       }));
 
+    if (sheetChanges.length === 0) {
+      console.warn("[SYNC STOCK] No resolved cell mappings found for changes");
+      return;
+    }
+
     try {
+      console.log(`[SYNC STOCK] Calling applyDeltasToCells with:`, JSON.stringify(sheetChanges));
       await applyDeltasToCells("Storage Spare", sheetChanges);
+      console.log(`[SYNC STOCK] applyDeltasToCells completed successfully`);
     } catch (err) {
       console.error("Google Sheets write-back failed:", err.message);
     }
