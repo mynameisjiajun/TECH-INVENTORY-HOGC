@@ -564,17 +564,32 @@ export async function GET(request) {
     )
     .all();
 
-  for (const loan of activeLoans) {
-    loan.items = db
+  if (activeLoans.length > 0) {
+    // ⚡ Bolt: Batch fetch all loan items in a single query to prevent N+1 bottleneck
+    // ⚡ Bolt: Use a JOIN on loan_requests instead of an IN clause to avoid SQLite parameter limits on Vercel
+    const allItems = db
       .prepare(
         `
       SELECT li.*, si.item, si.type
       FROM loan_items li
       JOIN storage_items si ON li.item_id = si.id
-      WHERE li.loan_request_id = ?
+      JOIN loan_requests lr ON li.loan_request_id = lr.id
+      WHERE lr.status IN ('approved', 'pending')
     `,
       )
-      .all(loan.id);
+      .all();
+
+    const itemsByLoan = new Map();
+    for (const item of allItems) {
+      if (!itemsByLoan.has(item.loan_request_id)) {
+        itemsByLoan.set(item.loan_request_id, []);
+      }
+      itemsByLoan.get(item.loan_request_id).push(item);
+    }
+
+    for (const loan of activeLoans) {
+      loan.items = itemsByLoan.get(loan.id) || [];
+    }
   }
 
   // Due date warnings: loans due within 1 day or overdue
