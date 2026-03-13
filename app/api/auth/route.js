@@ -106,7 +106,7 @@ export async function POST(request) {
       const token = createToken(user);
 
       // Persist users to Google Sheets (fire-and-forget)
-      syncUsersToSheet().catch(() => {});
+      await syncUsersToSheet();
 
       const response = NextResponse.json({ user });
       const cookieOpts = getTokenCookieOptions();

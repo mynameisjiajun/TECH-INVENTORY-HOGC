@@ -99,7 +99,7 @@ export async function POST(request) {
         user.id,
       );
 
-      syncUsersToSheet().catch(() => {});
+      await syncUsersToSheet();
 
       return NextResponse.json({
         message: "Password has been reset successfully! You can now log in.",

@@ -81,7 +81,7 @@ export async function POST(request) {
       `Reset password for @${target.username}`,
     );
 
-    syncUsersToSheet().catch(() => {});
+    await syncUsersToSheet();
     return NextResponse.json({
       message: `Password reset for @${target.username}`,
     });
@@ -122,7 +122,7 @@ export async function POST(request) {
       `Changed @${target.username} role to ${new_role}`,
     );
 
-    syncUsersToSheet().catch(() => {});
+    await syncUsersToSheet();
     return NextResponse.json({
       message: `Role updated for @${target.username}`,
     });
@@ -162,7 +162,7 @@ export async function POST(request) {
       `Deleted user @${target.username}`,
     );
 
-    syncUsersToSheet().catch(() => {});
+    await syncUsersToSheet();
     return NextResponse.json({ message: `User @${target.username} deleted` });
   }
 

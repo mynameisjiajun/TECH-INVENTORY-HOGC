@@ -57,7 +57,7 @@ export async function POST(request) {
       cleanEmail,
       user.id,
     );
-    syncUsersToSheet().catch(() => {});
+    await syncUsersToSheet();
     return NextResponse.json({ message: "Profile updated!" });
   }
 
@@ -93,7 +93,7 @@ export async function POST(request) {
       newHash,
       user.id,
     );
-    syncUsersToSheet().catch(() => {});
+    await syncUsersToSheet();
     return NextResponse.json({ message: "Password changed successfully!" });
   }
 
