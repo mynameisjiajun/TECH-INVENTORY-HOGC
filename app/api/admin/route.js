@@ -28,7 +28,7 @@ function logAudit(db, userId, action, targetType, targetId, details) {
  * @param {Array<{itemId: number, delta: number}>} changes
  *   delta is negative for approve (stock goes down), positive for return (stock goes up)
  */
-function syncStockToSheets(db, changes) {
+async function syncStockToSheets(db, changes) {
   if (!SHEETS_ENABLED || changes.length === 0) return;
   try {
     const itemIds = changes.map((c) => c.itemId);
@@ -49,9 +49,11 @@ function syncStockToSheets(db, changes) {
         delta: c.delta,
       }));
 
-    applyDeltasToCells("Storage Spare", sheetChanges).catch((err) => {
+    try {
+      await applyDeltasToCells("Storage Spare", sheetChanges);
+    } catch (err) {
       console.error("Google Sheets write-back failed:", err.message);
-    });
+    }
   } catch (err) {
     console.error("Google Sheets sync error:", err.message);
   }
@@ -62,7 +64,7 @@ function syncStockToSheets(db, changes) {
  * Columns in the sheet: A=empty, B=Item, C=Type, D=Brand, E=Model,
  * F=Quantity, G=Location, H=Allocation, I=Status, J=Remarks
  */
-function syncDeployedToSheets(deployedRows) {
+async function syncDeployedToSheets(deployedRows) {
   if (!SHEETS_ENABLED || deployedRows.length === 0) return;
   try {
     const sheetRows = deployedRows.map((r) => [
@@ -77,9 +79,11 @@ function syncDeployedToSheets(deployedRows) {
       r.status,
       r.remarks,
     ]);
-    appendRows("DEPLOYED", sheetRows).catch((err) => {
+    try {
+      await appendRows("DEPLOYED", sheetRows);
+    } catch (err) {
       console.error("Google Sheets deployed write-back failed:", err.message);
-    });
+    }
   } catch (err) {
     console.error("Google Sheets deployed sync error:", err.message);
   }
@@ -164,8 +168,8 @@ export async function POST(request) {
       const bulkChanges = [...bulkDeltaMap.entries()].map(
         ([itemId, delta]) => ({ itemId, delta }),
       );
-      syncStockToSheets(db, bulkChanges);
-      syncLoansToSheet();
+      await syncStockToSheets(db, bulkChanges);
+      await syncLoansToSheet();
       return NextResponse.json({
         message: `${returned} loan(s) returned to stock`,
       });
@@ -282,9 +286,9 @@ export async function POST(request) {
 
       try {
         const { approveChanges, deployedRows } = approveTx();
-        syncStockToSheets(db, approveChanges);
+        await syncStockToSheets(db, approveChanges);
         if (deployedRows.length > 0) {
-          syncDeployedToSheets(deployedRows);
+          await syncDeployedToSheets(deployedRows);
         }
         // Send approval email
         const loanUser = db
@@ -305,7 +309,7 @@ export async function POST(request) {
             items: loanItems,
           }).catch(() => {});
         }
-        syncLoansToSheet();
+        await syncLoansToSheet();
         const requester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
         logActivity(db, user.id, "approve", `Approved ${loan.loan_type} loan #${loan_id} for ${requester?.display_name || "user"}`);
         return NextResponse.json({ message: "Loan approved" });
@@ -364,7 +368,7 @@ export async function POST(request) {
           items: rejectItems,
         }).catch(() => {});
       }
-      syncLoansToSheet();
+      await syncLoansToSheet();
       const rejectRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "reject", `Rejected loan #${loan_id} from ${rejectRequester?.display_name || "user"}`);
       return NextResponse.json({ message: "Loan rejected" });
@@ -417,8 +421,8 @@ export async function POST(request) {
       });
 
       const returnChanges = returnTx();
-      syncStockToSheets(db, returnChanges);
-      syncLoansToSheet();
+      await syncStockToSheets(db, returnChanges);
+      await syncLoansToSheet();
       const returnRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "return", `Returned items from loan #${loan_id} (${returnRequester?.display_name || "user"})`);
       return NextResponse.json({ message: "Items returned to stock" });
@@ -468,9 +472,9 @@ export async function POST(request) {
 
       const restoreChanges = deleteTx();
       if (restoreChanges.length > 0) {
-        syncStockToSheets(db, restoreChanges);
+        await syncStockToSheets(db, restoreChanges);
       }
-      syncLoansToSheet();
+      await syncLoansToSheet();
       return NextResponse.json({ message: "Loan deleted" });
     }
 

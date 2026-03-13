@@ -328,7 +328,7 @@ export async function POST(request) {
 
     try {
       const loanId = createLoanTx();
-      syncLoansToSheet();
+      await syncLoansToSheet();
       logActivity(db, user.id, "request", `${user.display_name || user.username} submitted a new ${loan_type || "temporary"} loan request #${loanId}`);
       return NextResponse.json({
         loan_id: loanId,
