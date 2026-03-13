@@ -117,6 +117,8 @@ export async function GET(request) {
       .prepare("SELECT email, display_name FROM users WHERE id = ?")
       .get(user.id);
 
+    const backgroundTasks = [];
+
     for (const loan of overdueLoans) {
       const existing = db
         .prepare(
@@ -140,17 +142,21 @@ export async function GET(request) {
           "/loans",
         );
         if (userEmail?.email) {
-          sendOverdueEmail({
-            to: userEmail.email,
-            displayName: userEmail.display_name,
-            loanId: loan.id,
-            items: loanItems,
-            endDate: loan.end_date,
-          }).catch(() => {});
+          backgroundTasks.push(
+            sendOverdueEmail({
+              to: userEmail.email,
+              displayName: userEmail.display_name,
+              loanId: loan.id,
+              items: loanItems,
+              endDate: loan.end_date,
+            }).catch(() => {})
+          );
         }
-        sendTelegramMessage(
-          user.id,
-          `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`
+        backgroundTasks.push(
+          sendTelegramMessage(
+            user.id,
+            `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`
+          )
         );
       }
     }
@@ -178,19 +184,27 @@ export async function GET(request) {
           "/loans",
         );
         if (userEmail?.email) {
-          sendDueSoonEmail({
-            to: userEmail.email,
-            displayName: userEmail.display_name,
-            loanId: loan.id,
-            items: loanItems,
-            endDate: loan.end_date,
-          }).catch(() => {});
+          backgroundTasks.push(
+            sendDueSoonEmail({
+              to: userEmail.email,
+              displayName: userEmail.display_name,
+              loanId: loan.id,
+              items: loanItems,
+              endDate: loan.end_date,
+            }).catch(() => {})
+          );
         }
-        sendTelegramMessage(
-          user.id,
-          `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`
+        backgroundTasks.push(
+          sendTelegramMessage(
+            user.id,
+            `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`
+          )
         );
       }
+    }
+
+    if (backgroundTasks.length > 0) {
+      await Promise.all(backgroundTasks);
     }
   } catch (err) {
     // Non-blocking — don't let notification errors break the loans page
