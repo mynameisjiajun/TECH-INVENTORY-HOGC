@@ -119,87 +119,170 @@ export async function GET(request) {
 
     const backgroundTasks = [];
 
-    for (const loan of overdueLoans) {
-      const existing = db
+    if (overdueLoans.length > 0) {
+      const loanIds = overdueLoans.map((l) => l.id);
+
+      // Batch fetch all loan items
+      const allItems = db
         .prepare(
-          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%overdue%' AND message LIKE ? AND created_at >= ?",
+          `SELECT li.loan_request_id, li.quantity, si.item
+           FROM loan_items li
+           JOIN storage_items si ON li.item_id = si.id
+           JOIN json_each(?) je ON li.loan_request_id = je.value`
         )
-        .get(user.id, `%#${loan.id}%`, today);
-      if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
-        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
-        db.prepare(
-          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-        ).run(
-          user.id,
-          `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
-          "/loans",
-        );
-        if (userEmail?.email) {
+        .all(JSON.stringify(loanIds));
+
+      const itemsByLoan = new Map();
+      for (const item of allItems) {
+        if (!itemsByLoan.has(item.loan_request_id)) {
+          itemsByLoan.set(item.loan_request_id, []);
+        }
+        itemsByLoan.get(item.loan_request_id).push(item);
+      }
+
+      // Batch fetch today's overdue notifications
+      const existingNotifsRaw = db
+        .prepare(
+          `SELECT message FROM notifications
+           WHERE user_id = ?
+             AND message LIKE '%overdue%'
+             AND created_at >= ?`
+        )
+        .all(user.id, today);
+
+      const existingLoanIds = new Set();
+      for (const notif of existingNotifsRaw) {
+        const match = notif.message.match(/loan #(\d+)/);
+        if (match) {
+          existingLoanIds.add(parseInt(match[1], 10));
+        } else {
+          // Fallback if regex doesn't match
+          for (const loanId of loanIds) {
+            if (notif.message.includes(`#${loanId}`)) {
+              existingLoanIds.add(loanId);
+            }
+          }
+        }
+      }
+
+      const insertNotif = db.prepare(
+        "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)"
+      );
+
+      for (const loan of overdueLoans) {
+        if (!existingLoanIds.has(loan.id)) {
+          const loanItems = itemsByLoan.get(loan.id) || [];
+          const itemList = loanItems
+            .map((i) => `${i.item} × ${i.quantity}`)
+            .join(", ");
+
+          insertNotif.run(
+            user.id,
+            `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
+            "/loans"
+          );
+
+          if (userEmail?.email) {
+            backgroundTasks.push(
+              sendOverdueEmail({
+                to: userEmail.email,
+                displayName: userEmail.display_name,
+                loanId: loan.id,
+                items: loanItems,
+                endDate: loan.end_date,
+              }).catch(() => {})
+            );
+          }
           backgroundTasks.push(
-            sendOverdueEmail({
-              to: userEmail.email,
-              displayName: userEmail.display_name,
-              loanId: loan.id,
-              items: loanItems,
-              endDate: loan.end_date,
-            }).catch(() => {})
+            sendTelegramMessage(
+              user.id,
+              `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`
+            )
           );
         }
-        backgroundTasks.push(
-          sendTelegramMessage(
-            user.id,
-            `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`
-          )
-        );
       }
     }
 
-    for (const loan of dueSoonLoans) {
-      const existing = db
+    if (dueSoonLoans.length > 0) {
+      const loanIds = dueSoonLoans.map((l) => l.id);
+
+      // Batch fetch all loan items
+      const allItems = db
         .prepare(
-          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%due tomorrow%' AND message LIKE ? AND created_at >= ?",
+          `SELECT li.loan_request_id, li.quantity, si.item
+           FROM loan_items li
+           JOIN storage_items si ON li.item_id = si.id
+           JOIN json_each(?) je ON li.loan_request_id = je.value`
         )
-        .get(user.id, `%#${loan.id}%`, today);
-      if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
-        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
-        db.prepare(
-          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-        ).run(
-          user.id,
-          `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
-          "/loans",
-        );
-        if (userEmail?.email) {
+        .all(JSON.stringify(loanIds));
+
+      const itemsByLoan = new Map();
+      for (const item of allItems) {
+        if (!itemsByLoan.has(item.loan_request_id)) {
+          itemsByLoan.set(item.loan_request_id, []);
+        }
+        itemsByLoan.get(item.loan_request_id).push(item);
+      }
+
+      // Batch fetch today's due tomorrow notifications
+      const existingNotifsRaw = db
+        .prepare(
+          `SELECT message FROM notifications
+           WHERE user_id = ?
+             AND message LIKE '%due tomorrow%'
+             AND created_at >= ?`
+        )
+        .all(user.id, today);
+
+      const existingLoanIds = new Set();
+      for (const notif of existingNotifsRaw) {
+        const match = notif.message.match(/loan #(\d+)/);
+        if (match) {
+          existingLoanIds.add(parseInt(match[1], 10));
+        } else {
+          for (const loanId of loanIds) {
+            if (notif.message.includes(`#${loanId}`)) {
+              existingLoanIds.add(loanId);
+            }
+          }
+        }
+      }
+
+      const insertNotif = db.prepare(
+        "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)"
+      );
+
+      for (const loan of dueSoonLoans) {
+        if (!existingLoanIds.has(loan.id)) {
+          const loanItems = itemsByLoan.get(loan.id) || [];
+          const itemList = loanItems
+            .map((i) => `${i.item} × ${i.quantity}`)
+            .join(", ");
+
+          insertNotif.run(
+            user.id,
+            `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
+            "/loans"
+          );
+
+          if (userEmail?.email) {
+            backgroundTasks.push(
+              sendDueSoonEmail({
+                to: userEmail.email,
+                displayName: userEmail.display_name,
+                loanId: loan.id,
+                items: loanItems,
+                endDate: loan.end_date,
+              }).catch(() => {})
+            );
+          }
           backgroundTasks.push(
-            sendDueSoonEmail({
-              to: userEmail.email,
-              displayName: userEmail.display_name,
-              loanId: loan.id,
-              items: loanItems,
-              endDate: loan.end_date,
-            }).catch(() => {})
+            sendTelegramMessage(
+              user.id,
+              `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`
+            )
           );
         }
-        backgroundTasks.push(
-          sendTelegramMessage(
-            user.id,
-            `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`
-          )
-        );
       }
     }
 
