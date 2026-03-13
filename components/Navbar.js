@@ -165,6 +165,7 @@ export default function Navbar() {
           <div className="navbar-right">
             <div style={{ position: "relative" }} ref={notifRef}>
               <button
+                aria-label="Notifications"
                 className="notification-btn"
                 onClick={() => setShowNotifs(!showNotifs)}
               >
@@ -258,7 +259,7 @@ export default function Navbar() {
               </div>
               <span>{user.display_name || user.username}</span>
             </div>
-            <button className="logout-btn" onClick={handleLogout}>
+            <button aria-label="Logout" className="logout-btn" onClick={handleLogout}>
               <RiLogoutBoxLine />
             </button>
           </div>
@@ -310,7 +311,7 @@ export default function Navbar() {
 
       {/* Cart FAB */}
       {totalItems > 0 && (
-        <button className="cart-fab" onClick={() => setIsOpen(true)}>
+        <button aria-label="Open cart" className="cart-fab" onClick={() => setIsOpen(true)}>
           <RiShoppingCart2Line />
           <span className="cart-count">{totalItems}</span>
         </button>
