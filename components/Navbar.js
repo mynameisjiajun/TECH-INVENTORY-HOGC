@@ -26,7 +26,7 @@ export default function Navbar() {
   const [showNotifs, setShowNotifs] = useState(false);
   const [notifPermission, setNotifPermission] = useState("default");
   const notifRef = useRef(null);
-  const prevUnreadRef = useRef(0);
+  const prevUnreadRef = useRef(-1);
 
   useEffect(() => {
     if (!user) return;
@@ -40,15 +40,35 @@ export default function Navbar() {
         if (res.ok) {
           const data = await res.json();
           setNotifications(data.notifications);
-          // Show browser notification when new unreads arrive
-          if (data.unreadCount > prevUnreadRef.current && prevUnreadRef.current > 0 && Notification.permission === "granted") {
+          // Show browser push notification when new unreads arrive
+          // Skip on first poll (prevUnreadRef === -1) to avoid spamming on page load
+          if (
+            data.unreadCount > prevUnreadRef.current &&
+            prevUnreadRef.current >= 0 &&
+            typeof Notification !== "undefined" &&
+            Notification.permission === "granted"
+          ) {
             const newest = data.notifications.find(n => !n.read);
             if (newest) {
-              new Notification("Tech Inventory", {
-                body: newest.message,
-                icon: "/icons/icon-192.png",
-                tag: `notif-${newest.id}`,
-              });
+              // Use service worker showNotification for mobile/background support
+              if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.ready.then((reg) => {
+                  reg.showNotification("Tech Inventory", {
+                    body: newest.message,
+                    icon: "/icons/icon-192.png",
+                    badge: "/icons/icon-192.png",
+                    tag: `notif-${newest.id}`,
+                    data: { url: newest.link || "/dashboard" },
+                  });
+                });
+              } else {
+                // Fallback for desktop without active SW
+                new Notification("Tech Inventory", {
+                  body: newest.message,
+                  icon: "/icons/icon-192.png",
+                  tag: `notif-${newest.id}`,
+                });
+              }
             }
           }
           prevUnreadRef.current = data.unreadCount;

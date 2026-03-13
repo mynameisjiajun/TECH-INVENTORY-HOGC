@@ -1,5 +1,6 @@
 import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { sendOverdueEmail, sendDueSoonEmail } from "@/lib/email";
 import { NextResponse } from "next/server";
 
 // GET: fetch loan requests
@@ -81,6 +82,110 @@ export async function GET(request) {
         loan.purpose.toLowerCase().includes(s) ||
         loan.items.some((item) => item.item.toLowerCase().includes(s)),
     );
+  }
+
+  // ── Overdue / due-soon notification check ──────────────────────────
+  // Runs on every user page-load; deduped to one notification per loan per day.
+  try {
+    const now = new Date();
+    // Use local timezone for exact day boundaries
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toLocaleDateString('en-CA');
+    const tomorrowObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const tomorrow = tomorrowObj.toLocaleDateString('en-CA');
+
+    // Overdue loans for the current user
+    const overdueLoans = db
+      .prepare(
+        `SELECT lr.id, lr.end_date FROM loan_requests lr
+         WHERE lr.user_id = ? AND lr.status = 'approved'
+           AND lr.loan_type = 'temporary' AND lr.end_date IS NOT NULL
+           AND lr.end_date < ?`,
+      )
+      .all(user.id, today);
+
+    // Loans due tomorrow for the current user
+    const dueSoonLoans = db
+      .prepare(
+        `SELECT lr.id, lr.end_date FROM loan_requests lr
+         WHERE lr.user_id = ? AND lr.status = 'approved'
+           AND lr.loan_type = 'temporary' AND lr.end_date = ?`,
+      )
+      .all(user.id, tomorrow);
+
+    const userEmail = db
+      .prepare("SELECT email, display_name FROM users WHERE id = ?")
+      .get(user.id);
+
+    for (const loan of overdueLoans) {
+      const existing = db
+        .prepare(
+          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%overdue%' AND message LIKE ? AND created_at >= date('now')",
+        )
+        .get(user.id, `%#${loan.id}%`);
+      if (!existing) {
+        const loanItems = db
+          .prepare(
+            `SELECT li.quantity, si.item FROM loan_items li
+             JOIN storage_items si ON li.item_id = si.id
+             WHERE li.loan_request_id = ?`,
+          )
+          .all(loan.id);
+        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
+        db.prepare(
+          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+        ).run(
+          user.id,
+          `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
+          "/loans",
+        );
+        if (userEmail?.email) {
+          sendOverdueEmail({
+            to: userEmail.email,
+            displayName: userEmail.display_name,
+            loanId: loan.id,
+            items: loanItems,
+            endDate: loan.end_date,
+          }).catch(() => {});
+        }
+      }
+    }
+
+    for (const loan of dueSoonLoans) {
+      const existing = db
+        .prepare(
+          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%due tomorrow%' AND message LIKE ? AND created_at >= date('now')",
+        )
+        .get(user.id, `%#${loan.id}%`);
+      if (!existing) {
+        const loanItems = db
+          .prepare(
+            `SELECT li.quantity, si.item FROM loan_items li
+             JOIN storage_items si ON li.item_id = si.id
+             WHERE li.loan_request_id = ?`,
+          )
+          .all(loan.id);
+        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
+        db.prepare(
+          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
+        ).run(
+          user.id,
+          `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
+          "/loans",
+        );
+        if (userEmail?.email) {
+          sendDueSoonEmail({
+            to: userEmail.email,
+            displayName: userEmail.display_name,
+            loanId: loan.id,
+            items: loanItems,
+            endDate: loan.end_date,
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    // Non-blocking — don't let notification errors break the loans page
+    console.error("Overdue notification check failed:", err.message);
   }
 
   return NextResponse.json({ loans });
@@ -224,7 +329,7 @@ export async function POST(request) {
     try {
       const loanId = createLoanTx();
       syncLoansToSheet();
-      logActivity(db, user.id, "request", `${user.display_name || user.username} submitted a new ${body.loan_type || "temporary"} loan request #${loanId}`);
+      logActivity(db, user.id, "request", `${user.display_name || user.username} submitted a new ${loan_type || "temporary"} loan request #${loanId}`);
       return NextResponse.json({
         loan_id: loanId,
         message: "Loan request submitted!",

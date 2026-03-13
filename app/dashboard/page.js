@@ -138,6 +138,10 @@ export default function DashboardPage() {
       });
       if (res.ok) {
         setSelectedLoan(null);
+        // Optimistically remove from local state so it disappears instantly
+        setActiveLoans((prev) => prev.filter((l) => l.id !== loanId));
+        setMyLoans((prev) => prev.filter((l) => l.id !== loanId));
+        // Also refresh from server for accurate stats
         fetchDashboard();
         toast.success("Loan deleted successfully");
       } else {

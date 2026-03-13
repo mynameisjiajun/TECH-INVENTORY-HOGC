@@ -548,8 +548,10 @@ export async function GET(request) {
   }
 
   // Due date warnings: loans due within 1 day or overdue
-  const today = new Date().toISOString().split("T")[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toLocaleDateString('en-CA');
+  const tomorrowObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const tomorrow = tomorrowObj.toLocaleDateString('en-CA');
 
   const overdueLoans = db
     .prepare(
@@ -582,26 +584,25 @@ export async function GET(request) {
         )
         .get(loan.user_id, `%#${loan.id}%`);
       if (!existing) {
+        const loanItems = db
+          .prepare(
+            `SELECT li.quantity, si.item FROM loan_items li
+             JOIN storage_items si ON li.item_id = si.id
+             WHERE li.loan_request_id = ?`,
+          )
+          .all(loan.id);
+        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
         db.prepare(
           "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
         ).run(
           loan.user_id,
-          `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.`,
+          `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
           "/loans",
         );
         // Send email reminder
         const loanUser = db
           .prepare("SELECT email, display_name FROM users WHERE id = ?")
           .get(loan.user_id);
-        const loanItems = db
-          .prepare(
-            `
-          SELECT li.quantity, si.item FROM loan_items li
-          JOIN storage_items si ON li.item_id = si.id
-          WHERE li.loan_request_id = ?
-        `,
-          )
-          .all(loan.id);
         if (loanUser?.email) {
           sendOverdueEmail({
             to: loanUser.email,
@@ -621,26 +622,25 @@ export async function GET(request) {
         )
         .get(loan.user_id, `%#${loan.id}%`);
       if (!existing) {
+        const loanItems = db
+          .prepare(
+            `SELECT li.quantity, si.item FROM loan_items li
+             JOIN storage_items si ON li.item_id = si.id
+             WHERE li.loan_request_id = ?`,
+          )
+          .all(loan.id);
+        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
         db.prepare(
           "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
         ).run(
           loan.user_id,
-          `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.`,
+          `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
           "/loans",
         );
         // Send email reminder
         const loanUser = db
           .prepare("SELECT email, display_name FROM users WHERE id = ?")
           .get(loan.user_id);
-        const loanItems = db
-          .prepare(
-            `
-          SELECT li.quantity, si.item FROM loan_items li
-          JOIN storage_items si ON li.item_id = si.id
-          WHERE li.loan_request_id = ?
-        `,
-          )
-          .all(loan.id);
         if (loanUser?.email) {
           sendDueSoonEmail({
             to: loanUser.email,

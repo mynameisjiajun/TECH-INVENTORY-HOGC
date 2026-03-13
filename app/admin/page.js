@@ -329,9 +329,24 @@ export default function AdminPage() {
         }),
       });
       if (res.ok) {
+        // Optimistically update the UI to prevent stale data
+        if (action === "delete") {
+          setLoans((prev) => prev.filter((l) => l.id !== loanId));
+        } else {
+          setLoans((prev) =>
+            prev.map((l) =>
+              l.id === loanId
+                ? { ...l, status: action === "return" ? "returned" : action + "d" }
+                : l
+            )
+          );
+        }
+        
         fetchLoans();
         setAdminNotes((p) => ({ ...p, [loanId]: "" }));
-        toast.success(`Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "return" ? "returned" : action + "d"} successfully`);
+        toast.success(
+          `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "return" ? "returned" : action + "d"} successfully`
+        );
       } else {
         const data = await res.json().catch(() => ({}));
         toast.error(data.error || `Action failed (${res.status})`);
@@ -1506,6 +1521,14 @@ export default function AdminPage() {
                     const data = await res.json();
                     setTemplateMsg(data.message || data.error);
                     if (res.ok) {
+                      // Optimistically update the UI
+                      if (editingTemplate) {
+                        setTemplates(prev => prev.map(t => t.id === editingTemplate ? { ...t, ...templateForm } : t));
+                      } else {
+                        // Use a temporary ID for the optimistic new template until fetchTemplates completes
+                        setTemplates(prev => [...prev, { id: "temp-" + Date.now(), ...templateForm }]);
+                      }
+                      
                       setTemplateForm({
                         name: "",
                         description: "",
@@ -1578,6 +1601,10 @@ export default function AdminPage() {
                         }}
                         onDelete={async (t) => {
                           if (!confirm(`Delete template "${t.name}"?`)) return;
+                          
+                          // Optimistically remove the template
+                          setTemplates(prev => prev.filter(x => x.id !== t.id));
+                          
                           await fetch("/api/admin/templates", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
