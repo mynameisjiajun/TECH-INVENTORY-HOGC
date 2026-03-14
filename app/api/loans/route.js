@@ -119,6 +119,26 @@ export async function GET(request) {
 
     const backgroundTasks = [];
 
+    // ⚡ Bolt: Fetch overdue loan items in a single query (batching) to avoid N+1 queries.
+    const overdueLoanIds = overdueLoans.map((l) => l.id);
+    const overdueItemsMap = new Map();
+    if (overdueLoanIds.length > 0) {
+      const allOverdueItems = db
+        .prepare(
+          `SELECT li.loan_request_id, li.quantity, si.item
+           FROM loan_items li
+           JOIN storage_items si ON li.item_id = si.id
+           JOIN json_each(?) j ON li.loan_request_id = j.value`
+        )
+        .all(JSON.stringify(overdueLoanIds));
+      for (const item of allOverdueItems) {
+        if (!overdueItemsMap.has(item.loan_request_id)) {
+          overdueItemsMap.set(item.loan_request_id, []);
+        }
+        overdueItemsMap.get(item.loan_request_id).push(item);
+      }
+    }
+
     for (const loan of overdueLoans) {
       const existing = db
         .prepare(
@@ -126,13 +146,7 @@ export async function GET(request) {
         )
         .get(user.id, `%#${loan.id}%`, today);
       if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
+        const loanItems = overdueItemsMap.get(loan.id) || [];
         const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
         db.prepare(
           "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
@@ -161,6 +175,26 @@ export async function GET(request) {
       }
     }
 
+    // ⚡ Bolt: Fetch due-soon loan items in a single query (batching) to avoid N+1 queries.
+    const dueSoonLoanIds = dueSoonLoans.map((l) => l.id);
+    const dueSoonItemsMap = new Map();
+    if (dueSoonLoanIds.length > 0) {
+      const allDueSoonItems = db
+        .prepare(
+          `SELECT li.loan_request_id, li.quantity, si.item
+           FROM loan_items li
+           JOIN storage_items si ON li.item_id = si.id
+           JOIN json_each(?) j ON li.loan_request_id = j.value`
+        )
+        .all(JSON.stringify(dueSoonLoanIds));
+      for (const item of allDueSoonItems) {
+        if (!dueSoonItemsMap.has(item.loan_request_id)) {
+          dueSoonItemsMap.set(item.loan_request_id, []);
+        }
+        dueSoonItemsMap.get(item.loan_request_id).push(item);
+      }
+    }
+
     for (const loan of dueSoonLoans) {
       const existing = db
         .prepare(
@@ -168,13 +202,7 @@ export async function GET(request) {
         )
         .get(user.id, `%#${loan.id}%`, today);
       if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
+        const loanItems = dueSoonItemsMap.get(loan.id) || [];
         const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
         db.prepare(
           "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
