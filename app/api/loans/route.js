@@ -1,6 +1,11 @@
 import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db/db";
 import { getCurrentUser } from "@/lib/utils/auth";
-import { sendOverdueEmail, sendDueSoonEmail } from "@/lib/services/email";
+import { 
+  sendOverdueEmail, 
+  sendDueSoonEmail, 
+  sendNewLoanUserEmail, 
+  sendNewLoanAdminEmail 
+} from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
@@ -353,6 +358,55 @@ export async function POST(request) {
       const loanId = createLoanTx();
       await syncLoansToSheet();
       logActivity(db, user.id, "request", `${user.display_name || user.username} submitted a new ${loan_type || "temporary"} loan request #${loanId}`);
+
+      // Dispatch notifications
+      try {
+        const userRecord = db.prepare("SELECT email FROM users WHERE id = ?").get(user.id);
+        const loanItems = db.prepare(`
+          SELECT li.quantity, si.item 
+          FROM loan_items li
+          JOIN storage_items si ON li.item_id = si.id
+          WHERE li.loan_request_id = ?
+        `).all(loanId);
+
+        // 1. Email to user
+        if (userRecord?.email) {
+          sendNewLoanUserEmail({
+            to: userRecord.email,
+            displayName: user.display_name || user.username,
+            loanId,
+            loanType: loan_type,
+            purpose,
+            items: loanItems
+          }).catch(() => {});
+        }
+
+        // 2. Email & Telegram to admins
+        const admins = db.prepare("SELECT id, email, display_name FROM users WHERE role = 'admin'").all();
+        const itemListStr = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
+        for (const admin of admins) {
+          // Email
+          if (admin.email) {
+            sendNewLoanAdminEmail({
+              to: admin.email,
+              adminName: admin.display_name,
+              userName: user.display_name || user.username,
+              loanId,
+              loanType: loan_type,
+              purpose,
+              items: loanItems
+            }).catch(() => {});
+          }
+          // Telegram
+          sendTelegramMessage(
+            admin.id,
+            `🔔 <b>New Loan Request</b>\n<b>${user.display_name || user.username}</b> requested a <b>${loan_type}</b> loan.\n\nPurpose: ${purpose}\nItems: ${itemListStr}`
+          ).catch(() => {});
+        }
+      } catch (notifErr) {
+        console.error("Failed to send loan creation notifications:", notifErr);
+      }
+
       return NextResponse.json({
         loan_id: loanId,
         message: "Loan request submitted!",

@@ -10,6 +10,7 @@ import {
   createToken,
   getTokenCookieOptions,
 } from "@/lib/utils/auth";
+import { sendWelcomeEmail } from "@/lib/services/email";
 import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
 
@@ -32,7 +33,7 @@ export async function POST(request) {
     // Ensure users are restored from Google Sheets on cold start
     await ensureUsersRestored();
 
-    const { action, username, password, display_name, invite_code, email } =
+    const { action, username, password, display_name, invite_code, email, telegram_handle } =
       await request.json();
 
     const db = getDb();
@@ -85,9 +86,12 @@ export async function POST(request) {
 
       // Create user
       const hash = await hashPassword(password);
+      
+      const cleanTelegram = telegram_handle ? telegram_handle.trim().replace(/^@/, '') : null;
+
       const result = db
         .prepare(
-          "INSERT INTO users (username, password_hash, display_name, role, email) VALUES (?, ?, ?, ?, ?)",
+          "INSERT INTO users (username, password_hash, display_name, role, email, telegram_chat_id) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .run(
           normalizedUsername,
@@ -95,6 +99,7 @@ export async function POST(request) {
           display_name || normalizedUsername,
           "user",
           cleanEmail,
+          cleanTelegram,
         );
 
       const user = {
@@ -107,6 +112,15 @@ export async function POST(request) {
 
       // Persist users to Google Sheets (fire-and-forget)
       await syncUsersToSheet();
+      
+      // Send welcome email if email provided
+      if (cleanEmail) {
+        sendWelcomeEmail({
+          to: cleanEmail,
+          displayName: user.display_name,
+          username: user.username,
+        }).catch(() => {});
+      }
 
       const response = NextResponse.json({ user });
       const cookieOpts = getTokenCookieOptions();

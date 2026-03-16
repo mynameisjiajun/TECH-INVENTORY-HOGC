@@ -18,6 +18,7 @@ import {
   RiBookmarkLine,
   RiAddLine,
   RiDragMove2Fill,
+  RiCameraLine,
 } from "react-icons/ri";
 import {
   DndContext,
@@ -871,6 +872,13 @@ export default function AdminPage() {
                       <strong>Admin notes:</strong> {loan.admin_notes}
                     </div>
                   )}
+                  {loan.status === 'returned' && loan.return_photo_url && (
+                    <div style={{ marginTop: 12, fontSize: 13 }}>
+                      <a href={loan.return_photo_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <RiCameraLine /> View Proof of Return
+                      </a>
+                    </div>
+                  )}
                   <div
                     style={{
                       marginTop: 8,
@@ -1007,6 +1015,7 @@ export default function AdminPage() {
                     <tr>
                       <th>User</th>
                       <th className="hide-mobile">Username</th>
+                      <th>Contact Info</th>
                       <th>Role</th>
                       <th>Joined</th>
                       <th>Reset Pass</th>
@@ -1057,6 +1066,23 @@ export default function AdminPage() {
                           }}
                         >
                           @{u.username}
+                        </td>
+                        <td style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                          {u.email ? (
+                            <div>
+                              <span title="Email">📧 {u.email}</span>
+                            </div>
+                          ) : null}
+                          {u.telegram_chat_id ? (
+                            <div>
+                              <span title="Telegram Handle" style={{ color: "#3b82f6" }}>
+                                💬 @{u.telegram_chat_id}
+                              </span>
+                            </div>
+                          ) : null}
+                          {!u.email && !u.telegram_chat_id && (
+                            <span style={{ color: "var(--text-muted)" }}>-</span>
+                          )}
                         </td>
                         <td>
                           <button

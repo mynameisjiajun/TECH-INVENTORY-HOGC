@@ -2,9 +2,10 @@
 import { useAuth } from '@/lib/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useToast } from '@/lib/context/ToastContext';
 import Navbar from '@/components/Navbar';
 import CartPanel from '@/components/CartPanel';
-import { RiTimeLine, RiCheckLine, RiCloseLine, RiArrowGoBackLine, RiSearchLine, RiFilterLine } from 'react-icons/ri';
+import { RiTimeLine, RiCheckLine, RiCloseLine, RiArrowGoBackLine, RiSearchLine, RiFilterLine, RiCameraLine } from 'react-icons/ri';
 
 export default function LoansPage() {
   const { user, loading } = useAuth();
@@ -16,6 +17,70 @@ export default function LoansPage() {
   const [dateTo, setDateTo] = useState('');
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState('');
+  const toast = useToast();
+  
+  const [returnModalLoan, setReturnModalLoan] = useState(null);
+  const [returnPhoto, setReturnPhoto] = useState(null);
+  const [returnLoading, setReturnLoading] = useState(false);
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Compress image before upload using canvas
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+        } else {
+          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+        }
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setReturnPhoto(dataUrl);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const submitReturn = async () => {
+    if (!returnPhoto || !returnModalLoan) {
+      toast.error('Please upload a photo as proof of return');
+      return;
+    }
+    setReturnLoading(true);
+    try {
+      const res = await fetch(`/api/loans/${returnModalLoan.id}/return`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: returnPhoto })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message);
+        setLoans(loans.map(l => l.id === returnModalLoan.id ? { ...l, status: 'returned', return_photo_url: data.photo_url } : l));
+        setReturnModalLoan(null);
+        setReturnPhoto(null);
+      } else {
+        toast.error(data.error);
+      }
+    } catch (err) {
+      toast.error('Network error — failed to submit return');
+    } finally {
+      setReturnLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -157,9 +222,93 @@ export default function LoansPage() {
                 <strong>Admin notes:</strong> {loan.admin_notes}
               </div>
             )}
+
+            {loan.status === 'approved' && loan.loan_type === 'temporary' && (
+              <div style={{ marginTop: 16 }}>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => setReturnModalLoan(loan)}
+                  style={{
+                    background: 'rgba(59,130,246,0.1)',
+                    color: '#3b82f6',
+                    border: '1px solid rgba(59,130,246,0.3)',
+                    fontWeight: 600
+                  }}
+                >
+                  <RiCameraLine style={{ marginRight: 6 }} /> Return Items
+                </button>
+              </div>
+            )}
+            {loan.status === 'returned' && loan.return_photo_url && (
+              <div style={{ marginTop: 12, fontSize: 13 }}>
+                <a href={loan.return_photo_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <RiCameraLine /> View Return Photo
+                </a>
+              </div>
+            )}
           </div>
         ))}
       </div>
+
+      {/* Return Modal */}
+      {returnModalLoan && (
+        <div className="modal-overlay" onClick={() => !returnLoading && setReturnModalLoan(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 450 }}>
+            <div className="modal-header">
+              <h2>Return Loan #{returnModalLoan.id}</h2>
+              <button className="btn-close" onClick={() => !returnLoading && setReturnModalLoan(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                Please upload a clear photo showing all items have been returned to their proper storage location.
+              </p>
+              
+              <div style={{ background: 'var(--bg-secondary)', border: '1px dashed var(--border)', borderRadius: 12, padding: 20, textAlign: 'center', marginBottom: 16 }}>
+                {returnPhoto ? (
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <img src={returnPhoto} alt="Return proof" style={{ maxWidth: '100%', maxHeight: 250, borderRadius: 8 }} />
+                    <button 
+                      onClick={() => setReturnPhoto(null)}
+                      style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >✕</button>
+                  </div>
+                ) : (
+                  <>
+                    <RiCameraLine size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                    <br />
+                    <label className="btn btn-outline" style={{ cursor: 'pointer' }}>
+                      Take / Upload Photo
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        capture="environment" 
+                        style={{ display: 'none' }} 
+                        onChange={handlePhotoChange} 
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button 
+                className="btn btn-outline" 
+                onClick={() => setReturnModalLoan(null)}
+                disabled={returnLoading}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={submitReturn}
+                disabled={!returnPhoto || returnLoading}
+              >
+                {returnLoading ? 'Uploading...' : 'Submit Return'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

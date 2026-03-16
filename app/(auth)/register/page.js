@@ -14,6 +14,7 @@ export default function RegisterPage() {
     confirm_password: "",
     display_name: "",
     email: "",
+    telegram_handle: "",
     invite_code: "",
   });
   const [error, setError] = useState("");
@@ -46,6 +47,7 @@ export default function RegisterPage() {
       formData.display_name,
       formData.invite_code,
       formData.email,
+      formData.telegram_handle
     );
     if (result.ok) {
       router.push("/inventory");
@@ -111,6 +113,25 @@ export default function RegisterPage() {
               }}
             >
               Used for password reset emails
+            </span>
+          </div>
+          <div className="input-group">
+            <label>Telegram Handle</label>
+            <input
+              type="text"
+              value={formData.telegram_handle}
+              onChange={update("telegram_handle")}
+              placeholder="@your_username (Optional)"
+            />
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                marginTop: 4,
+                display: "block",
+              }}
+            >
+              Used for loan approvals/return notifications
             </span>
           </div>
           <div className="input-group">

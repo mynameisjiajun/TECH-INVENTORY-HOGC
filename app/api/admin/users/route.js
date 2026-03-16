@@ -22,7 +22,7 @@ export async function GET() {
   const db = getDb();
   const users = db
     .prepare(
-      "SELECT id, username, display_name, role, created_at FROM users ORDER BY created_at DESC",
+      "SELECT id, username, display_name, role, email, telegram_chat_id, created_at FROM users ORDER BY created_at DESC",
     )
     .all();
   const invite_code = getSetting("invite_code") || "";
