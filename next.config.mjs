@@ -34,9 +34,6 @@ const securityHeaders = [
 const nextConfig = {
   output: "standalone",
   serverExternalPackages: ["better-sqlite3"],
-  experimental: {
-    serverComponentsExternalPackages: ["better-sqlite3"],
-  },
   devIndicators: false,
   turbopack: {
     root: __dirname,

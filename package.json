@@ -26,6 +26,7 @@
     "resend": "^6.9.3"
   },
   "devDependencies": {
+    "copy-webpack-plugin": "^14.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6"
   }
