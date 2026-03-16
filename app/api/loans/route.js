@@ -119,6 +119,23 @@ export async function GET(request) {
 
     const backgroundTasks = [];
 
+    // ⚡ Bolt: Optimized N+1 query - batch fetch items for all notification checks
+    const allNotificationLoanIds = [...overdueLoans, ...dueSoonLoans].map(l => l.id);
+    const notificationItemsByLoan = new Map();
+    if (allNotificationLoanIds.length > 0) {
+      const items = db.prepare(
+        `SELECT li.loan_request_id, li.quantity, si.item FROM loan_items li
+         JOIN storage_items si ON li.item_id = si.id
+         JOIN json_each(?) j ON li.loan_request_id = j.value`
+      ).all(JSON.stringify(allNotificationLoanIds));
+      for (const item of items) {
+        if (!notificationItemsByLoan.has(item.loan_request_id)) {
+          notificationItemsByLoan.set(item.loan_request_id, []);
+        }
+        notificationItemsByLoan.get(item.loan_request_id).push(item);
+      }
+    }
+
     for (const loan of overdueLoans) {
       const existing = db
         .prepare(
@@ -126,13 +143,7 @@ export async function GET(request) {
         )
         .get(user.id, `%#${loan.id}%`, today);
       if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
+        const loanItems = notificationItemsByLoan.get(loan.id) || [];
         const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
         db.prepare(
           "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
@@ -168,13 +179,7 @@ export async function GET(request) {
         )
         .get(user.id, `%#${loan.id}%`, today);
       if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
+        const loanItems = notificationItemsByLoan.get(loan.id) || [];
         const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
         db.prepare(
           "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
