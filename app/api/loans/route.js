@@ -292,24 +292,10 @@ export async function POST(request) {
     ensureUserExists(user);
 
     const createLoanTx = db.transaction(() => {
-      // ⚡ Optimized: Gather item IDs and fetch them in a single query to avoid N+1 queries.
-      // Using JOIN with json_each instead of an IN clause to avoid SQLite parameter limits on serverless environments.
-      const itemIds = items.map(item => item.item_id);
-      const storageItems = db
-        .prepare(`
-          SELECT si.*
-          FROM storage_items si
-          JOIN json_each(?) j ON si.id = j.value
-        `)
-        .all(JSON.stringify(itemIds));
-
-      const storageItemMap = new Map();
-      for (const si of storageItems) {
-        storageItemMap.set(si.id, si);
-      }
-
       for (const item of items) {
-        const storageItem = storageItemMap.get(item.item_id);
+        const storageItem = db
+          .prepare("SELECT * FROM storage_items WHERE id = ?")
+          .get(item.item_id);
         if (!storageItem) {
           throw new Error(`Item not found: ${item.item_id}`);
         }
