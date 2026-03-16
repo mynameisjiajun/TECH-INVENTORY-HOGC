@@ -35,6 +35,8 @@ export function middleware(request) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   const user = token ? parseJwtPayload(token) : null;
 
+  console.log(`Middleware: path=${pathname}, hasToken=${!!token}, user=${user?.username || 'null'}`);
+
   // Redirect authenticated users away from login/register
   if (AUTH_ROUTES.some((r) => pathname.startsWith(r))) {
     if (user) {

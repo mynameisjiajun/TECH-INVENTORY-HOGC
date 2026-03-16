@@ -14,6 +14,17 @@ export default function Home() {
     }
   }, [user, loading, router]);
 
+  // Safety timeout: if we're still loading after 5 seconds, try to force redirect to login
+  useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => {
+        console.warn('Home page loading timed out, forcing redirect to login');
+        router.replace('/login');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, router]);
+
   return (
     <>
       <FluidBackground />

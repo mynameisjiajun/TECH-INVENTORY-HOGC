@@ -120,7 +120,7 @@ export default function InventoryPage() {
 
   if (loading || !user)
     return (
-      <div className="loading-spinner">
+      <div className="loading-spinner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <div className="spinner" />
       </div>
     );
@@ -405,10 +405,10 @@ export default function InventoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item) => {
+                    {items.map((item, i) => {
                       const loaned = item.quantity_spare - item.current;
                       return (
-                        <tr key={item.id}>
+                        <tr key={`storage-${item.id}-${i}`}>
                           <td style={{ fontWeight: 500 }}>{item.item}</td>
                           <td>
                             <TypeBadge type={item.type} />
@@ -498,8 +498,8 @@ export default function InventoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item) => (
-                      <tr key={item.id}>
+                    {items.map((item, i) => (
+                      <tr key={`deployed-${item.id}-${i}`}>
                         <td style={{ fontWeight: 500 }}>{item.item}</td>
                         <td>
                           <TypeBadge type={item.type} />
