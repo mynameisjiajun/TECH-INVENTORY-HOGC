@@ -1,10 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/ping",
-      "schedule": "0 * * * *"
-    }
-  ],
   "headers": [
     {
       "source": "/sw.js",
