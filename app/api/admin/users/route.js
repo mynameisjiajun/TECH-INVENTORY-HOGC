@@ -180,6 +180,7 @@ export async function POST(request) {
         display_name,
         user_id,
       );
+      await syncUsersToSheet();
     }
 
     return NextResponse.json({ message: `User @${target.username} updated` });
