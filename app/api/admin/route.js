@@ -35,12 +35,11 @@ async function syncStockToSheets(db, changes) {
   console.log(`[SYNC STOCK] Start targeting ${changes.length} items`);
   try {
     const itemIds = changes.map((c) => c.itemId);
-    const placeholders = itemIds.map(() => "?").join(",");
     const rows = db
       .prepare(
-        `SELECT id, sheet_row FROM storage_items WHERE id IN (${placeholders}) AND sheet_row IS NOT NULL`,
+        `SELECT id, sheet_row FROM storage_items JOIN json_each(?) j ON storage_items.id = j.value WHERE sheet_row IS NOT NULL`,
       )
-      .all(...itemIds);
+      .all(JSON.stringify(itemIds));
 
     if (rows.length === 0) {
       console.warn("[SYNC STOCK] Target items have no sheet_row mapping in DB");
