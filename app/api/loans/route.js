@@ -26,7 +26,10 @@ export async function GET(request) {
   const dateTo = searchParams.get("date_to") || "";
 
   let query = `
-    SELECT lr.*, u.display_name as requester_name, u.username as requester_username
+    SELECT lr.id, lr.user_id, lr.loan_type, lr.status, lr.purpose, lr.department,
+           lr.location, lr.start_date, lr.end_date, lr.admin_notes, lr.return_photo_url,
+           lr.created_at, lr.updated_at,
+           u.display_name as requester_name, u.username as requester_username
     FROM loan_requests lr
     JOIN users u ON lr.user_id = u.id
     WHERE 1=1
@@ -216,7 +219,9 @@ export async function GET(request) {
     console.error("Overdue notification check failed:", err.message);
   }
 
-  return NextResponse.json({ loans });
+  return NextResponse.json({ loans }, {
+    headers: { "Cache-Control": "private, s-maxage=5, stale-while-revalidate=15" },
+  });
 }
 
 // POST: create a new loan request

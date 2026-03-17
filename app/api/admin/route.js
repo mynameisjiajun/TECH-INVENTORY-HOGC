@@ -1,5 +1,6 @@
 import { getDb, waitForSync, syncLoansToSheet, logActivity } from "@/lib/db/db";
 import { getCurrentUser } from "@/lib/utils/auth";
+import { invalidateAll } from "@/lib/utils/cache";
 import { applyDeltasToCells, appendRows } from "@/lib/services/sheets";
 import {
   sendOverdueEmail,
@@ -181,6 +182,7 @@ export async function POST(request) {
         ([itemId, delta]) => ({ itemId, delta }),
       );
       await syncStockToSheets(db, bulkChanges);
+      invalidateAll();
       await syncLoansToSheet();
       return NextResponse.json({
         message: `${returned} loan(s) returned to stock`,
@@ -333,7 +335,8 @@ export async function POST(request) {
         if (adminBackgroundTasks.length > 0) {
           await Promise.all(adminBackgroundTasks);
         }
-        await syncLoansToSheet();
+        invalidateAll();
+      await syncLoansToSheet();
         const requester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
         logActivity(db, user.id, "approve", `Approved ${loan.loan_type} loan #${loan_id} for ${requester?.display_name || "user"}`);
         return NextResponse.json({ message: "Loan approved" });
@@ -404,6 +407,7 @@ export async function POST(request) {
       if (rejectBackgroundTasks.length > 0) {
         await Promise.all(rejectBackgroundTasks);
       }
+      invalidateAll();
       await syncLoansToSheet();
       const rejectRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "reject", `Rejected loan #${loan_id} from ${rejectRequester?.display_name || "user"}`);
@@ -464,6 +468,7 @@ export async function POST(request) {
         `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`
       );
 
+      invalidateAll();
       await syncLoansToSheet();
       const returnRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
       logActivity(db, user.id, "return", `Returned items from loan #${loan_id} (${returnRequester?.display_name || "user"})`);
@@ -516,6 +521,7 @@ export async function POST(request) {
       if (restoreChanges.length > 0) {
         await syncStockToSheets(db, restoreChanges);
       }
+      invalidateAll();
       await syncLoansToSheet();
       return NextResponse.json({ message: "Loan deleted" });
     }

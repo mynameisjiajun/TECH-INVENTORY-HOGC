@@ -1,5 +1,6 @@
 import { getDb } from '@/lib/db/db';
 import { getCurrentUser } from '@/lib/utils/auth';
+import { invalidateAll } from '@/lib/utils/cache';
 import { readSheet } from '@/lib/services/sheets';
 import { NextResponse } from 'next/server';
 
@@ -96,6 +97,7 @@ export async function POST() {
     });
 
     const { storageUpdated, deployedUpdated } = syncAll();
+    invalidateAll();
 
     return NextResponse.json({
       message: `Synced ${storageUpdated} storage items, ${deployedUpdated} deployed items from Google Sheets`,

@@ -1,5 +1,6 @@
 import { getDb, waitForSync } from "@/lib/db/db";
 import { getCurrentUser } from "@/lib/utils/auth";
+import { cached } from "@/lib/utils/cache";
 import { NextResponse } from "next/server";
 
 // Fuzzy search: handles word reordering, partial matches, and normalized comparisons.
@@ -15,7 +16,6 @@ function fuzzyMatch(text, search) {
   if (normalizedText.includes(normalizedSearch)) return true;
 
   // Split search into words and check all appear in text (any order)
-  // Also normalize text dashes/hyphens to spaces so "type-C" is searchable as "type c"
   const textLower = textStr.toLowerCase().replace(/[\-_\/\.]+/g, " ");
   const words = search
     .toLowerCase()
@@ -25,14 +25,14 @@ function fuzzyMatch(text, search) {
   if (words.length > 0 && words.every((word) => textLower.includes(word)))
     return true;
 
-  // Try with normalized words against normalized text (handles "type-c" vs "type c")
+  // Try with normalized words against normalized text
   if (
     words.length > 0 &&
     words.every((word) => normalizedText.includes(normalize(word)))
   )
     return true;
 
-  // Combine adjacent word pairs and try matching (handles "typec" matching "type c")
+  // Combine adjacent word pairs and try matching
   for (let i = 0; i < words.length - 1; i++) {
     const pair = words[i] + words[i + 1];
     if (normalizedText.includes(pair)) {
@@ -43,6 +43,33 @@ function fuzzyMatch(text, search) {
   }
 
   return false;
+}
+
+// Cache TTL: 30 seconds for inventory data (balances freshness vs performance)
+const CACHE_TTL = 30_000;
+
+function getFilters(db, table) {
+  return cached(`filters:${table}`, () => {
+    const types = db
+      .prepare(`SELECT DISTINCT type FROM ${table} ORDER BY type`)
+      .all()
+      .map((r) => r.type);
+    const brands = db
+      .prepare(
+        `SELECT DISTINCT brand FROM ${table} WHERE brand != '-' ORDER BY brand`,
+      )
+      .all()
+      .map((r) => r.brand);
+    return { types, brands };
+  }, CACHE_TTL);
+}
+
+function respond(data) {
+  return NextResponse.json(data, {
+    headers: {
+      "Cache-Control": "private, s-maxage=10, stale-while-revalidate=30",
+    },
+  });
 }
 
 export async function GET(request) {
@@ -72,7 +99,6 @@ export async function GET(request) {
     query += " ORDER BY sheet_row ASC, id ASC";
     let items = db.prepare(query).all(...params);
 
-    // Apply fuzzy search in JS for smart matching
     if (search) {
       items = items.filter(
         (item) =>
@@ -84,19 +110,8 @@ export async function GET(request) {
       );
     }
 
-    // Get filter options
-    const types = db
-      .prepare("SELECT DISTINCT type FROM storage_items ORDER BY type")
-      .all()
-      .map((r) => r.type);
-    const brands = db
-      .prepare(
-        "SELECT DISTINCT brand FROM storage_items WHERE brand != '-' ORDER BY brand",
-      )
-      .all()
-      .map((r) => r.brand);
-
-    return NextResponse.json({ items, filters: { types, brands } });
+    const filters = await getFilters(db, "storage_items");
+    return respond({ items, filters });
   }
 
   if (tab === "deployed") {
@@ -113,7 +128,6 @@ export async function GET(request) {
     query += " ORDER BY id ASC";
     let items = db.prepare(query).all(...params);
 
-    // Apply fuzzy search
     if (search) {
       items = items.filter(
         (item) =>
@@ -124,68 +138,53 @@ export async function GET(request) {
       );
     }
 
-    // Get filter options for deployed tab
-    const types = db
-      .prepare("SELECT DISTINCT type FROM deployed_items ORDER BY type")
-      .all()
-      .map((r) => r.type);
-    const brands = db
-      .prepare(
-        "SELECT DISTINCT brand FROM deployed_items WHERE brand != '-' ORDER BY brand",
-      )
-      .all()
-      .map((r) => r.brand);
-
-    return NextResponse.json({ items, filters: { types, brands } });
+    const filters = await getFilters(db, "deployed_items");
+    return respond({ items, filters });
   }
 
   if (tab === "total_quantity") {
-    const items = db
-      .prepare(
-        `
-      SELECT type,
-             SUM(quantity_spare) as total_spare,
-             SUM(current) as total_current,
-             SUM(quantity_spare - current) as total_loaned
-      FROM storage_items
-      GROUP BY type
-      ORDER BY type
-    `,
-      )
-      .all();
-    return NextResponse.json({ items });
+    const items = await cached("total_quantity", () =>
+      db.prepare(`
+        SELECT type,
+               SUM(quantity_spare) as total_spare,
+               SUM(current) as total_current,
+               SUM(quantity_spare - current) as total_loaned
+        FROM storage_items
+        GROUP BY type
+        ORDER BY type
+      `).all(),
+      CACHE_TTL
+    );
+    return respond({ items });
   }
 
   if (tab === "total_breakdown") {
-    const items = db
-      .prepare(
-        `
-      SELECT item, type, brand, model, quantity_spare,
-             current, (quantity_spare - current) as loaned_out
-      FROM storage_items
-      ORDER BY sheet_row ASC, id ASC
-    `,
-      )
-      .all();
-    return NextResponse.json({ items });
+    const items = await cached("total_breakdown", () =>
+      db.prepare(`
+        SELECT item, type, brand, model, quantity_spare,
+               current, (quantity_spare - current) as loaned_out
+        FROM storage_items
+        ORDER BY sheet_row ASC, id ASC
+      `).all(),
+      CACHE_TTL
+    );
+    return respond({ items });
   }
 
   if (tab === "low_stock") {
-    const items = db
-      .prepare(
-        `
-      SELECT * FROM storage_items
-      WHERE current <= 2 AND quantity_spare > 0
-      ORDER BY current ASC, item ASC
-    `,
-      )
-      .all();
-    return NextResponse.json({ items });
+    const items = await cached("low_stock", () =>
+      db.prepare(`
+        SELECT * FROM storage_items
+        WHERE current <= 2 AND quantity_spare > 0
+        ORDER BY current ASC, item ASC
+      `).all(),
+      CACHE_TTL
+    );
+    return respond({ items });
   }
 
   if (tab === "presets") {
-    // Templates are fetched separately via /api/admin/templates on the frontend
-    return NextResponse.json({ items: [] });
+    return respond({ items: [] });
   }
 
   return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
