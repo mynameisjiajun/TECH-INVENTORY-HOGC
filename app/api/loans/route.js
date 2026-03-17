@@ -302,10 +302,18 @@ export async function POST(request) {
     ensureUserExists(user);
 
     const createLoanTx = db.transaction(() => {
+      // ⚡ Bolt: Prevent N+1 query problem by batch fetching all requested items
+      // Using JSON_EACH trick avoids hitting SQLite parameter limits on Vercel
+      const itemIds = items.map(i => i.item_id);
+      const allStorageItems = db.prepare(`SELECT t.* FROM json_each(?) j JOIN storage_items t ON t.id = j.value`).all(JSON.stringify(itemIds));
+
+      const storageItemMap = new Map();
+      for (const si of allStorageItems) {
+        storageItemMap.set(si.id, si);
+      }
+
       for (const item of items) {
-        const storageItem = db
-          .prepare("SELECT * FROM storage_items WHERE id = ?")
-          .get(item.item_id);
+        const storageItem = storageItemMap.get(item.item_id);
         if (!storageItem) {
           throw new Error(`Item not found: ${item.item_id}`);
         }
