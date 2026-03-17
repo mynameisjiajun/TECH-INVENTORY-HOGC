@@ -1,6 +1,7 @@
 import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db/db";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
+import { uploadToImgBB } from "@/lib/services/imgbb";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
@@ -26,14 +27,12 @@ export async function POST(request, { params }) {
     const db = getDb();
     ensureUserExists(user);
 
-    // Verify loan belongs to user and is currently approved/temporary
     const loan = db.prepare("SELECT * FROM loan_requests WHERE id = ?").get(loanId);
 
     if (!loan) {
       return NextResponse.json({ error: "Loan not found" }, { status: 404 });
     }
 
-    // Allow admins to use this endpoint to upload photos for users too
     if (loan.user_id !== user.id && user.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized to return this loan" }, { status: 403 });
     }
@@ -42,14 +41,13 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "Loan is not eligible for return" }, { status: 400 });
     }
 
-    // Store photo in database and serve via /api/loans/[id]/photo
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-    const photoUrl = `${appUrl}/api/loans/${loanId}/photo`;
+    // Upload photo to ImgBB (permanent, survives cold starts)
+    const photoUrl = await uploadToImgBB(imageBase64);
 
-    // Update database — store base64 data and the public URL
+    // Update database
     db.prepare(
-      `UPDATE loan_requests SET status = 'returned', return_photo_url = ?, return_photo_data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-    ).run(photoUrl, imageBase64, loanId);
+      `UPDATE loan_requests SET status = 'returned', return_photo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+    ).run(photoUrl, loanId);
 
     // Notify admins
     const loanUser = db.prepare("SELECT display_name, username FROM users WHERE id = ?").get(loan.user_id);
@@ -62,7 +60,7 @@ export async function POST(request, { params }) {
       insertNotif.run(
         admin.id,
         `${loanUser?.display_name || 'A user'} returned loan request #${loanId}. Click to view proof of return.`,
-        `/loans`
+        photoUrl
       );
       sendTelegramMessage(
         admin.id,
@@ -74,7 +72,7 @@ export async function POST(request, { params }) {
     invalidateAll();
     await syncLoansToSheet();
 
-    return NextResponse.json({ message: "Items returned successfully!", photo_url: `/api/loans/${loanId}/photo` });
+    return NextResponse.json({ message: "Items returned successfully!", photo_url: photoUrl });
   } catch (error) {
     console.error("Return loan error:", error);
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
