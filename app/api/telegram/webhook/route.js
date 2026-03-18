@@ -21,6 +21,25 @@ function getLoanItems(db, loanId) {
   `).all(loanId);
 }
 
+function getMultipleLoanItems(db, loanIds) {
+  if (!loanIds || loanIds.length === 0) return new Map();
+  const allItems = db.prepare(`
+    SELECT li.loan_request_id, li.quantity, si.item
+    FROM loan_items li
+    JOIN storage_items si ON li.item_id = si.id
+    JOIN json_each(?) AS j ON li.loan_request_id = j.value
+  `).all(JSON.stringify(loanIds));
+
+  const itemsMap = new Map();
+  for (const item of allItems) {
+    if (!itemsMap.has(item.loan_request_id)) {
+      itemsMap.set(item.loan_request_id, []);
+    }
+    itemsMap.get(item.loan_request_id).push(item);
+  }
+  return itemsMap;
+}
+
 function formatItems(items) {
   return items.map(i => `  • ${i.item} × ${i.quantity}`).join("\n");
 }
@@ -77,8 +96,11 @@ async function handleLoans(db, chatId, userId) {
   }
 
   let message = "<b>Your Active Loans:</b>\n\n";
+  const loanIds = loans.map((l) => l.id);
+  const itemsMap = getMultipleLoanItems(db, loanIds);
+
   for (const loan of loans) {
-    const items = getLoanItems(db, loan.id);
+    const items = itemsMap.get(loan.id) || [];
     const statusEmoji = loan.status === "approved" ? "✅" : "⏳";
     message += `${statusEmoji} <b>Loan #${loan.id}</b> (${loan.loan_type})\n`;
     message += `Status: ${loan.status.charAt(0).toUpperCase() + loan.status.slice(1)}\n`;
@@ -107,8 +129,11 @@ async function handleReturns(db, chatId, userId) {
   }
 
   let message = "<b>📋 Items You Need To Return:</b>\n\n";
+  const loanIds = loans.map((l) => l.id);
+  const itemsMap = getMultipleLoanItems(db, loanIds);
+
   for (const loan of loans) {
-    const items = getLoanItems(db, loan.id);
+    const items = itemsMap.get(loan.id) || [];
     const days = loan.end_date ? daysUntil(loan.end_date) : null;
 
     let urgency = "";
@@ -147,8 +172,11 @@ async function handleOverdue(db, chatId, userId) {
   }
 
   let message = `<b>🚨 You have ${loans.length} overdue loan(s):</b>\n\n`;
+  const loanIds = loans.map((l) => l.id);
+  const itemsMap = getMultipleLoanItems(db, loanIds);
+
   for (const loan of loans) {
-    const items = getLoanItems(db, loan.id);
+    const items = itemsMap.get(loan.id) || [];
     const days = Math.abs(daysUntil(loan.end_date));
 
     message += `<b>Loan #${loan.id}</b> — ${days} day(s) overdue\n`;
