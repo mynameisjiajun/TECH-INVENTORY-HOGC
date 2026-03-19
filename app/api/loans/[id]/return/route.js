@@ -78,7 +78,6 @@ export async function POST(request, { params }) {
       user_id: user.id,
       action: "return",
       description: `${loanUser?.display_name || "A user"} returned loan #${loanId}.${remarksLine}`,
-      link: photoUrl,
     });
 
     if (admins && admins.length > 0) {

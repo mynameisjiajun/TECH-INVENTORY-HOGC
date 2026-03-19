@@ -1113,14 +1113,10 @@ export default function DashboardPage() {
                 key={a.id}
                 className="activity-item"
                 onClick={() => {
-                  if (!a.link) return;
-                  if (a.link.startsWith("http")) {
-                    window.open(a.link, "_blank", "noopener");
-                  } else {
-                    router.push(a.link);
-                  }
+                  if (!a.link || a.link.startsWith("http")) return;
+                  router.push(a.link);
                 }}
-                style={a.link ? { cursor: "pointer" } : undefined}
+                style={a.link && !a.link.startsWith("http") ? { cursor: "pointer" } : undefined}
               >
                 <div className={`activity-dot ${a.action}`} />
                 <div style={{ flex: 1 }}>
@@ -1129,7 +1125,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="activity-time">
                     {new Date(a.created_at).toLocaleString()}
-                    {a.link && <span style={{ marginLeft: 6, opacity: 0.5, fontSize: 10 }}>↗</span>}
+                    {a.link && !a.link.startsWith("http") && <span style={{ marginLeft: 6, opacity: 0.5, fontSize: 10 }}>↗</span>}
                   </div>
                 </div>
               </div>
