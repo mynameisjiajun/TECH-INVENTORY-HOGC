@@ -1,36 +1,33 @@
-import { getDb, ensureUserExists } from "@/lib/db/db";
+import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = getDb();
-  ensureUserExists(user);
-  const notifications = db
-    .prepare(
-      "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20",
-    )
-    .all(user.id);
+  const [{ data: notifications }, { count: unreadCount }] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("notifications")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("read", false),
+  ]);
 
-  const unreadCount = db
-    .prepare(
-      "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = 0",
-    )
-    .get(user.id).count;
-
-  return NextResponse.json({ notifications, unreadCount });
+  return NextResponse.json({ notifications: notifications || [], unreadCount: unreadCount || 0 });
 }
 
 export async function POST(request) {
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { action, notification_id } = await request.json();
-  const db = getDb();
 
   if (action === "read") {
     if (!notification_id || !Number.isInteger(Number(notification_id))) {
@@ -39,13 +36,16 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    db.prepare(
-      "UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?",
-    ).run(notification_id, user.id);
+    await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("id", notification_id)
+      .eq("user_id", user.id);
   } else if (action === "read_all") {
-    db.prepare("UPDATE notifications SET read = 1 WHERE user_id = ?").run(
-      user.id,
-    );
+    await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", user.id);
   }
 
   return NextResponse.json({ ok: true });

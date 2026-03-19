@@ -1,5 +1,5 @@
-import { getDb, syncUsersToSheet, ensureUsersRestored } from "@/lib/db/db";
-import { hashPassword, createResetToken, verifyResetToken } from "@/lib/utils/auth";
+import { supabase } from "@/lib/db/supabase";
+import { hashPassword, createResetToken, verifyResetToken, decodeTokenUnsafe } from "@/lib/utils/auth";
 import { sendPasswordResetEmail } from "@/lib/services/email";
 import { checkRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
@@ -8,11 +8,11 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export async function POST(request) {
   try {
-    await ensureUsersRestored();
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       "unknown";
-    const { limited, retryAfterSeconds } = checkRateLimit(ip);
+    // Separate rate limit key from login so they don't interfere with each other
+    const { limited, retryAfterSeconds } = checkRateLimit(`reset:${ip}`);
     if (limited) {
       return NextResponse.json(
         {
@@ -24,8 +24,6 @@ export async function POST(request) {
 
     const { action, username, token, new_password } = await request.json();
 
-    const db = getDb();
-
     if (action === "request_reset") {
       if (!username || username.trim().length < 2) {
         return NextResponse.json(
@@ -35,14 +33,14 @@ export async function POST(request) {
       }
 
       const normalizedUsername = username.trim().toLowerCase();
-      const user = db
-        .prepare(
-          "SELECT id, username, display_name, email FROM users WHERE username = ?",
-        )
-        .get(normalizedUsername);
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, username, display_name, email, password_hash")
+        .eq("username", normalizedUsername)
+        .single();
 
+      // Don't reveal whether the user exists
       if (!user || !user.email) {
-        // Don't reveal whether the user exists — always show success
         return NextResponse.json({
           message:
             "If an account with that username exists and has an email set, a reset link has been sent.",
@@ -78,28 +76,37 @@ export async function POST(request) {
         );
       }
 
-      const payload = verifyResetToken(token);
-      if (!payload) {
+      // Decode (without verifying) to extract the user id for the DB lookup
+      const claims = decodeTokenUnsafe(token);
+      if (!claims?.id || claims?.purpose !== "password_reset") {
         return NextResponse.json(
           { error: "Invalid or expired reset link. Please request a new one." },
           { status: 400 },
         );
       }
 
-      const user = db
-        .prepare("SELECT id FROM users WHERE id = ? AND username = ?")
-        .get(payload.id, payload.username);
+      // Fetch current password_hash — required to fully verify the token
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, password_hash")
+        .eq("id", claims.id)
+        .eq("username", claims.username)
+        .single();
+
       if (!user) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
 
-      const hash = await hashPassword(new_password);
-      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
-        hash,
-        user.id,
-      );
+      // Full cryptographic verify using current hash — fails if already used
+      if (!verifyResetToken(token, user.password_hash)) {
+        return NextResponse.json(
+          { error: "This reset link has already been used or has expired. Please request a new one." },
+          { status: 400 },
+        );
+      }
 
-      await syncUsersToSheet();
+      const hash = await hashPassword(new_password);
+      await supabase.from("users").update({ password_hash: hash }).eq("id", user.id);
 
       return NextResponse.json({
         message: "Password has been reset successfully! You can now log in.",

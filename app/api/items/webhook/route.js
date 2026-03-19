@@ -1,14 +1,24 @@
+import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db/db';
-import { getCurrentUser } from '@/lib/utils/auth';
 import { invalidateAll } from '@/lib/utils/cache';
 import { readSheet } from '@/lib/services/sheets';
-import { NextResponse } from 'next/server';
 
-const SHEETS_ENABLED = !!(process.env.GOOGLE_SHEETS_ID && process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY);
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const SHEETS_ENABLED = !!(
+  process.env.GOOGLE_SHEETS_ID &&
+  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+  process.env.GOOGLE_PRIVATE_KEY
+);
 
-export async function POST() {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function POST(request) {
+  // Verify secret token from Google Apps Script
+  const authHeader = request.headers.get('authorization');
+  const token = authHeader?.replace('Bearer ', '');
+
+  if (!WEBHOOK_SECRET || token !== WEBHOOK_SECRET) {
+    console.warn('Inventory webhook: unauthorized attempt');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   if (!SHEETS_ENABLED) {
     return NextResponse.json({ error: 'Google Sheets not configured' }, { status: 400 });
@@ -25,6 +35,7 @@ export async function POST() {
     const syncAll = db.transaction(() => {
       const seenSheetRows = new Set();
       let storageUpdated = 0;
+
       for (let i = 2; i < spareData.length; i++) {
         const row = spareData[i];
         const item = row[0] != null ? String(row[0]).trim() : '';
@@ -60,6 +71,7 @@ export async function POST() {
         storageUpdated++;
       }
 
+      // Remove rows deleted from the sheet
       if (seenSheetRows.size > 0) {
         const allDbRows = db.prepare('SELECT id, sheet_row FROM storage_items WHERE sheet_row IS NOT NULL').all();
         for (const dbRow of allDbRows) {
@@ -69,8 +81,9 @@ export async function POST() {
         }
       }
 
-      db.prepare('DELETE FROM deployed_items').run();
+      db.prepare('DELETE FROM deployed_items WHERE loan_request_id IS NULL').run();
       let deployedUpdated = 0;
+
       for (let i = 2; i < deployedData.length; i++) {
         const row = deployedData[i];
         const item = row[0] != null ? String(row[0]).trim() : '';
@@ -99,13 +112,10 @@ export async function POST() {
     const { storageUpdated, deployedUpdated } = syncAll();
     invalidateAll();
 
-    return NextResponse.json({
-      message: `Synced ${storageUpdated} storage items, ${deployedUpdated} deployed items from Google Sheets`,
-      storageUpdated,
-      deployedUpdated,
-    });
+    console.log(`Inventory webhook: synced ${storageUpdated} storage, ${deployedUpdated} deployed`);
+    return NextResponse.json({ ok: true, storageUpdated, deployedUpdated });
   } catch (err) {
-    console.error('Sheets sync error:', err);
+    console.error('Inventory webhook error:', err);
     return NextResponse.json({ error: `Sync failed: ${err.message}` }, { status: 500 });
   }
 }

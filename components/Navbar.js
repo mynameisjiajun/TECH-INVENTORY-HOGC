@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useCart } from "@/lib/context/CartContext";
 import { useState, useEffect, useRef } from "react";
+import { supabaseClient } from "@/lib/db/supabaseClient";
 import {
   RiDashboardLine,
   RiArchiveLine,
@@ -30,7 +31,7 @@ export default function Navbar() {
 
   useEffect(() => {
     if (!user) return;
-    // Removed setNotifPermission from here to separate effect
+
     const fetchNotifs = async () => {
       try {
         const res = await fetch("/api/notifications");
@@ -38,16 +39,15 @@ export default function Navbar() {
           const data = await res.json();
           setNotifications(data.notifications);
           // Show browser push notification when new unreads arrive
-          // Skip on first poll (prevUnreadRef === -1) to avoid spamming on page load
+          // Skip on first load (prevUnreadRef === -1) to avoid spamming
           if (
             data.unreadCount > prevUnreadRef.current &&
             prevUnreadRef.current >= 0 &&
             typeof Notification !== "undefined" &&
             Notification.permission === "granted"
           ) {
-            const newest = data.notifications.find(n => !n.read);
+            const newest = data.notifications.find((n) => !n.read);
             if (newest) {
-              // Use service worker showNotification for mobile/background support
               if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
                 navigator.serviceWorker.ready.then((reg) => {
                   reg.showNotification("Tech Inventory", {
@@ -59,7 +59,6 @@ export default function Navbar() {
                   });
                 });
               } else {
-                // Fallback for desktop without active SW
                 new Notification("Tech Inventory", {
                   body: newest.message,
                   icon: "/icons/icon-192.png",
@@ -75,9 +74,31 @@ export default function Navbar() {
         console.warn("Failed to fetch notifications:", err.message);
       }
     };
+
     fetchNotifs();
-    const interval = setInterval(fetchNotifs, 30000);
-    return () => clearInterval(interval);
+
+    // Realtime: refetch when a notification is inserted for this user
+    const channel = supabaseClient
+      .channel(`notifications-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => { fetchNotifs(); }
+      )
+      .subscribe();
+
+    // Fallback poll every 60s in case Realtime drops
+    const fallback = setInterval(fetchNotifs, 60000);
+
+    return () => {
+      supabaseClient.removeChannel(channel);
+      clearInterval(fallback);
+    };
   }, [user]);
 
   useEffect(() => {

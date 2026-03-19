@@ -1,9 +1,4 @@
-import {
-  getDb,
-  getSetting,
-  syncUsersToSheet,
-  ensureUsersRestored,
-} from "@/lib/db/db";
+import { supabase } from "@/lib/db/supabase";
 import {
   hashPassword,
   verifyPassword,
@@ -16,7 +11,6 @@ import { NextResponse } from "next/server";
 
 export async function POST(request) {
   try {
-    // Rate limit by IP
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       "unknown";
@@ -30,13 +24,8 @@ export async function POST(request) {
       );
     }
 
-    // Ensure users are restored from Google Sheets on cold start
-    await ensureUsersRestored();
-
     const { action, username, password, display_name, invite_code, email, telegram_handle } =
       await request.json();
-
-    const db = getDb();
 
     if (action === "register") {
       if (!username || username.trim().length < 2) {
@@ -54,9 +43,13 @@ export async function POST(request) {
 
       const normalizedUsername = username.trim().toLowerCase();
 
-      // Validate invite code (stored in DB, editable by admins)
-      const currentInviteCode =
-        getSetting("invite_code") || process.env.INVITE_CODE;
+      // Get invite code from Supabase app_settings
+      const { data: setting } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "invite_code")
+        .single();
+      const currentInviteCode = setting?.value || process.env.INVITE_CODE;
       if (!currentInviteCode || invite_code !== currentInviteCode) {
         return NextResponse.json(
           { error: "Invalid invite code" },
@@ -65,9 +58,11 @@ export async function POST(request) {
       }
 
       // Check if username exists
-      const existing = db
-        .prepare("SELECT id FROM users WHERE username = ?")
-        .get(normalizedUsername);
+      const { data: existing } = await supabase
+        .from("users")
+        .select("id")
+        .eq("username", normalizedUsername)
+        .single();
       if (existing) {
         return NextResponse.json(
           { error: "Username already taken" },
@@ -75,7 +70,6 @@ export async function POST(request) {
         );
       }
 
-      // Validate email
       const cleanEmail = email ? email.trim() : null;
       if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
         return NextResponse.json(
@@ -84,45 +78,37 @@ export async function POST(request) {
         );
       }
 
-      // Create user
       const hash = await hashPassword(password);
-      
-      const cleanTelegram = telegram_handle ? telegram_handle.trim().replace(/^@/, '') : null;
+      const cleanTelegram = telegram_handle
+        ? telegram_handle.trim().replace(/^@/, "")
+        : null;
 
-      const result = db
-        .prepare(
-          "INSERT INTO users (username, password_hash, display_name, role, email, telegram_chat_id) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          normalizedUsername,
-          hash,
-          display_name || normalizedUsername,
-          "user",
-          cleanEmail,
-          cleanTelegram,
-        );
+      const { data: newUser, error: insertError } = await supabase
+        .from("users")
+        .insert({
+          username: normalizedUsername,
+          password_hash: hash,
+          display_name: display_name || normalizedUsername,
+          role: "user",
+          email: cleanEmail,
+          telegram_chat_id: cleanTelegram,
+        })
+        .select("id, username, role, display_name")
+        .single();
 
-      const user = {
-        id: result.lastInsertRowid,
-        username: normalizedUsername,
-        role: "user",
-        display_name: display_name || normalizedUsername,
-      };
-      const token = createToken(user);
+      if (insertError) throw insertError;
 
-      // Persist users to Google Sheets (fire-and-forget)
-      await syncUsersToSheet();
-      
-      // Send welcome email if email provided
+      const token = createToken(newUser);
+
       if (cleanEmail) {
         sendWelcomeEmail({
           to: cleanEmail,
-          displayName: user.display_name,
-          username: user.username,
+          displayName: newUser.display_name,
+          username: newUser.username,
         }).catch(() => {});
       }
 
-      const response = NextResponse.json({ user });
+      const response = NextResponse.json({ user: newUser });
       const cookieOpts = getTokenCookieOptions();
       response.cookies.set(cookieOpts.name, token, cookieOpts);
       return response;
@@ -136,9 +122,13 @@ export async function POST(request) {
         );
       }
       const normalizedUsername = username.trim().toLowerCase();
-      const user = db
-        .prepare("SELECT * FROM users WHERE username = ?")
-        .get(normalizedUsername);
+
+      const { data: user } = await supabase
+        .from("users")
+        .select("*")
+        .eq("username", normalizedUsername)
+        .single();
+
       if (!user || !(await verifyPassword(password, user.password_hash))) {
         return NextResponse.json(
           { error: "Invalid username or password" },
@@ -146,9 +136,7 @@ export async function POST(request) {
         );
       }
 
-      // Successful login — reset rate limit so correct logins aren't penalised
       resetRateLimit(ip);
-
       const token = createToken(user);
       const response = NextResponse.json({
         user: {

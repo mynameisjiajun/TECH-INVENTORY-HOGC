@@ -1,4 +1,5 @@
-import { getDb, waitForSync, syncLoansToSheet, logActivity } from "@/lib/db/db";
+import { getDb, waitForSync } from "@/lib/db/db";
+import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
 import { applyDeltasToCells, appendRows } from "@/lib/services/sheets";
@@ -17,88 +18,38 @@ const SHEETS_ENABLED = !!(
 );
 const CURRENT_COL = "G";
 
-function logAudit(db, userId, action, targetType, targetId, details) {
-  db.prepare(
-    "INSERT INTO audit_log (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)",
-  ).run(userId, action, targetType, targetId, details);
-}
-
 /**
- * Fire-and-forget: read the current values from Google Sheets, apply the
- * quantity deltas, and write the results back.
- * @param {object} db - SQLite database
- * @param {Array<{itemId: number, delta: number}>} changes
- *   delta is negative for approve (stock goes down), positive for return (stock goes up)
+ * Apply stock quantity deltas to the Google Sheets "Storage Spare" tab.
+ * Uses sheet_row (stable) instead of item_id (may change on cold start).
+ * @param {Array<{sheetRow: number, delta: number}>} changes
  */
-async function syncStockToSheets(db, changes) {
+async function syncStockToSheets(changes) {
   if (!SHEETS_ENABLED || changes.length === 0) return;
-  console.log(`[SYNC STOCK] Start targeting ${changes.length} items`);
   try {
-    const itemIds = changes.map((c) => c.itemId);
-    const placeholders = itemIds.map(() => "?").join(",");
-    const rows = db
-      .prepare(
-        `SELECT id, sheet_row FROM storage_items WHERE id IN (${placeholders}) AND sheet_row IS NOT NULL`,
-      )
-      .all(...itemIds);
-
-    if (rows.length === 0) {
-      console.warn("[SYNC STOCK] Target items have no sheet_row mapping in DB");
-      return;
-    }
-
-    const rowMap = Object.fromEntries(rows.map((r) => [r.id, r.sheet_row]));
     const sheetChanges = changes
-      .filter((c) => rowMap[c.itemId])
-      .map((c) => ({
-        cell: `${CURRENT_COL}${rowMap[c.itemId]}`,
-        delta: c.delta,
-      }));
+      .filter((c) => c.sheetRow)
+      .map((c) => ({ cell: `${CURRENT_COL}${c.sheetRow}`, delta: c.delta }));
 
-    if (sheetChanges.length === 0) {
-      console.warn("[SYNC STOCK] No resolved cell mappings found for changes");
-      return;
-    }
-
-    try {
-      console.log(`[SYNC STOCK] Calling applyDeltasToCells with:`, JSON.stringify(sheetChanges));
-      await applyDeltasToCells("Storage Spare", sheetChanges);
-      console.log(`[SYNC STOCK] applyDeltasToCells completed successfully`);
-    } catch (err) {
-      console.error("Google Sheets write-back failed:", err.message);
-    }
+    if (sheetChanges.length === 0) return;
+    await applyDeltasToCells("Storage Spare", sheetChanges);
   } catch (err) {
-    console.error("Google Sheets sync error:", err.message);
+    console.error("Google Sheets stock write-back failed:", err.message);
   }
 }
 
 /**
- * Append newly deployed items to the DEPLOYED sheet in Google Sheets.
- * Columns in the sheet: A=empty, B=Item, C=Type, D=Brand, E=Model,
- * F=Quantity, G=Location, H=Allocation, I=Status, J=Remarks
+ * Append newly deployed items to the DEPLOYED sheet.
  */
 async function syncDeployedToSheets(deployedRows) {
   if (!SHEETS_ENABLED || deployedRows.length === 0) return;
   try {
     const sheetRows = deployedRows.map((r) => [
-      "",
-      r.item,
-      r.type,
-      r.brand,
-      r.model,
-      r.quantity,
-      r.location,
-      r.allocation,
-      r.status,
-      r.remarks,
+      "", r.item, r.type, r.brand, r.model,
+      r.quantity, r.location, r.allocation, r.status, r.remarks,
     ]);
-    try {
-      await appendRows("DEPLOYED", sheetRows);
-    } catch (err) {
-      console.error("Google Sheets deployed write-back failed:", err.message);
-    }
+    await appendRows("DEPLOYED", sheetRows);
   } catch (err) {
-    console.error("Google Sheets deployed sync error:", err.message);
+    console.error("Google Sheets deployed write-back failed:", err.message);
   }
 }
 
@@ -106,689 +57,613 @@ async function syncDeployedToSheets(deployedRows) {
 export async function POST(request) {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
-    return NextResponse.json(
-      { error: "Admin access required" },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
   try {
     const body = await request.json();
     const { action } = body;
+
+    // SQLite still needed for inventory (storage_items, deployed_items)
     const db = getDb();
 
     // ===== BULK RETURN =====
     if (action === "bulk_return") {
       const { loan_ids, admin_notes } = body;
       if (!loan_ids || !Array.isArray(loan_ids) || loan_ids.length === 0) {
-        return NextResponse.json(
-          { error: "No loans selected" },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: "No loans selected" }, { status: 400 });
       }
 
-      const bulkReturnTx = db.transaction(() => {
-        let returned = 0;
-        const bulkDeltaMap = new Map();
-        for (const loanId of loan_ids) {
-          const loan = db
-            .prepare("SELECT * FROM loan_requests WHERE id = ? AND status = ?")
-            .get(loanId, "approved");
-          if (!loan) continue;
+      // Batch fetch all approved loans in one query
+      const { data: approvedLoans } = await supabase
+        .from("loan_requests")
+        .select("*")
+        .in("id", loan_ids)
+        .eq("status", "approved");
 
-          const loanItems = db
-            .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
-            .all(loanId);
-          for (const li of loanItems) {
-            db.prepare(
-              "UPDATE storage_items SET current = current + ? WHERE id = ?",
-            ).run(li.quantity, li.item_id);
-            bulkDeltaMap.set(
-              li.item_id,
-              (bulkDeltaMap.get(li.item_id) || 0) + li.quantity,
-            );
+      if (!approvedLoans || approvedLoans.length === 0) {
+        return NextResponse.json({ error: "No approved loans found in selection" }, { status: 400 });
+      }
+
+      const validLoanIds = approvedLoans.map((l) => l.id);
+
+      // Batch fetch all loan items
+      const { data: allBulkItems } = await supabase
+        .from("loan_items")
+        .select("*")
+        .in("loan_request_id", validLoanIds);
+
+      const itemsByLoan = new Map();
+      for (const item of allBulkItems || []) {
+        if (!itemsByLoan.has(item.loan_request_id)) itemsByLoan.set(item.loan_request_id, []);
+        itemsByLoan.get(item.loan_request_id).push(item);
+      }
+
+      // Batch fetch user telegram data for notifications
+      const uniqueUserIds = [...new Set(approvedLoans.map((l) => l.user_id))];
+      const { data: bulkUsers } = await supabase
+        .from("users")
+        .select("id, telegram_chat_id")
+        .in("id", uniqueUserIds);
+      const userMap = new Map((bulkUsers || []).map((u) => [u.id, u]));
+
+      // Apply SQLite stock changes (synchronous, single-threaded)
+      const sheetChangesMap = new Map();
+      for (const loan of approvedLoans) {
+        for (const li of itemsByLoan.get(loan.id) || []) {
+          if (li.sheet_row) {
+            const si = db.prepare("SELECT id FROM storage_items WHERE sheet_row = ?").get(li.sheet_row);
+            if (si) {
+              db.prepare("UPDATE storage_items SET current = current + ? WHERE id = ?").run(li.quantity, si.id);
+            }
+            sheetChangesMap.set(li.sheet_row, (sheetChangesMap.get(li.sheet_row) || 0) + li.quantity);
           }
-
-          db.prepare(
-            `
-            UPDATE loan_requests SET status = 'returned', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `,
-          ).run(admin_notes || "Bulk return", loanId);
-
-          db.prepare(
-            "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-          ).run(
-            loan.user_id,
-            "Your loaned items have been marked as returned.",
-            "/loans",
-          );
-
-          logAudit(
-            db,
-            user.id,
-            "bulk_return",
-            "loan",
-            loanId,
-            `Returned via bulk action. ${admin_notes || ""}`,
-          );
-          returned++;
         }
-        return { returned, bulkDeltaMap };
-      });
+      }
 
-      const { returned, bulkDeltaMap } = bulkReturnTx();
-      const bulkChanges = [...bulkDeltaMap.entries()].map(
-        ([itemId, delta]) => ({ itemId, delta }),
+      // Batch update loan statuses
+      await supabase
+        .from("loan_requests")
+        .update({ status: "returned", admin_notes: admin_notes || "Bulk return", updated_at: new Date().toISOString() })
+        .in("id", validLoanIds);
+
+      // Batch insert in-app notifications
+      await supabase.from("notifications").insert(
+        approvedLoans.map((loan) => ({
+          user_id: loan.user_id,
+          message: "Your loaned items have been marked as returned.",
+          link: "/loans",
+        }))
       );
-      await syncStockToSheets(db, bulkChanges);
+
+      // Batch insert audit logs
+      await supabase.from("audit_log").insert(
+        approvedLoans.map((loan) => ({
+          user_id: user.id,
+          action: "bulk_return",
+          target_type: "loan",
+          target_id: loan.id,
+          details: `Returned via bulk action. ${admin_notes || ""}`,
+        }))
+      );
+
+      const sheetChanges = [...sheetChangesMap.entries()].map(([sheetRow, delta]) => ({ sheetRow, delta }));
+      await syncStockToSheets(sheetChanges);
+
+      // Fire-and-forget Telegram notifications
+      for (const loan of approvedLoans) {
+        const u = userMap.get(loan.user_id);
+        sendTelegramMessage(
+          loan.user_id,
+          `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan.id} have been marked as returned.`,
+          u?.telegram_chat_id,
+        ).catch(() => {});
+      }
+
       invalidateAll();
-      await syncLoansToSheet();
-      return NextResponse.json({
-        message: `${returned} loan(s) returned to stock`,
-      });
+      return NextResponse.json({ message: `${approvedLoans.length} loan(s) returned to stock` });
     }
 
     // ===== SINGLE LOAN ACTIONS =====
     const { loan_id, admin_notes } = body;
-    const loan = db
-      .prepare("SELECT * FROM loan_requests WHERE id = ?")
-      .get(loan_id);
+    const { data: loan } = await supabase
+      .from("loan_requests")
+      .select("*")
+      .eq("id", loan_id)
+      .single();
+
     if (!loan) {
       return NextResponse.json({ error: "Loan not found" }, { status: 404 });
     }
 
     if (action === "approve") {
       if (loan.status !== "pending") {
-        return NextResponse.json(
-          { error: "Loan already processed" },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: "Loan already processed" }, { status: 400 });
       }
 
-      const loanItems = db
-        .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
-        .all(loan_id);
+      const { data: loanItems } = await supabase
+        .from("loan_items")
+        .select("*")
+        .eq("loan_request_id", loan_id);
 
-      const approveTx = db.transaction(() => {
-        for (const li of loanItems) {
-          const item = db
-            .prepare("SELECT * FROM storage_items WHERE id = ?")
-            .get(li.item_id);
-          if (item.current < li.quantity) {
-            throw new Error(
-              `Not enough stock for "${item.item}". Available: ${item.current}`,
-            );
-          }
+      const approveChanges = []; // { sheetRow, delta }
+      const deployedRows = [];
+
+      // Validate + deduct stock in SQLite using sheet_row
+      for (const li of loanItems || []) {
+        const si = li.sheet_row
+          ? db.prepare("SELECT * FROM storage_items WHERE sheet_row = ?").get(li.sheet_row)
+          : db.prepare("SELECT * FROM storage_items WHERE id = ?").get(li.item_id);
+
+        if (!si) throw new Error(`Item not found in inventory: ${li.item_name}`);
+        if (si.current < li.quantity) {
+          throw new Error(`Not enough stock for "${si.item}". Available: ${si.current}`);
         }
 
-        const approveChanges = [];
-        const deployedRows = [];
-        for (const li of loanItems) {
-          const item = db
-            .prepare("SELECT * FROM storage_items WHERE id = ?")
-            .get(li.item_id);
-          const result = db
-            .prepare(
-              "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
-            )
-            .run(li.quantity, li.item_id, li.quantity);
-          if (result.changes === 0) {
-            throw new Error("Stock changed during approval — please try again");
-          }
-          approveChanges.push({ itemId: li.item_id, delta: -li.quantity });
+        const result = db
+          .prepare("UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?")
+          .run(li.quantity, si.id, li.quantity);
+        if (result.changes === 0) throw new Error("Stock changed during approval — please try again");
 
-          // For permanent loans, add to deployed_items
-          if (loan.loan_type === "permanent") {
-            const deployedRow = {
-              item: item.item,
-              type: item.type,
-              brand: item.brand,
-              model: item.model,
-              quantity: li.quantity,
-              location: loan.location || item.location,
-              allocation: loan.department || loan.purpose,
-              status: "DEPLOYED",
-              remarks: `Perm loan #${loan_id} — ${loan.purpose}`,
-            };
-            db.prepare(
-              `
-              INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks, loan_request_id)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-            ).run(
-              deployedRow.item,
-              deployedRow.type,
-              deployedRow.brand,
-              deployedRow.model,
-              deployedRow.quantity,
-              deployedRow.location,
-              deployedRow.allocation,
-              deployedRow.status,
-              deployedRow.remarks,
-              loan_id,
-            );
-            deployedRows.push(deployedRow);
-          }
+        approveChanges.push({ sheetRow: si.sheet_row, delta: -li.quantity });
+
+        // For permanent loans, add to deployed_items in SQLite
+        if (loan.loan_type === "permanent") {
+          const deployedRow = {
+            item: si.item, type: si.type, brand: si.brand, model: si.model,
+            quantity: li.quantity,
+            location: loan.location || si.location,
+            allocation: loan.department || loan.purpose,
+            status: "DEPLOYED",
+            remarks: `Perm loan #${loan_id} — ${loan.purpose}`,
+          };
+          db.prepare(`
+            INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            deployedRow.item, deployedRow.type, deployedRow.brand, deployedRow.model,
+            deployedRow.quantity, deployedRow.location, deployedRow.allocation,
+            deployedRow.status, deployedRow.remarks,
+          );
+          deployedRows.push(deployedRow);
         }
+      }
 
-        db.prepare(
-          `
-          UPDATE loan_requests SET status = 'approved', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `,
-        ).run(admin_notes || "", loan_id);
+      // Update loan in Supabase
+      await supabase
+        .from("loan_requests")
+        .update({ status: "approved", admin_notes: admin_notes || "", updated_at: new Date().toISOString() })
+        .eq("id", loan_id);
 
-        db.prepare(
-          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-        ).run(
-          loan.user_id,
-          `Your ${loan.loan_type} loan request has been approved!`,
-          "/loans",
-        );
-
-        logAudit(
-          db,
-          user.id,
-          "approve",
-          "loan",
-          loan_id,
-          `Approved ${loan.loan_type} loan. ${admin_notes || ""}`,
-        );
-        return { approveChanges, deployedRows };
+      await supabase.from("notifications").insert({
+        user_id: loan.user_id,
+        message: `Your ${loan.loan_type} loan request has been approved!`,
+        link: "/loans",
       });
 
-      try {
-        const { approveChanges, deployedRows } = approveTx();
-        await syncStockToSheets(db, approveChanges);
-        if (deployedRows.length > 0) {
-          await syncDeployedToSheets(deployedRows);
-        }
-        // Send approval email
-        const loanUser = db
-          .prepare("SELECT email, display_name FROM users WHERE id = ?")
-          .get(loan.user_id);
-        const adminBackgroundTasks = [];
-        if (loanUser?.email) {
-          const loanItems = db
-            .prepare(
-              `SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`,
-            )
-            .all(loan_id);
-          adminBackgroundTasks.push(
-            sendLoanStatusEmail({
-              to: loanUser.email,
-              displayName: loanUser.display_name,
-              loanId: loan_id,
-              status: "approved",
-              adminNotes: admin_notes,
-              items: loanItems,
-            }).catch(() => {})
-          );
-        }
-        adminBackgroundTasks.push(
-          sendTelegramMessage(
-            loan.user_id,
-            `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan_id} has been approved!${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`
-          )
+      await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "approve",
+        target_type: "loan",
+        target_id: loan_id,
+        details: `Approved ${loan.loan_type} loan. ${admin_notes || ""}`,
+      });
+
+      // Sync to Google Sheets
+      await syncStockToSheets(approveChanges);
+      if (deployedRows.length > 0) await syncDeployedToSheets(deployedRows);
+
+      // Notifications
+      const { data: loanUser } = await supabase.from("users").select("email, display_name, telegram_chat_id").eq("id", loan.user_id).single();
+      const backgroundTasks = [];
+      if (loanUser?.email) {
+        backgroundTasks.push(
+          sendLoanStatusEmail({
+            to: loanUser.email,
+            displayName: loanUser.display_name,
+            loanId: loan_id,
+            status: "approved",
+            adminNotes: admin_notes,
+            items: (loanItems || []).map((i) => ({ item: i.item_name, quantity: i.quantity })),
+          }).catch(() => {}),
         );
-        if (adminBackgroundTasks.length > 0) {
-          await Promise.all(adminBackgroundTasks);
-        }
-        invalidateAll();
-      await syncLoansToSheet();
-        const requester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
-        logActivity(db, user.id, "approve", `Approved ${loan.loan_type} loan #${loan_id} for ${requester?.display_name || "user"}`);
-        return NextResponse.json({ message: "Loan approved" });
-      } catch (txErr) {
-        return NextResponse.json({ error: txErr.message }, { status: 400 });
       }
+      backgroundTasks.push(
+        sendTelegramMessage(
+          loan.user_id,
+          `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan_id} has been approved!${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
+          loanUser?.telegram_chat_id,
+        ),
+      );
+      await Promise.all(backgroundTasks);
+
+      invalidateAll();
+      await supabase.from("activity_feed").insert({
+        user_id: user.id,
+        action: "approve",
+        description: `Approved ${loan.loan_type} loan #${loan_id} for ${loanUser?.display_name || "user"}`,
+      });
+
+      return NextResponse.json({ message: "Loan approved" });
     }
 
     if (action === "reject") {
       if (loan.status !== "pending") {
-        return NextResponse.json(
-          { error: "Loan already processed" },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: "Loan already processed" }, { status: 400 });
       }
 
-      db.prepare(
-        `
-        UPDATE loan_requests SET status = 'rejected', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `,
-      ).run(admin_notes || "", loan_id);
+      await supabase
+        .from("loan_requests")
+        .update({ status: "rejected", admin_notes: admin_notes || "", updated_at: new Date().toISOString() })
+        .eq("id", loan_id);
 
-      db.prepare(
-        "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-      ).run(
-        loan.user_id,
-        `Your ${loan.loan_type} loan request has been rejected. ${admin_notes || ""}`,
-        "/loans",
-      );
+      await supabase.from("notifications").insert({
+        user_id: loan.user_id,
+        message: `Your ${loan.loan_type} loan request has been rejected. ${admin_notes || ""}`,
+        link: "/loans",
+      });
 
-      logAudit(
-        db,
-        user.id,
-        "reject",
-        "loan",
-        loan_id,
-        `Rejected ${loan.loan_type} loan. ${admin_notes || ""}`,
-      );
-      // Send rejection email
-      const rejectUser = db
-        .prepare("SELECT email, display_name FROM users WHERE id = ?")
-        .get(loan.user_id);
-      const rejectBackgroundTasks = [];
+      await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "reject",
+        target_type: "loan",
+        target_id: loan_id,
+        details: `Rejected ${loan.loan_type} loan. ${admin_notes || ""}`,
+      });
+
+      const { data: rejectUser } = await supabase.from("users").select("email, display_name, telegram_chat_id").eq("id", loan.user_id).single();
+      const { data: rejectItems } = await supabase.from("loan_items").select("item_name, quantity").eq("loan_request_id", loan_id);
+      const rejectTasks = [];
       if (rejectUser?.email) {
-        const rejectItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li JOIN storage_items si ON li.item_id = si.id WHERE li.loan_request_id = ?`,
-          )
-          .all(loan_id);
-        rejectBackgroundTasks.push(
+        rejectTasks.push(
           sendLoanStatusEmail({
             to: rejectUser.email,
             displayName: rejectUser.display_name,
             loanId: loan_id,
             status: "rejected",
             adminNotes: admin_notes,
-            items: rejectItems,
-          }).catch(() => {})
+            items: (rejectItems || []).map((i) => ({ item: i.item_name, quantity: i.quantity })),
+          }).catch(() => {}),
         );
       }
-      rejectBackgroundTasks.push(
+      rejectTasks.push(
         sendTelegramMessage(
           loan.user_id,
-          `❌ <b>Loan Rejected</b>\nYour ${loan.loan_type} loan request #${loan_id} has been rejected.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`
-        )
+          `❌ <b>Loan Rejected</b>\nYour ${loan.loan_type} loan request #${loan_id} has been rejected.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
+          rejectUser?.telegram_chat_id,
+        ),
       );
-      if (rejectBackgroundTasks.length > 0) {
-        await Promise.all(rejectBackgroundTasks);
-      }
+      await Promise.all(rejectTasks);
+
       invalidateAll();
-      await syncLoansToSheet();
-      const rejectRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
-      logActivity(db, user.id, "reject", `Rejected loan #${loan_id} from ${rejectRequester?.display_name || "user"}`);
+      await supabase.from("activity_feed").insert({
+        user_id: user.id,
+        action: "reject",
+        description: `Rejected loan #${loan_id} from ${rejectUser?.display_name || "user"}`,
+      });
+
       return NextResponse.json({ message: "Loan rejected" });
     }
 
     if (action === "return") {
       if (loan.status !== "approved") {
-        return NextResponse.json(
-          { error: "Only approved loans can be returned" },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: "Only approved loans can be returned" }, { status: 400 });
       }
 
-      const returnTx = db.transaction(() => {
-        const loanItems = db
-          .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
-          .all(loan_id);
-        const returnChanges = [];
-        for (const li of loanItems) {
-          db.prepare(
-            "UPDATE storage_items SET current = current + ? WHERE id = ?",
-          ).run(li.quantity, li.item_id);
-          returnChanges.push({ itemId: li.item_id, delta: li.quantity });
+      const [{ data: loanItems }, { data: returnUser }] = await Promise.all([
+        supabase.from("loan_items").select("*").eq("loan_request_id", loan_id),
+        supabase.from("users").select("display_name, telegram_chat_id").eq("id", loan.user_id).single(),
+      ]);
+
+      const returnChanges = [];
+      for (const li of loanItems || []) {
+        const si = li.sheet_row
+          ? db.prepare("SELECT id FROM storage_items WHERE sheet_row = ?").get(li.sheet_row)
+          : db.prepare("SELECT id FROM storage_items WHERE id = ?").get(li.item_id);
+        if (si) {
+          db.prepare("UPDATE storage_items SET current = current + ? WHERE id = ?").run(li.quantity, si.id);
+          returnChanges.push({ sheetRow: li.sheet_row, delta: li.quantity });
         }
+      }
 
-        db.prepare(
-          `
-          UPDATE loan_requests SET status = 'returned', admin_notes = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `,
-        ).run(admin_notes || "Items returned", loan_id);
+      await supabase
+        .from("loan_requests")
+        .update({ status: "returned", admin_notes: admin_notes || "Items returned", updated_at: new Date().toISOString() })
+        .eq("id", loan_id);
 
-        db.prepare(
-          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-        ).run(
-          loan.user_id,
-          "Your loaned items have been marked as returned.",
-          "/loans",
-        );
-
-        logAudit(
-          db,
-          user.id,
-          "return",
-          "loan",
-          loan_id,
-          `Items returned to stock. ${admin_notes || ""}`,
-        );
-        return returnChanges;
+      await supabase.from("notifications").insert({
+        user_id: loan.user_id,
+        message: "Your loaned items have been marked as returned.",
+        link: "/loans",
       });
 
-      const returnChanges = returnTx();
-      await syncStockToSheets(db, returnChanges);
-      
+      await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "return",
+        target_type: "loan",
+        target_id: loan_id,
+        details: `Items returned to stock. ${admin_notes || ""}`,
+      });
+
+      await syncStockToSheets(returnChanges);
       await sendTelegramMessage(
         loan.user_id,
-        `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`
+        `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`,
+        returnUser?.telegram_chat_id,
       );
 
       invalidateAll();
-      await syncLoansToSheet();
-      const returnRequester = db.prepare("SELECT display_name FROM users WHERE id = ?").get(loan.user_id);
-      logActivity(db, user.id, "return", `Returned items from loan #${loan_id} (${returnRequester?.display_name || "user"})`);
+      await supabase.from("activity_feed").insert({
+        user_id: user.id,
+        action: "return",
+        description: `Returned items from loan #${loan_id} (${returnUser?.display_name || "user"})`,
+      });
+
       return NextResponse.json({ message: "Items returned to stock" });
     }
 
     if (action === "delete") {
-      const deleteTx = db.transaction(() => {
-        const loanItems = db
-          .prepare("SELECT * FROM loan_items WHERE loan_request_id = ?")
-          .all(loan_id);
-        const restoreChanges = [];
+      const { data: loanItems } = await supabase
+        .from("loan_items")
+        .select("*")
+        .eq("loan_request_id", loan_id);
 
-        // If loan was approved, restore stock
-        if (loan.status === "approved") {
-          for (const li of loanItems) {
-            db.prepare(
-              "UPDATE storage_items SET current = current + ? WHERE id = ?",
-            ).run(li.quantity, li.item_id);
-            restoreChanges.push({ itemId: li.item_id, delta: li.quantity });
+      const restoreChanges = [];
+
+      // If approved, restore stock in SQLite
+      if (loan.status === "approved") {
+        for (const li of loanItems || []) {
+          const si = li.sheet_row
+            ? db.prepare("SELECT id FROM storage_items WHERE sheet_row = ?").get(li.sheet_row)
+            : db.prepare("SELECT id FROM storage_items WHERE id = ?").get(li.item_id);
+          if (si) {
+            db.prepare("UPDATE storage_items SET current = current + ? WHERE id = ?").run(li.quantity, si.id);
+            restoreChanges.push({ sheetRow: li.sheet_row, delta: li.quantity });
           }
         }
+      }
 
-        // Remove deployed items created by this permanent loan
-        if (loan.loan_type === "permanent") {
-          db.prepare(
-            "DELETE FROM deployed_items WHERE loan_request_id = ?",
-          ).run(loan_id);
-        }
-
-        // Delete loan items, then the loan itself
-        db.prepare("DELETE FROM loan_items WHERE loan_request_id = ?").run(
-          loan_id,
-        );
-        db.prepare("DELETE FROM loan_requests WHERE id = ?").run(loan_id);
-
-        logAudit(
-          db,
-          user.id,
-          "delete",
-          "loan",
-          loan_id,
-          `Deleted ${loan.loan_type} loan (was ${loan.status}). ${admin_notes || ""}`,
-        );
-
-        return restoreChanges;
+      await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "delete",
+        target_type: "loan",
+        target_id: loan_id,
+        details: `Deleted ${loan.loan_type} loan (was ${loan.status}). ${admin_notes || ""}`,
       });
 
-      const restoreChanges = deleteTx();
-      if (restoreChanges.length > 0) {
-        await syncStockToSheets(db, restoreChanges);
+      // Notify the user their loan was deleted (only for non-rejected/non-returned)
+      if (loan.status === "pending" || loan.status === "approved") {
+        await supabase.from("notifications").insert({
+          user_id: loan.user_id,
+          message: `Your ${loan.loan_type} loan request #${loan_id} has been removed by an admin.${admin_notes ? ` Note: ${admin_notes}` : ""}`,
+          link: "/loans",
+        });
       }
+
+      // ON DELETE CASCADE removes loan_items automatically
+      await supabase.from("loan_requests").delete().eq("id", loan_id);
+
+      if (restoreChanges.length > 0) await syncStockToSheets(restoreChanges);
       invalidateAll();
-      await syncLoansToSheet();
+
       return NextResponse.json({ message: "Loan deleted" });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error) {
     console.error("Admin action error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
 
 // GET: dashboard stats + active loans + due date warnings
-export async function GET(request) {
+export async function GET() {
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "admin")
-    return NextResponse.json(
-      { error: "Admin access required" },
-      { status: 403 },
-    );
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (user.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  }
 
   await waitForSync();
   const db = getDb();
+
+  // Inventory stats from SQLite (still the source of truth)
+  const totalItems = db.prepare("SELECT SUM(quantity_spare) as total FROM storage_items").get().total || 0;
+  const totalCurrent = db.prepare("SELECT SUM(current) as total FROM storage_items").get().total || 0;
+  const deployedItems = db.prepare("SELECT SUM(quantity) as total FROM deployed_items").get().total || 0;
+  const lowStock = db.prepare("SELECT COUNT(*) as count FROM storage_items WHERE current <= 2 AND quantity_spare > 0").get().count;
+
+  // Loan stats from Supabase
+  const { count: pendingRequests } = await supabase
+    .from("loan_requests")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "pending");
+
   const stats = {
-    totalItems:
-      db.prepare("SELECT SUM(quantity_spare) as total FROM storage_items").get()
-        .total || 0,
-    totalCurrent:
-      db.prepare("SELECT SUM(current) as total FROM storage_items").get()
-        .total || 0,
-    totalLoaned: 0,
-    pendingRequests: db
-      .prepare(
-        "SELECT COUNT(*) as count FROM loan_requests WHERE status = 'pending'",
-      )
-      .get().count,
-    lowStock: db
-      .prepare(
-        "SELECT COUNT(*) as count FROM storage_items WHERE current <= 2 AND quantity_spare > 0",
-      )
-      .get().count,
-    deployedItems:
-      db.prepare("SELECT SUM(quantity) as total FROM deployed_items").get()
-        .total || 0,
+    totalItems,
+    totalCurrent,
+    totalLoaned: totalItems - totalCurrent,
+    pendingRequests: pendingRequests || 0,
+    lowStock,
+    deployedItems,
   };
-  stats.totalLoaned = stats.totalItems - stats.totalCurrent;
 
-  // Active loans for calendar
-  const activeLoans = db
-    .prepare(
-      `
-    SELECT lr.*, u.display_name as requester_name, u.username as requester_username
-    FROM loan_requests lr
-    JOIN users u ON lr.user_id = u.id
-    WHERE lr.status IN ('approved', 'pending')
-    ORDER BY lr.start_date
-  `,
-    )
-    .all();
+  // Active loans from Supabase
+  const { data: activeLoans } = await supabase
+    .from("loan_requests")
+    .select(`*, users (display_name, username)`)
+    .in("status", ["approved", "pending"])
+    .order("start_date", { ascending: true });
 
-  if (activeLoans.length > 0) {
-    // ⚡ Bolt: Batch fetch all loan items in a single query to prevent N+1 bottleneck
-    // ⚡ Bolt: Use a JOIN on loan_requests instead of an IN clause to avoid SQLite parameter limits on Vercel
-    const allItems = db
-      .prepare(
-        `
-      SELECT li.*, si.item, si.type
-      FROM loan_items li
-      JOIN storage_items si ON li.item_id = si.id
-      JOIN loan_requests lr ON li.loan_request_id = lr.id
-      WHERE lr.status IN ('approved', 'pending')
-    `,
-      )
-      .all();
+  const formattedLoans = (activeLoans || []).map((lr) => ({
+    ...lr,
+    requester_name: lr.users?.display_name || null,
+    requester_username: lr.users?.username || null,
+    users: undefined,
+    items: [],
+  }));
+
+  if (formattedLoans.length > 0) {
+    const loanIds = formattedLoans.map((l) => l.id);
+    const { data: allItems } = await supabase
+      .from("loan_items")
+      .select("loan_request_id, item_name, quantity")
+      .in("loan_request_id", loanIds);
 
     const itemsByLoan = new Map();
-    for (const item of allItems) {
-      if (!itemsByLoan.has(item.loan_request_id)) {
-        itemsByLoan.set(item.loan_request_id, []);
-      }
-      itemsByLoan.get(item.loan_request_id).push(item);
+    for (const item of allItems || []) {
+      if (!itemsByLoan.has(item.loan_request_id)) itemsByLoan.set(item.loan_request_id, []);
+      itemsByLoan.get(item.loan_request_id).push({ ...item, item: item.item_name });
     }
-
-    for (const loan of activeLoans) {
-      loan.items = itemsByLoan.get(loan.id) || [];
-    }
+    for (const loan of formattedLoans) loan.items = itemsByLoan.get(loan.id) || [];
   }
 
-  // Due date warnings: loans due within 1 day or overdue
+  // Due date warnings
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toLocaleDateString('en-CA');
-  const tomorrowObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const tomorrow = tomorrowObj.toLocaleDateString('en-CA');
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toLocaleDateString("en-CA");
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toLocaleDateString("en-CA");
 
-  const overdueLoans = db
-    .prepare(
-      `
-    SELECT lr.id, lr.end_date, lr.user_id, u.display_name
-    FROM loan_requests lr
-    JOIN users u ON lr.user_id = u.id
-    WHERE lr.status = 'approved' AND lr.loan_type = 'temporary' AND lr.end_date IS NOT NULL AND lr.end_date < ?
-  `,
-    )
-    .all(today);
+  const [{ data: overdueLoans }, { data: dueSoonLoans }] = await Promise.all([
+    supabase.from("loan_requests").select(`id, end_date, user_id, users (display_name)`)
+      .eq("status", "approved").eq("loan_type", "temporary").not("end_date", "is", null).lt("end_date", today),
+    supabase.from("loan_requests").select(`id, end_date, user_id, users (display_name)`)
+      .eq("status", "approved").eq("loan_type", "temporary").eq("end_date", tomorrow),
+  ]);
 
-  const dueSoonLoans = db
-    .prepare(
-      `
-    SELECT lr.id, lr.end_date, lr.user_id, u.display_name
-    FROM loan_requests lr
-    JOIN users u ON lr.user_id = u.id
-    WHERE lr.status = 'approved' AND lr.loan_type = 'temporary' AND lr.end_date = ?
-  `,
-    )
-    .all(tomorrow);
+  // Overdue/due-soon reminders (admin-triggered, deduped, parallelized)
+  const adminReminderTasks = [];
+  await Promise.all([
+    ...(overdueLoans || []).map(async (loan) => {
+      const { data: existing } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("user_id", loan.user_id)
+        .ilike("message", "%overdue%")
+        .ilike("message", `%#${loan.id}%`)
+        .gte("created_at", today)
+        .single();
 
-  // Only admins trigger reminder notifications to avoid duplicate sends
-  if (user.role === "admin") {
-    const adminReminderTasks = [];
-
-    for (const loan of overdueLoans) {
-      const existing = db
-        .prepare(
-          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%overdue%' AND message LIKE ? AND created_at >= date('now')",
-        )
-        .get(loan.user_id, `%#${loan.id}%`);
       if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
-        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
-        db.prepare(
-          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-        ).run(
-          loan.user_id,
-          `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
-          "/loans",
-        );
-        // Send email reminder
-        const loanUser = db
-          .prepare("SELECT email, display_name FROM users WHERE id = ?")
-          .get(loan.user_id);
+        const [{ data: loanItems }, { data: loanUser }] = await Promise.all([
+          supabase.from("loan_items").select("item_name, quantity").eq("loan_request_id", loan.id),
+          supabase.from("users").select("email, display_name").eq("id", loan.user_id).single(),
+        ]);
+        const itemList = (loanItems || []).map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
+
+        await supabase.from("notifications").insert({
+          user_id: loan.user_id,
+          message: `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
+          link: "/loans",
+        });
+
         if (loanUser?.email) {
           adminReminderTasks.push(
             sendOverdueEmail({
               to: loanUser.email,
               displayName: loanUser.display_name,
               loanId: loan.id,
-              items: loanItems,
+              items: (loanItems || []).map((i) => ({ item: i.item_name, quantity: i.quantity })),
               endDate: loan.end_date,
-            }).catch(() => {})
+            }).catch(() => {}),
           );
         }
       }
-    }
+    }),
+    ...(dueSoonLoans || []).map(async (loan) => {
+      const { data: existing } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("user_id", loan.user_id)
+        .ilike("message", "%due tomorrow%")
+        .ilike("message", `%#${loan.id}%`)
+        .gte("created_at", today)
+        .single();
 
-    for (const loan of dueSoonLoans) {
-      const existing = db
-        .prepare(
-          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%due tomorrow%' AND message LIKE ? AND created_at >= date('now')",
-        )
-        .get(loan.user_id, `%#${loan.id}%`);
       if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
-        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
-        db.prepare(
-          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-        ).run(
-          loan.user_id,
-          `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
-          "/loans",
-        );
-        // Send email reminder
-        const loanUser = db
-          .prepare("SELECT email, display_name FROM users WHERE id = ?")
-          .get(loan.user_id);
+        const [{ data: loanItems }, { data: loanUser }] = await Promise.all([
+          supabase.from("loan_items").select("item_name, quantity").eq("loan_request_id", loan.id),
+          supabase.from("users").select("email, display_name").eq("id", loan.user_id).single(),
+        ]);
+        const itemList = (loanItems || []).map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
+
+        await supabase.from("notifications").insert({
+          user_id: loan.user_id,
+          message: `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
+          link: "/loans",
+        });
+
         if (loanUser?.email) {
           adminReminderTasks.push(
             sendDueSoonEmail({
               to: loanUser.email,
               displayName: loanUser.display_name,
               loanId: loan.id,
-              items: loanItems,
+              items: (loanItems || []).map((i) => ({ item: i.item_name, quantity: i.quantity })),
               endDate: loan.end_date,
-            }).catch(() => {})
+            }).catch(() => {}),
           );
         }
       }
-    }
+    }),
+  ]);
+  if (adminReminderTasks.length > 0) await Promise.all(adminReminderTasks);
 
-    if (adminReminderTasks.length > 0) {
-      await Promise.all(adminReminderTasks);
-    }
-  }
-
-  // -- Chart Analytics Data --
-
-  // 1. Loans over the past 30 days
+  // Chart data
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  // Using substr/date logic works mostly, but we can just group by substring if created_at is an ISO string
-  const recentLoans = db.prepare(`
-    SELECT substr(created_at, 1, 10) as day, COUNT(*) as count 
-    FROM loan_requests 
-    WHERE created_at >= ?
-    GROUP BY day 
-    ORDER BY day ASC
-  `).all(thirtyDaysAgo);
+  const { data: recentLoansRaw } = await supabase
+    .from("loan_requests")
+    .select("created_at")
+    .gte("created_at", thirtyDaysAgo);
 
-  // Format into {date: 'Mar 10', loans: 5}
-  const loansTrend = recentLoans.map(row => {
-    const d = new Date(row.day);
-    return {
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      loans: row.count
-    };
-  });
+  // Group by day
+  const dayMap = new Map();
+  for (const lr of recentLoansRaw || []) {
+    const day = lr.created_at.split("T")[0];
+    dayMap.set(day, (dayMap.get(day) || 0) + 1);
+  }
+  const loansTrend = [...dayMap.entries()].sort().map(([day, count]) => ({
+    date: new Date(day).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    loans: count,
+  }));
 
-  // 2. Top 5 borrowed items
-  const topItems = db.prepare(`
-    SELECT si.item as name, SUM(li.quantity) as value
-    FROM loan_items li
-    JOIN storage_items si ON li.item_id = si.id
-    GROUP BY li.item_id
-    ORDER BY value DESC
-    LIMIT 5
-  `).all();
+  // Top 5 borrowed items from Supabase loan_items (using item_name)
+  const { data: allLoanItems } = await supabase.from("loan_items").select("item_name, quantity");
+  const itemTotals = new Map();
+  for (const li of allLoanItems || []) {
+    itemTotals.set(li.item_name, (itemTotals.get(li.item_name) || 0) + li.quantity);
+  }
+  const topItems = [...itemTotals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, value]) => ({ name, value }));
 
-  // 3. Inventory distribution
   const inventoryDistribution = [
-    { name: 'Available Storage', value: stats.totalCurrent },
-    { name: 'Currently Loaned', value: stats.totalLoaned },
-    { name: 'Perm Deployed', value: stats.deployedItems }
-  ].filter(d => d.value > 0);
+    { name: "Available Storage", value: stats.totalCurrent },
+    { name: "Currently Loaned", value: stats.totalLoaned },
+    { name: "Perm Deployed", value: stats.deployedItems },
+  ].filter((d) => d.value > 0);
 
-  // Recent activity feed
-  const recentActivity = db.prepare(`
-    SELECT af.*, u.display_name
-    FROM activity_feed af
-    JOIN users u ON af.user_id = u.id
-    ORDER BY af.created_at DESC
-    LIMIT 20
-  `).all();
+  // Recent activity from Supabase
+  const { data: recentActivityRaw } = await supabase
+    .from("activity_feed")
+    .select(`*, users (display_name)`)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  const recentActivity = (recentActivityRaw || []).map((af) => ({
+    ...af,
+    display_name: af.users?.display_name || null,
+    users: undefined,
+  }));
 
   return NextResponse.json({
     stats,
-    activeLoans,
-    overdueCount: overdueLoans.length,
-    dueSoonCount: dueSoonLoans.length,
-    charts: {
-      loansTrend,
-      topItems,
-      inventoryDistribution
-    },
-    recentActivity
+    activeLoans: formattedLoans,
+    overdueCount: (overdueLoans || []).length,
+    dueSoonCount: (dueSoonLoans || []).length,
+    charts: { loansTrend, topItems, inventoryDistribution },
+    recentActivity,
+  }, {
+    headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },
   });
 }

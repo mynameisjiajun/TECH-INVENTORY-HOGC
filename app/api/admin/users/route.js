@@ -1,49 +1,38 @@
-import {
-  getDb,
-  getSetting,
-  setSetting,
-  syncUsersToSheet,
-  ensureUsersRestored,
-} from "@/lib/db/db";
+import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser, hashPassword } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
 // GET: list all users (admin only)
 export async function GET() {
-  await ensureUsersRestored();
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
-    return NextResponse.json(
-      { error: "Admin access required" },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  const db = getDb();
-  const users = db
-    .prepare(
-      "SELECT id, username, display_name, role, email, telegram_chat_id, created_at FROM users ORDER BY created_at DESC",
-    )
-    .all();
-  const invite_code = getSetting("invite_code") || "";
-  return NextResponse.json({ users, invite_code });
+  const [{ data: users }, { data: setting }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, username, display_name, role, email, telegram_chat_id, created_at")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "invite_code")
+      .single(),
+  ]);
+
+  return NextResponse.json({ users: users || [], invite_code: setting?.value || "" });
 }
 
 // POST: admin user management actions
 export async function POST(request) {
-  await ensureUsersRestored();
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
-    return NextResponse.json(
-      { error: "Admin access required" },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  const db = getDb();
   const body = await request.json();
-  const { action, user_id, new_password, new_role, display_name, invite_code } =
-    body;
+  const { action, user_id, new_password, new_role, display_name, invite_code } = body;
 
   if (action === "reset_password") {
     if (!user_id || !new_password) {
@@ -58,33 +47,25 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    const target = db
-      .prepare("SELECT id, username FROM users WHERE id = ?")
-      .get(user_id);
-    if (!target)
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+    const { data: target } = await supabase
+      .from("users")
+      .select("id, username")
+      .eq("id", user_id)
+      .single();
+    if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const hash = await hashPassword(new_password);
-    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
-      hash,
-      user_id,
-    );
-
-    // Log audit
-    db.prepare(
-      "INSERT INTO audit_log (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)",
-    ).run(
-      user.id,
-      "reset_password",
-      "user",
-      user_id,
-      `Reset password for @${target.username}`,
-    );
-
-    await syncUsersToSheet();
-    return NextResponse.json({
-      message: `Password reset for @${target.username}`,
+    await supabase.from("users").update({ password_hash: hash }).eq("id", user_id);
+    await supabase.from("audit_log").insert({
+      user_id: user.id,
+      action: "reset_password",
+      target_type: "user",
+      target_id: user_id,
+      details: `Reset password for @${target.username}`,
     });
+
+    return NextResponse.json({ message: `Password reset for @${target.username}` });
   }
 
   if (action === "change_role") {
@@ -97,90 +78,69 @@ export async function POST(request) {
     if (!["admin", "user"].includes(new_role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
-    // Prevent self-demotion
-    if (user_id === user.id) {
-      return NextResponse.json(
-        { error: "Cannot change your own role" },
-        { status: 400 },
-      );
+    if (Number(user_id) === Number(user.id)) {
+      return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 });
     }
-    const target = db
-      .prepare("SELECT id, username FROM users WHERE id = ?")
-      .get(user_id);
-    if (!target)
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    db.prepare("UPDATE users SET role = ? WHERE id = ?").run(new_role, user_id);
+    const { data: target } = await supabase
+      .from("users")
+      .select("id, username")
+      .eq("id", user_id)
+      .single();
+    if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    db.prepare(
-      "INSERT INTO audit_log (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)",
-    ).run(
-      user.id,
-      "change_role",
-      "user",
-      user_id,
-      `Changed @${target.username} role to ${new_role}`,
-    );
-
-    await syncUsersToSheet();
-    return NextResponse.json({
-      message: `Role updated for @${target.username}`,
+    await supabase.from("users").update({ role: new_role }).eq("id", user_id);
+    await supabase.from("audit_log").insert({
+      user_id: user.id,
+      action: "change_role",
+      target_type: "user",
+      target_id: user_id,
+      details: `Changed @${target.username} role to ${new_role}`,
     });
+
+    return NextResponse.json({ message: `Role updated for @${target.username}` });
   }
 
   if (action === "delete_user") {
-    if (!user_id)
-      return NextResponse.json({ error: "User ID required" }, { status: 400 });
-    if (user_id === user.id)
-      return NextResponse.json(
-        { error: "Cannot delete yourself" },
-        { status: 400 },
-      );
+    if (!user_id) return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    if (Number(user_id) === Number(user.id)) {
+      return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
+    }
 
-    const target = db
-      .prepare("SELECT id, username FROM users WHERE id = ?")
-      .get(user_id);
-    if (!target)
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const { data: target } = await supabase
+      .from("users")
+      .select("id, username")
+      .eq("id", user_id)
+      .single();
+    if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    // Delete related records first to avoid FK constraint violations
-    db.prepare("DELETE FROM notifications WHERE user_id = ?").run(user_id);
-    db.prepare(
-      "DELETE FROM loan_items WHERE loan_request_id IN (SELECT id FROM loan_requests WHERE user_id = ?)",
-    ).run(user_id);
-    db.prepare("DELETE FROM loan_requests WHERE user_id = ?").run(user_id);
-    db.prepare("DELETE FROM audit_log WHERE user_id = ?").run(user_id);
-    db.prepare("DELETE FROM users WHERE id = ?").run(user_id);
+    // Log audit before delete (so user_id reference is still valid)
+    await supabase.from("audit_log").insert({
+      user_id: user.id,
+      action: "delete_user",
+      target_type: "user",
+      target_id: user_id,
+      details: `Deleted user @${target.username}`,
+    });
 
-    db.prepare(
-      "INSERT INTO audit_log (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)",
-    ).run(
-      user.id,
-      "delete_user",
-      "user",
-      user_id,
-      `Deleted user @${target.username}`,
-    );
+    // ON DELETE CASCADE handles: notifications, loan_items (via loan_requests), loan_requests
+    await supabase.from("users").delete().eq("id", user_id);
 
-    await syncUsersToSheet();
     return NextResponse.json({ message: `User @${target.username} deleted` });
   }
 
   if (action === "update_user") {
-    if (!user_id)
-      return NextResponse.json({ error: "User ID required" }, { status: 400 });
-    const target = db
-      .prepare("SELECT id, username FROM users WHERE id = ?")
-      .get(user_id);
-    if (!target)
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!user_id) return NextResponse.json({ error: "User ID required" }, { status: 400 });
+
+    const { data: target } = await supabase
+      .from("users")
+      .select("id, username")
+      .eq("id", user_id)
+      .single();
+    if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     if (display_name) {
-      db.prepare("UPDATE users SET display_name = ? WHERE id = ?").run(
-        display_name,
-        user_id,
-      );
-      await syncUsersToSheet();
+      await supabase.from("users").update({ display_name }).eq("id", user_id);
     }
 
     return NextResponse.json({ message: `User @${target.username} updated` });
@@ -193,17 +153,18 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    setSetting("invite_code", invite_code.trim());
 
-    db.prepare(
-      "INSERT INTO audit_log (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)",
-    ).run(
-      user.id,
-      "set_invite_code",
-      "settings",
-      0,
-      "Updated the registration invite code",
-    );
+    await supabase
+      .from("app_settings")
+      .upsert({ key: "invite_code", value: invite_code.trim() });
+
+    await supabase.from("audit_log").insert({
+      user_id: user.id,
+      action: "set_invite_code",
+      target_type: "settings",
+      target_id: 0,
+      details: "Updated the registration invite code",
+    });
 
     return NextResponse.json({ message: "Invite code updated" });
   }

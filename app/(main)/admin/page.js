@@ -1,7 +1,8 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { supabaseClient } from "@/lib/db/supabaseClient";
 import { useToast } from "@/lib/context/ToastContext";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
@@ -309,11 +310,26 @@ export default function AdminPage() {
     }
   }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers]);
 
-  // Auto-refresh loans list every 15 seconds
+  // Realtime subscription — refetch loans on any loan_requests change
   useEffect(() => {
     if (user?.role !== "admin" || activeTab !== "loans") return;
-    const interval = setInterval(fetchLoans, 15000);
-    return () => clearInterval(interval);
+
+    const channel = supabaseClient
+      .channel("admin-loan-requests")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "loan_requests" },
+        () => { fetchLoans(); }
+      )
+      .subscribe();
+
+    // Fallback poll every 60s in case Realtime drops
+    const fallback = setInterval(fetchLoans, 60000);
+
+    return () => {
+      supabaseClient.removeChannel(channel);
+      clearInterval(fallback);
+    };
   }, [user, activeTab, fetchLoans]);
 
   const handleAction = async (loanId, action) => {

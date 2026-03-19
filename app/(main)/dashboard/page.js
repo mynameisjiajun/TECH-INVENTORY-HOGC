@@ -1,8 +1,9 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/lib/context/ToastContext";
+import { supabaseClient } from '@/lib/db/supabaseClient';
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import {
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [error, setError] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const channelRef = useRef(null);
 
   // User-only state
   const [myLoans, setMyLoans] = useState([]);
@@ -66,7 +68,7 @@ export default function DashboardPage() {
   }, [user, loading, router]);
 
   // Admin: fetch full dashboard
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async () => {
     setError("");
     try {
       const res = await fetch("/api/admin", { cache: "no-store" });
@@ -85,10 +87,10 @@ export default function DashboardPage() {
     } catch (err) {
       setError("Network error — could not load dashboard data");
     }
-  };
+  }, []);
 
   // Normal user: fetch own loans
-  const fetchMyLoans = async () => {
+  const fetchMyLoans = useCallback(async () => {
     setMyFetching(true);
     setError("");
     try {
@@ -105,7 +107,7 @@ export default function DashboardPage() {
     } finally {
       setMyFetching(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -114,15 +116,35 @@ export default function DashboardPage() {
     } else {
       fetchMyLoans();
     }
-    const interval = setInterval(() => {
-      if (user.role === "admin") {
-        fetchDashboard();
-      } else {
-        fetchMyLoans();
-      }
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [user]);
+  }, [user, fetchDashboard, fetchMyLoans]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (channelRef.current) supabaseClient.removeChannel(channelRef.current);
+
+    const fetch = user.role === "admin" ? fetchDashboard : fetchMyLoans;
+    const filter = user.role === "admin"
+      ? undefined
+      : `user_id=eq.${user.id}`;
+
+    const channelOpts = filter
+      ? { event: "*", schema: "public", table: "loan_requests", filter }
+      : { event: "*", schema: "public", table: "loan_requests" };
+
+    const channel = supabaseClient
+      .channel(`dashboard-${user.id}`)
+      .on("postgres_changes", channelOpts, () => { fetch(); })
+      .subscribe();
+
+    channelRef.current = channel;
+    const fallback = setInterval(fetch, 60000);
+
+    return () => {
+      supabaseClient.removeChannel(channel);
+      channelRef.current = null;
+      clearInterval(fallback);
+    };
+  }, [user, fetchDashboard, fetchMyLoans]);
 
   const handleDeleteLoan = async (loanId) => {
     if (

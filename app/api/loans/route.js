@@ -1,10 +1,11 @@
-import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db/db";
+import { getDb, waitForSync } from "@/lib/db/db";
+import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
-import { 
-  sendOverdueEmail, 
-  sendDueSoonEmail, 
-  sendNewLoanUserEmail, 
-  sendNewLoanAdminEmail 
+import {
+  sendOverdueEmail,
+  sendDueSoonEmail,
+  sendNewLoanUserEmail,
+  sendNewLoanAdminEmails,
 } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
@@ -12,210 +13,194 @@ import { NextResponse } from "next/server";
 // GET: fetch loan requests
 export async function GET(request) {
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await waitForSync();
-  const db = getDb();
-  ensureUserExists(user);
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") || "";
-  const view = searchParams.get("view") || "my"; // 'my' or 'all' (admin)
+  const view = searchParams.get("view") || "my";
   const search = searchParams.get("search") || "";
   const dateFrom = searchParams.get("date_from") || "";
   const dateTo = searchParams.get("date_to") || "";
 
-  let query = `
-    SELECT lr.id, lr.user_id, lr.loan_type, lr.status, lr.purpose, lr.department,
-           lr.location, lr.start_date, lr.end_date, lr.admin_notes, lr.return_photo_url,
-           lr.created_at, lr.updated_at,
-           u.display_name as requester_name, u.username as requester_username
-    FROM loan_requests lr
-    JOIN users u ON lr.user_id = u.id
-    WHERE 1=1
-  `;
-  const params = [];
+  // Build query for loan_requests
+  let query = supabase
+    .from("loan_requests")
+    .select(`
+      *,
+      users (display_name, username)
+    `)
+    .order("created_at", { ascending: false });
 
   if (view !== "all" || user.role !== "admin") {
-    query += " AND lr.user_id = ?";
-    params.push(user.id);
+    query = query.eq("user_id", user.id);
   }
-  if (status) {
-    query += " AND lr.status = ?";
-    params.push(status);
-  }
-  if (dateFrom) {
-    query += " AND lr.start_date >= ?";
-    params.push(dateFrom);
-  }
-  if (dateTo) {
-    query += " AND lr.start_date <= ?";
-    params.push(dateTo);
-  }
-  query += " ORDER BY lr.created_at DESC";
+  if (status) query = query.eq("status", status);
+  if (dateFrom) query = query.gte("start_date", dateFrom);
+  if (dateTo) query = query.lte("start_date", dateTo);
 
-  let loans = db.prepare(query).all(...params);
+  const { data: loanRows } = await query;
+  let loans = (loanRows || []).map((lr) => ({
+    ...lr,
+    requester_name: lr.users?.display_name || null,
+    requester_username: lr.users?.username || null,
+    users: undefined,
+    items: [],
+  }));
 
-  // Batch-load items for all loans in a single query
+  // Batch-load items for all loans
   if (loans.length > 0) {
     const loanIds = loans.map((l) => l.id);
-    const placeholders = loanIds.map(() => "?").join(",");
-    const allItems = db
-      .prepare(
-        `
-      SELECT li.*, si.item, si.type, si.brand, si.model
-      FROM loan_items li
-      JOIN storage_items si ON li.item_id = si.id
-      WHERE li.loan_request_id IN (${placeholders})
-    `,
-      )
-      .all(...loanIds);
+    const { data: allItems } = await supabase
+      .from("loan_items")
+      .select("*")
+      .in("loan_request_id", loanIds);
+
     const itemsByLoan = new Map();
-    for (const item of allItems) {
-      if (!itemsByLoan.has(item.loan_request_id))
-        itemsByLoan.set(item.loan_request_id, []);
-      itemsByLoan.get(item.loan_request_id).push(item);
+    for (const item of allItems || []) {
+      if (!itemsByLoan.has(item.loan_request_id)) itemsByLoan.set(item.loan_request_id, []);
+      // Expose item_name as "item" to match the original shape the frontend expects
+      itemsByLoan.get(item.loan_request_id).push({ ...item, item: item.item_name });
     }
     for (const loan of loans) {
       loan.items = itemsByLoan.get(loan.id) || [];
     }
-  } else {
-    for (const loan of loans) loan.items = [];
   }
 
-  // Filter by item name or purpose in JS
+  // Filter by search
   if (search) {
     const s = search.toLowerCase();
     loans = loans.filter(
       (loan) =>
-        loan.purpose.toLowerCase().includes(s) ||
-        loan.items.some((item) => item.item.toLowerCase().includes(s)),
+        loan.purpose?.toLowerCase().includes(s) ||
+        loan.items.some((item) => item.item?.toLowerCase().includes(s)),
     );
   }
 
   // ── Overdue / due-soon notification check ──────────────────────────
-  // Runs on every user page-load; deduped to one notification per loan per day.
   try {
     const now = new Date();
-    // Use local timezone for exact day boundaries
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toLocaleDateString('en-CA');
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toLocaleDateString("en-CA");
     const tomorrowObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const tomorrow = tomorrowObj.toLocaleDateString('en-CA');
+    const tomorrow = tomorrowObj.toLocaleDateString("en-CA");
 
-    // Overdue loans for the current user
-    const overdueLoans = db
-      .prepare(
-        `SELECT lr.id, lr.end_date FROM loan_requests lr
-         WHERE lr.user_id = ? AND lr.status = 'approved'
-           AND lr.loan_type = 'temporary' AND lr.end_date IS NOT NULL
-           AND lr.end_date < ?`,
-      )
-      .all(user.id, today);
-
-    // Loans due tomorrow for the current user
-    const dueSoonLoans = db
-      .prepare(
-        `SELECT lr.id, lr.end_date FROM loan_requests lr
-         WHERE lr.user_id = ? AND lr.status = 'approved'
-           AND lr.loan_type = 'temporary' AND lr.end_date = ?`,
-      )
-      .all(user.id, tomorrow);
-
-    const userEmail = db
-      .prepare("SELECT email, display_name FROM users WHERE id = ?")
-      .get(user.id);
+    const [{ data: overdueLoans }, { data: dueSoonLoans }, { data: userRecord }] = await Promise.all([
+      supabase
+        .from("loan_requests")
+        .select("id, end_date")
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+        .eq("loan_type", "temporary")
+        .not("end_date", "is", null)
+        .lt("end_date", today),
+      supabase
+        .from("loan_requests")
+        .select("id, end_date")
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+        .eq("loan_type", "temporary")
+        .eq("end_date", tomorrow),
+      supabase
+        .from("users")
+        .select("email, display_name, telegram_chat_id")
+        .eq("id", user.id)
+        .single(),
+    ]);
 
     const backgroundTasks = [];
 
-    for (const loan of overdueLoans) {
-      const existing = db
-        .prepare(
-          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%overdue%' AND message LIKE ? AND created_at >= ?",
-        )
-        .get(user.id, `%#${loan.id}%`, today);
-      if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
-        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
-        db.prepare(
-          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-        ).run(
-          user.id,
-          `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
-          "/loans",
-        );
-        if (userEmail?.email) {
+    await Promise.all([
+      ...(overdueLoans || []).map(async (loan) => {
+        const { data: existing } = await supabase
+          .from("notifications")
+          .select("id")
+          .eq("user_id", user.id)
+          .ilike("message", "%overdue%")
+          .ilike("message", `%#${loan.id}%`)
+          .gte("created_at", today)
+          .single();
+
+        if (!existing) {
+          const { data: loanItems } = await supabase
+            .from("loan_items")
+            .select("item_name, quantity")
+            .eq("loan_request_id", loan.id);
+
+          const itemList = (loanItems || []).map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
+
+          await supabase.from("notifications").insert({
+            user_id: user.id,
+            message: `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
+            link: "/loans",
+          });
+
+          if (userRecord?.email) {
+            backgroundTasks.push(
+              sendOverdueEmail({
+                to: userRecord.email,
+                displayName: userRecord.display_name,
+                loanId: loan.id,
+                items: (loanItems || []).map((i) => ({ item: i.item_name, quantity: i.quantity })),
+                endDate: loan.end_date,
+              }).catch(() => {}),
+            );
+          }
           backgroundTasks.push(
-            sendOverdueEmail({
-              to: userEmail.email,
-              displayName: userEmail.display_name,
-              loanId: loan.id,
-              items: loanItems,
-              endDate: loan.end_date,
-            }).catch(() => {})
+            sendTelegramMessage(
+              user.id,
+              `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`,
+              userRecord?.telegram_chat_id,
+            ),
           );
         }
-        backgroundTasks.push(
-          sendTelegramMessage(
-            user.id,
-            `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`
-          )
-        );
-      }
-    }
+      }),
+      ...(dueSoonLoans || []).map(async (loan) => {
+        const { data: existing } = await supabase
+          .from("notifications")
+          .select("id")
+          .eq("user_id", user.id)
+          .ilike("message", "%due tomorrow%")
+          .ilike("message", `%#${loan.id}%`)
+          .gte("created_at", today)
+          .single();
 
-    for (const loan of dueSoonLoans) {
-      const existing = db
-        .prepare(
-          "SELECT id FROM notifications WHERE user_id = ? AND message LIKE '%due tomorrow%' AND message LIKE ? AND created_at >= ?",
-        )
-        .get(user.id, `%#${loan.id}%`, today);
-      if (!existing) {
-        const loanItems = db
-          .prepare(
-            `SELECT li.quantity, si.item FROM loan_items li
-             JOIN storage_items si ON li.item_id = si.id
-             WHERE li.loan_request_id = ?`,
-          )
-          .all(loan.id);
-        const itemList = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
-        db.prepare(
-          "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-        ).run(
-          user.id,
-          `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
-          "/loans",
-        );
-        if (userEmail?.email) {
+        if (!existing) {
+          const { data: loanItems } = await supabase
+            .from("loan_items")
+            .select("item_name, quantity")
+            .eq("loan_request_id", loan.id);
+
+          const itemList = (loanItems || []).map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
+
+          await supabase.from("notifications").insert({
+            user_id: user.id,
+            message: `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
+            link: "/loans",
+          });
+
+          if (userRecord?.email) {
+            backgroundTasks.push(
+              sendDueSoonEmail({
+                to: userRecord.email,
+                displayName: userRecord.display_name,
+                loanId: loan.id,
+                items: (loanItems || []).map((i) => ({ item: i.item_name, quantity: i.quantity })),
+                endDate: loan.end_date,
+              }).catch(() => {}),
+            );
+          }
           backgroundTasks.push(
-            sendDueSoonEmail({
-              to: userEmail.email,
-              displayName: userEmail.display_name,
-              loanId: loan.id,
-              items: loanItems,
-              endDate: loan.end_date,
-            }).catch(() => {})
+            sendTelegramMessage(
+              user.id,
+              `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`,
+              userRecord?.telegram_chat_id,
+            ),
           );
         }
-        backgroundTasks.push(
-          sendTelegramMessage(
-            user.id,
-            `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`
-          )
-        );
-      }
-    }
+      }),
+    ]);
 
-    if (backgroundTasks.length > 0) {
-      await Promise.all(backgroundTasks);
-    }
+    if (backgroundTasks.length > 0) await Promise.all(backgroundTasks);
   } catch (err) {
-    // Non-blocking — don't let notification errors break the loans page
     console.error("Overdue notification check failed:", err.message);
   }
 
@@ -227,29 +212,17 @@ export async function GET(request) {
 // POST: create a new loan request
 export async function POST(request) {
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const {
-      loan_type,
-      purpose,
-      department,
-      start_date,
-      end_date,
-      location,
-      items,
-    } = await request.json();
+    const { loan_type, purpose, department, start_date, end_date, location, items } =
+      await request.json();
 
     if (!items || items.length === 0) {
       return NextResponse.json({ error: "No items selected" }, { status: 400 });
     }
     for (const item of items) {
-      if (
-        !item.quantity ||
-        item.quantity < 1 ||
-        !Number.isInteger(item.quantity)
-      ) {
+      if (!item.quantity || item.quantity < 1 || !Number.isInteger(item.quantity)) {
         return NextResponse.json(
           { error: "Each item must have a quantity of at least 1" },
           { status: 400 },
@@ -257,173 +230,140 @@ export async function POST(request) {
       }
     }
     if (!purpose || !purpose.trim()) {
-      return NextResponse.json(
-        { error: "Purpose is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Purpose is required" }, { status: 400 });
     }
     if (!start_date) {
-      return NextResponse.json(
-        { error: "Start date is required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Start date is required" }, { status: 400 });
     }
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(start_date) || isNaN(Date.parse(start_date))) {
-      return NextResponse.json(
-        { error: "Invalid start date format" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Invalid start date format" }, { status: 400 });
     }
     if (loan_type === "temporary" && !end_date) {
-      return NextResponse.json(
-        { error: "End date is required for temporary loans" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "End date is required for temporary loans" }, { status: 400 });
     }
-    if (
-      end_date &&
-      (!dateRegex.test(end_date) || isNaN(Date.parse(end_date)))
-    ) {
-      return NextResponse.json(
-        { error: "Invalid end date format" },
-        { status: 400 },
-      );
+    if (end_date && (!dateRegex.test(end_date) || isNaN(Date.parse(end_date)))) {
+      return NextResponse.json({ error: "Invalid end date format" }, { status: 400 });
     }
     if (end_date && start_date && end_date < start_date) {
-      return NextResponse.json(
-        { error: "End date cannot be before start date" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "End date cannot be before start date" }, { status: 400 });
     }
 
+    // Inventory validation + name lookup from SQLite
     await waitForSync();
     const db = getDb();
-    ensureUserExists(user);
 
-    const createLoanTx = db.transaction(() => {
-      for (const item of items) {
-        const storageItem = db
-          .prepare("SELECT * FROM storage_items WHERE id = ?")
-          .get(item.item_id);
-        if (!storageItem) {
-          throw new Error(`Item not found: ${item.item_id}`);
-        }
-        if (storageItem.current < item.quantity) {
-          throw new Error(
-            `Not enough stock for "${storageItem.item}". Available: ${storageItem.current}, Requested: ${item.quantity}`,
-          );
-        }
+    const resolvedItems = [];
+    for (const item of items) {
+      const storageItem = db.prepare("SELECT * FROM storage_items WHERE id = ?").get(item.item_id);
+      if (!storageItem) {
+        return NextResponse.json({ error: `Item not found: ${item.item_id}` }, { status: 400 });
       }
-
-      const result = db
-        .prepare(
-          `
-        INSERT INTO loan_requests (user_id, loan_type, purpose, department, location, start_date, end_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-        )
-        .run(
-          user.id,
-          loan_type,
-          purpose.trim(),
-          department || "",
-          location || "",
-          start_date,
-          end_date || null,
-        );
-
-      const loanId = result.lastInsertRowid;
-
-      const insertItem = db.prepare(
-        "INSERT INTO loan_items (loan_request_id, item_id, quantity) VALUES (?, ?, ?)",
-      );
-      for (const item of items) {
-        insertItem.run(loanId, item.item_id, item.quantity);
-      }
-
-      const admins = db
-        .prepare("SELECT id FROM users WHERE role = ?")
-        .all("admin");
-      const insertNotif = db.prepare(
-        "INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)",
-      );
-      for (const admin of admins) {
-        insertNotif.run(
-          admin.id,
-          `New ${loan_type} loan request from ${user.display_name}`,
-          "/admin",
+      if (storageItem.current < item.quantity) {
+        return NextResponse.json(
+          {
+            error: `Not enough stock for "${storageItem.item}". Available: ${storageItem.current}, Requested: ${item.quantity}`,
+          },
+          { status: 400 },
         );
       }
-
-      return loanId;
-    });
-
-    try {
-      const loanId = createLoanTx();
-      await syncLoansToSheet();
-      logActivity(db, user.id, "request", `${user.display_name || user.username} submitted a new ${loan_type || "temporary"} loan request #${loanId}`);
-
-      // Dispatch notifications
-      try {
-        const userRecord = db.prepare("SELECT email FROM users WHERE id = ?").get(user.id);
-        const loanItems = db.prepare(`
-          SELECT li.quantity, si.item 
-          FROM loan_items li
-          JOIN storage_items si ON li.item_id = si.id
-          WHERE li.loan_request_id = ?
-        `).all(loanId);
-
-        // 1. Email to user
-        if (userRecord?.email) {
-          sendNewLoanUserEmail({
-            to: userRecord.email,
-            displayName: user.display_name || user.username,
-            loanId,
-            loanType: loan_type,
-            purpose,
-            items: loanItems
-          }).catch(() => {});
-        }
-
-        // 2. Email & Telegram to admins
-        const admins = db.prepare("SELECT id, email, display_name FROM users WHERE role = 'admin'").all();
-        const itemListStr = loanItems.map(i => `${i.item} × ${i.quantity}`).join(", ");
-        for (const admin of admins) {
-          // Email
-          if (admin.email) {
-            sendNewLoanAdminEmail({
-              to: admin.email,
-              adminName: admin.display_name,
-              userName: user.display_name || user.username,
-              loanId,
-              loanType: loan_type,
-              purpose,
-              items: loanItems
-            }).catch(() => {});
-          }
-          // Telegram
-          sendTelegramMessage(
-            admin.id,
-            `🔔 <b>New Loan Request</b>\n<b>${user.display_name || user.username}</b> requested a <b>${loan_type}</b> loan.\n\nPurpose: ${purpose}\nItems: ${itemListStr}`
-          ).catch(() => {});
-        }
-      } catch (notifErr) {
-        console.error("Failed to send loan creation notifications:", notifErr);
-      }
-
-      return NextResponse.json({
-        loan_id: loanId,
-        message: "Loan request submitted!",
+      resolvedItems.push({
+        item_id: item.item_id,
+        sheet_row: storageItem.sheet_row,
+        item_name: storageItem.item,
+        quantity: item.quantity,
       });
-    } catch (txErr) {
-      return NextResponse.json({ error: txErr.message }, { status: 400 });
     }
+
+    // Create loan request in Supabase
+    const { data: newLoan, error: loanError } = await supabase
+      .from("loan_requests")
+      .insert({
+        user_id: user.id,
+        loan_type,
+        purpose: purpose.trim(),
+        department: department || "",
+        location: location || "",
+        start_date,
+        end_date: end_date || null,
+      })
+      .select("id")
+      .single();
+
+    if (loanError) throw loanError;
+    const loanId = newLoan.id;
+
+    // Insert loan items with item_name + sheet_row for stability
+    await supabase.from("loan_items").insert(
+      resolvedItems.map((i) => ({
+        loan_request_id: loanId,
+        item_id: i.item_id,
+        sheet_row: i.sheet_row,
+        item_name: i.item_name,
+        quantity: i.quantity,
+      })),
+    );
+
+    // Notify admins
+    const { data: admins } = await supabase
+      .from("users")
+      .select("id, email, display_name")
+      .eq("role", "admin");
+
+    if (admins && admins.length > 0) {
+      await supabase.from("notifications").insert(
+        admins.map((admin) => ({
+          user_id: admin.id,
+          message: `New ${loan_type} loan request from ${user.display_name}`,
+          link: "/admin",
+        })),
+      );
+    }
+
+    // Fire-and-forget: emails + telegram
+    try {
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("email")
+        .eq("id", user.id)
+        .single();
+
+      const itemListStr = resolvedItems.map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
+      const itemsForEmail = resolvedItems.map((i) => ({ item: i.item_name, quantity: i.quantity }));
+
+      if (userRecord?.email) {
+        sendNewLoanUserEmail({
+          to: userRecord.email,
+          displayName: user.display_name || user.username,
+          loanId,
+          loanType: loan_type,
+          purpose,
+          items: itemsForEmail,
+        }).catch(() => {});
+      }
+
+      sendNewLoanAdminEmails({
+        admins: admins || [],
+        userName: user.display_name || user.username,
+        loanId,
+        loanType: loan_type,
+        purpose,
+        items: itemsForEmail,
+      }).catch(() => {});
+
+      for (const admin of admins || []) {
+        sendTelegramMessage(
+          admin.id,
+          `🔔 <b>New Loan Request</b>\n<b>${user.display_name || user.username}</b> requested a <b>${loan_type}</b> loan.\n\nPurpose: ${purpose}\nItems: ${itemListStr}`,
+        ).catch(() => {});
+      }
+    } catch (notifErr) {
+      console.error("Failed to send loan creation notifications:", notifErr);
+    }
+
+    return NextResponse.json({ loan_id: loanId, message: "Loan request submitted!" });
   } catch (error) {
     console.error("Loan creation error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

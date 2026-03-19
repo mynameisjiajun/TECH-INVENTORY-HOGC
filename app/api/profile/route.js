@@ -1,40 +1,28 @@
-import {
-  getDb,
-  ensureUserExists,
-  syncUsersToSheet,
-  ensureUsersRestored,
-} from "@/lib/db/db";
-import { getCurrentUser, hashPassword, verifyPassword } from "@/lib/utils/auth";
+import { supabase } from "@/lib/db/supabase";
+import { getCurrentUser, hashPassword, verifyPassword, createToken, getTokenCookieOptions } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
 // GET: get profile info
 export async function GET() {
-  await ensureUsersRestored();
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = getDb();
-  ensureUserExists(user);
-  const profile = db
-    .prepare(
-      "SELECT id, username, display_name, role, email, created_at FROM users WHERE id = ?",
-    )
-    .get(user.id);
-  if (!profile)
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const { data: profile } = await supabase
+    .from("users")
+    .select("id, username, display_name, role, email, telegram_chat_id, created_at")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
   return NextResponse.json({ profile });
 }
 
 // POST: update profile or change password
 export async function POST(request) {
-  await ensureUsersRestored();
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = getDb();
-  ensureUserExists(user);
   const { action, display_name, email, current_password, new_password } =
     await request.json();
 
@@ -47,18 +35,20 @@ export async function POST(request) {
     }
     const cleanEmail = email ? email.trim() : null;
     if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return NextResponse.json(
-        { error: "Invalid email format" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
     }
-    db.prepare("UPDATE users SET display_name = ?, email = ? WHERE id = ?").run(
-      display_name.trim(),
-      cleanEmail,
-      user.id,
-    );
-    await syncUsersToSheet();
-    return NextResponse.json({ message: "Profile updated!" });
+
+    await supabase
+      .from("users")
+      .update({ display_name: display_name.trim(), email: cleanEmail })
+      .eq("id", user.id);
+
+    // Re-issue JWT so navbar reflects new display_name immediately
+    const updatedToken = createToken({ ...user, display_name: display_name.trim() });
+    const response = NextResponse.json({ message: "Profile updated!" });
+    const cookieOpts = getTokenCookieOptions();
+    response.cookies.set(cookieOpts.name, updatedToken, cookieOpts);
+    return response;
   }
 
   if (action === "change_password") {
@@ -75,11 +65,14 @@ export async function POST(request) {
       );
     }
 
-    const dbUser = db
-      .prepare("SELECT password_hash FROM users WHERE id = ?")
-      .get(user.id);
-    if (!dbUser)
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("password_hash")
+      .eq("id", user.id)
+      .single();
+
+    if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
     const valid = await verifyPassword(current_password, dbUser.password_hash);
     if (!valid) {
       return NextResponse.json(
@@ -89,11 +82,8 @@ export async function POST(request) {
     }
 
     const newHash = await hashPassword(new_password);
-    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
-      newHash,
-      user.id,
-    );
-    await syncUsersToSheet();
+    await supabase.from("users").update({ password_hash: newHash }).eq("id", user.id);
+
     return NextResponse.json({ message: "Password changed successfully!" });
   }
 

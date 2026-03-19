@@ -1,7 +1,6 @@
-import { getDb, waitForSync, ensureUserExists, syncLoansToSheet, logActivity } from "@/lib/db/db";
+import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
-import { uploadToImgBB } from "@/lib/services/imgbb";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
@@ -23,54 +22,77 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "Loan ID is required" }, { status: 400 });
     }
 
-    await waitForSync();
-    const db = getDb();
-    ensureUserExists(user);
-
-    const loan = db.prepare("SELECT * FROM loan_requests WHERE id = ?").get(loanId);
+    // Get loan from Supabase
+    const { data: loan } = await supabase
+      .from("loan_requests")
+      .select("*")
+      .eq("id", loanId)
+      .single();
 
     if (!loan) {
       return NextResponse.json({ error: "Loan not found" }, { status: 404 });
     }
-
-    if (loan.user_id !== user.id && user.role !== "admin") {
+    if (Number(loan.user_id) !== Number(user.id) && user.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized to return this loan" }, { status: 403 });
     }
-
     if (loan.status !== "approved" || loan.loan_type !== "temporary") {
       return NextResponse.json({ error: "Loan is not eligible for return" }, { status: 400 });
     }
 
-    // Upload photo to ImgBB (permanent, survives cold starts)
-    const photoUrl = await uploadToImgBB(imageBase64);
+    // Upload photo to Supabase Storage
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, "base64");
+    const fileName = `loan-${loanId}-${Date.now()}.jpg`;
 
-    // Update database
-    db.prepare(
-      `UPDATE loan_requests SET status = 'returned', return_photo_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-    ).run(photoUrl, loanId);
+    const { error: uploadError } = await supabase.storage
+      .from("return-photos")
+      .upload(fileName, buffer, { contentType: "image/jpeg", upsert: false });
+
+    if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
+
+    const { data: urlData } = supabase.storage
+      .from("return-photos")
+      .getPublicUrl(fileName);
+    const photoUrl = urlData.publicUrl;
+
+    // Update loan status in Supabase
+    await supabase
+      .from("loan_requests")
+      .update({ status: "returned", return_photo_url: photoUrl, updated_at: new Date().toISOString() })
+      .eq("id", loanId);
+
+    // Log activity and fetch admins in parallel
+    const [{ data: loanUser }, { data: admins }] = await Promise.all([
+      supabase.from("users").select("display_name, username").eq("id", loan.user_id).single(),
+      supabase.from("users").select("id").eq("role", "admin"),
+    ]);
+
+    await supabase.from("activity_feed").insert({
+      user_id: user.id,
+      action: "return",
+      description: `${loanUser?.display_name || "A user"} returned loan #${loanId}. Photo: ${photoUrl}`,
+    });
 
     // Notify admins
-    const loanUser = db.prepare("SELECT display_name, username FROM users WHERE id = ?").get(loan.user_id);
-    const activityDesc = `${loanUser?.display_name || 'A user'} returned loan #${loanId}. Photo: ${photoUrl}`;
-    logActivity(db, user.id, "return", activityDesc);
 
-    const admins = db.prepare("SELECT id FROM users WHERE role = 'admin'").all();
-    const insertNotif = db.prepare("INSERT INTO notifications (user_id, message, link) VALUES (?, ?, ?)");
-    for (const admin of admins) {
-      insertNotif.run(
-        admin.id,
-        `${loanUser?.display_name || 'A user'} returned loan request #${loanId}. Click to view proof of return.`,
-        photoUrl
+    if (admins && admins.length > 0) {
+      await supabase.from("notifications").insert(
+        admins.map((admin) => ({
+          user_id: admin.id,
+          message: `${loanUser?.display_name || "A user"} returned loan request #${loanId}. Click to view proof of return.`,
+          link: photoUrl,
+        })),
       );
-      sendTelegramMessage(
-        admin.id,
-        `📥 <b>Item Returned</b>\n${loanUser?.display_name} returned loan #${loanId}.\n<a href="${photoUrl}">View Proof Photo</a>`
-      ).catch(() => {});
+
+      for (const admin of admins) {
+        sendTelegramMessage(
+          admin.id,
+          `📥 <b>Item Returned</b>\n${loanUser?.display_name} returned loan #${loanId}.\n<a href="${photoUrl}">View Proof Photo</a>`,
+        ).catch(() => {});
+      }
     }
 
-    // Invalidate cache and sync to Google Sheets
     invalidateAll();
-    await syncLoansToSheet();
 
     return NextResponse.json({ message: "Items returned successfully!", photo_url: photoUrl });
   } catch (error) {

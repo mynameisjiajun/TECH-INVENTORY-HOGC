@@ -63,6 +63,8 @@ function ResetPasswordForm() {
       const data = await res.json();
       if (res.ok) {
         setMessage(data.message);
+        // Clear token from URL immediately so it can't be reused from browser history
+        router.replace("/reset-password");
         setTimeout(() => router.push("/login"), 2000);
       } else {
         setError(data.error);

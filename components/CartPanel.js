@@ -1,7 +1,6 @@
 "use client";
 import { useCart } from "@/lib/context/CartContext";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   RiCloseLine,
   RiAddLine,
@@ -31,14 +30,10 @@ export default function CartPanel() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState("");
-  const router = useRouter();
-
   const handleCheckout = (type) => {
     setLoanType(type);
     setShowLoanForm(true);
     setError("");
-    setSuccess("");
     const today = new Date().toISOString().split("T")[0];
     setFormData((prev) => ({ ...prev, start_date: today }));
   };
@@ -68,8 +63,8 @@ export default function CartPanel() {
 
       clearCart();
       setShowLoanForm(false);
-      setSuccess("");
-      // Force a hard cache-bursting reload so they immediately see the new loan
+      setIsOpen(false);
+      // Hard navigate to bust Next.js client cache so new loan appears immediately
       window.location.href = "/loans";
     } catch (err) {
       setError(err.message);
@@ -219,7 +214,6 @@ export default function CartPanel() {
               </div>
 
               {error && <div className="error-msg">{error}</div>}
-              {success && <div className="success-msg">{success}</div>}
 
               <div
                 style={{
