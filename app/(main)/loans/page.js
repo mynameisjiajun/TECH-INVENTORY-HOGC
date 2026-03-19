@@ -410,7 +410,7 @@ export default function LoansPage() {
       {/* Return Modal */}
       {returnModalLoan && (
         <div className="modal-overlay" onClick={() => !returnLoading && (setReturnModalLoan(null), setReturnPhoto(null), setReturnRemarks(''))}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="modal-header">
               <div>
                 <h2 style={{ marginBottom: 2 }}>Return Loan #{returnModalLoan.id}</h2>
