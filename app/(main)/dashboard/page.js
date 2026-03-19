@@ -1109,7 +1109,19 @@ export default function DashboardPage() {
           <div className="activity-feed">
             <h3 style={{ fontSize: 16, marginBottom: 12 }}>Recent Activity</h3>
             {recentActivity.map((a) => (
-              <div key={a.id} className="activity-item">
+              <div
+                key={a.id}
+                className="activity-item"
+                onClick={() => {
+                  if (!a.link) return;
+                  if (a.link.startsWith("http")) {
+                    window.open(a.link, "_blank", "noopener");
+                  } else {
+                    router.push(a.link);
+                  }
+                }}
+                style={a.link ? { cursor: "pointer" } : undefined}
+              >
                 <div className={`activity-dot ${a.action}`} />
                 <div style={{ flex: 1 }}>
                   <div style={{ color: "var(--text-primary)" }}>
@@ -1117,6 +1129,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="activity-time">
                     {new Date(a.created_at).toLocaleString()}
+                    {a.link && <span style={{ marginLeft: 6, opacity: 0.5, fontSize: 10 }}>↗</span>}
                   </div>
                 </div>
               </div>

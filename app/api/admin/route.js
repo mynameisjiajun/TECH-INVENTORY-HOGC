@@ -409,6 +409,7 @@ export async function POST(request) {
         user_id: user.id,
         action: "approve",
         description: `Approved ${loan.loan_type} loan #${loan_id} for ${loanUser?.display_name || "user"}`,
+        link: "/admin",
       });
 
       return NextResponse.json({ message: "Loan approved" });
@@ -467,6 +468,7 @@ export async function POST(request) {
         user_id: user.id,
         action: "reject",
         description: `Rejected loan #${loan_id} from ${rejectUser?.display_name || "user"}`,
+        link: "/admin",
       });
 
       return NextResponse.json({ message: "Loan rejected" });
@@ -524,6 +526,7 @@ export async function POST(request) {
         user_id: user.id,
         action: "return",
         description: `Returned items from loan #${loan_id} (${returnUser?.display_name || "user"})`,
+        link: "/admin",
       });
 
       return NextResponse.json({ message: "Items returned to stock" });

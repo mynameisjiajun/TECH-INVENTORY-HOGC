@@ -1036,6 +1036,28 @@ tr:last-child td {
   border-top: 1px solid var(--border);
 }
 
+.btn-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-close:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--error);
+}
+
 /* ===== EMPTY STATE ===== */
 .empty-state {
   text-align: center;
@@ -1180,6 +1202,13 @@ tr:last-child td {
 .admin-notes-input {
   width: 100%;
   margin-bottom: 8px;
+}
+
+/* Reminder times 3-col grid — collapses to 1-col on mobile */
+.reminder-times-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 
 /* ===== LOADING ===== */
@@ -1449,11 +1478,19 @@ tr:last-child td {
     flex-wrap: wrap;
   }
 
-  /* Notification dropdown mobile — keep it fully on-screen */
+  /* Reminder times — stack vertically on mobile */
+  .reminder-times-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Notification dropdown mobile — fixed so it never clips */
   .notification-dropdown {
-    width: min(300px, calc(100vw - 20px));
-    right: 0;
-    left: auto;
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 56px);
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 70vh;
   }
   .notification-item p {
     font-size: 12px;
@@ -1477,6 +1514,11 @@ tr:last-child td {
   }
   .modal-footer {
     padding: 12px 16px;
+    flex-direction: column-reverse;
+  }
+  .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   /* Input sizing */
@@ -1560,6 +1602,7 @@ tr:last-child td {
   /* Cart panel mobile tweaks */
   .cart-header {
     padding: 14px 16px;
+    padding-top: calc(env(safe-area-inset-top) + 14px);
   }
   .cart-header h2 {
     font-size: 16px;

@@ -30,6 +30,7 @@ export default function LoansPage() {
 
   const [returnModalLoan, setReturnModalLoan] = useState(null);
   const [returnPhoto, setReturnPhoto] = useState(null);
+  const [returnRemarks, setReturnRemarks] = useState('');
   const [returnLoading, setReturnLoading] = useState(false);
 
   const handlePhotoChange = (e) => {
@@ -68,7 +69,7 @@ export default function LoansPage() {
       const res = await fetch(`/api/loans/${returnModalLoan.id}/return`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: returnPhoto }),
+        body: JSON.stringify({ imageBase64: returnPhoto, remarks: returnRemarks.trim() || null }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -80,6 +81,7 @@ export default function LoansPage() {
         ));
         setReturnModalLoan(null);
         setReturnPhoto(null);
+        setReturnRemarks('');
       } else {
         toast.error(data.error);
       }
@@ -407,56 +409,76 @@ export default function LoansPage() {
 
       {/* Return Modal */}
       {returnModalLoan && (
-        <div className="modal-overlay" onClick={() => !returnLoading && setReturnModalLoan(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 450 }}>
+        <div className="modal-overlay" onClick={() => !returnLoading && (setReturnModalLoan(null), setReturnPhoto(null), setReturnRemarks(''))}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="modal-header">
-              <h2>Return Loan #{returnModalLoan.id}</h2>
-              <button className="btn-close" onClick={() => !returnLoading && setReturnModalLoan(null)}>✕</button>
+              <div>
+                <h2 style={{ marginBottom: 2 }}>Return Loan #{returnModalLoan.id}</h2>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>
+                  {returnModalLoan.items.map(i => `${i.item} ×${i.quantity}`).join(' · ')}
+                </div>
+              </div>
+              <button className="btn-close" onClick={() => !returnLoading && (setReturnModalLoan(null), setReturnPhoto(null), setReturnRemarks(''))}>✕</button>
             </div>
-            <div className="modal-body">
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
-                Please upload a clear photo showing all items have been returned to their proper storage location.
-              </p>
 
-              <div style={{ marginBottom: 12, padding: 10, background: 'var(--bg-secondary)', borderRadius: 8, fontSize: 13 }}>
-                {returnModalLoan.items.map(item => (
-                  <div key={item.id} style={{ color: 'var(--text-secondary)' }}>• {item.item} × {item.quantity}</div>
-                ))}
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Photo upload */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Proof of Return <span style={{ color: 'var(--error)' }}>*</span>
+                </div>
+                <div style={{ background: 'var(--bg-secondary)', border: '1px dashed var(--border)', borderRadius: 10, padding: returnPhoto ? 8 : 18, textAlign: 'center' }}>
+                  {returnPhoto ? (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img src={returnPhoto} alt="Return proof" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, display: 'block' }} />
+                      <button
+                        onClick={() => setReturnPhoto(null)}
+                        className="btn-close"
+                        style={{ position: 'absolute', top: 6, right: 6 }}
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <RiCameraLine size={28} style={{ color: 'var(--text-muted)', marginBottom: 8 }} />
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                        Photo showing items in storage
+                      </div>
+                      <label className="btn btn-outline btn-sm" style={{ cursor: 'pointer' }}>
+                        Take / Upload Photo
+                        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhotoChange} />
+                      </label>
+                    </>
+                  )}
+                </div>
               </div>
 
-              <div style={{ background: 'var(--bg-secondary)', border: '1px dashed var(--border)', borderRadius: 12, padding: 20, textAlign: 'center', marginBottom: 16 }}>
-                {returnPhoto ? (
-                  <div style={{ position: 'relative', display: 'inline-block' }}>
-                    <img src={returnPhoto} alt="Return proof" style={{ maxWidth: '100%', maxHeight: 250, borderRadius: 8 }} />
-                    <button
-                      onClick={() => setReturnPhoto(null)}
-                      style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >✕</button>
-                  </div>
-                ) : (
-                  <>
-                    <RiCameraLine size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-                    <br />
-                    <label className="btn btn-outline" style={{ cursor: 'pointer' }}>
-                      Take / Upload Photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        style={{ display: 'none' }}
-                        onChange={handlePhotoChange}
-                      />
-                    </label>
-                  </>
-                )}
+              {/* Remarks */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Condition Remarks <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
+                </div>
+                <textarea
+                  value={returnRemarks}
+                  onChange={e => setReturnRemarks(e.target.value)}
+                  placeholder="Report any damage, faults, or missing parts…"
+                  maxLength={500}
+                  rows={3}
+                  style={{
+                    width: '100%', padding: '10px 12px', background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)',
+                    fontSize: 13, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box',
+                    outline: 'none',
+                  }}
+                />
               </div>
             </div>
-            <div className="modal-footer" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-outline" onClick={() => { setReturnModalLoan(null); setReturnPhoto(null); }} disabled={returnLoading}>
+
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => { setReturnModalLoan(null); setReturnPhoto(null); setReturnRemarks(''); }} disabled={returnLoading}>
                 Cancel
               </button>
               <button className="btn btn-primary" onClick={submitReturn} disabled={!returnPhoto || returnLoading}>
-                {returnLoading ? 'Uploading...' : 'Submit Return'}
+                {returnLoading ? <><span className="btn-spinner" /> Uploading…</> : 'Submit Return'}
               </button>
             </div>
           </div>

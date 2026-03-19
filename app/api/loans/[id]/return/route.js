@@ -11,7 +11,7 @@ export async function POST(request, { params }) {
   }
 
   try {
-    const { imageBase64 } = await request.json();
+    const { imageBase64, remarks } = await request.json();
     if (!imageBase64) {
       return NextResponse.json({ error: "Photo is required to return items" }, { status: 400 });
     }
@@ -58,7 +58,12 @@ export async function POST(request, { params }) {
     // Update loan status in Supabase
     await supabase
       .from("loan_requests")
-      .update({ status: "returned", return_photo_url: photoUrl, updated_at: new Date().toISOString() })
+      .update({
+        status: "returned",
+        return_photo_url: photoUrl,
+        return_remarks: remarks || null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", loanId);
 
     // Log activity and fetch admins in parallel
@@ -67,19 +72,20 @@ export async function POST(request, { params }) {
       supabase.from("users").select("id").eq("role", "admin"),
     ]);
 
+    const remarksLine = remarks ? `\nRemarks: ${remarks}` : "";
+
     await supabase.from("activity_feed").insert({
       user_id: user.id,
       action: "return",
-      description: `${loanUser?.display_name || "A user"} returned loan #${loanId}. Photo: ${photoUrl}`,
+      description: `${loanUser?.display_name || "A user"} returned loan #${loanId}.${remarksLine}`,
+      link: photoUrl,
     });
-
-    // Notify admins
 
     if (admins && admins.length > 0) {
       await supabase.from("notifications").insert(
         admins.map((admin) => ({
           user_id: admin.id,
-          message: `${loanUser?.display_name || "A user"} returned loan request #${loanId}. Click to view proof of return.`,
+          message: `${loanUser?.display_name || "A user"} returned loan #${loanId}.${remarksLine} Tap to view proof photo.`,
           link: photoUrl,
         })),
       );
@@ -87,7 +93,7 @@ export async function POST(request, { params }) {
       for (const admin of admins) {
         sendTelegramMessage(
           admin.id,
-          `📥 <b>Item Returned</b>\n${loanUser?.display_name} returned loan #${loanId}.\n<a href="${photoUrl}">View Proof Photo</a>`,
+          `📥 <b>Item Returned</b>\n${loanUser?.display_name} returned loan #${loanId}.${remarks ? `\n⚠️ <b>Remarks:</b> ${remarks}` : ""}\n<a href="${photoUrl}">View Proof Photo</a>`,
         ).catch(() => {});
       }
     }

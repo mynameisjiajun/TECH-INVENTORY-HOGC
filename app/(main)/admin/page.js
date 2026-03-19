@@ -1161,7 +1161,7 @@ export default function AdminPage() {
               <p style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 12 }}>
                 Set the time (SGT) to send due-tomorrow reminders. Overdue alerts fire regardless of this setting. The cron job should run hourly.
               </p>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
+              <div className="reminder-times-grid" style={{ marginBottom: 12 }}>
                 {[
                   { key: "weekday", label: "Weekdays (Mon–Fri)" },
                   { key: "saturday", label: "Saturday" },
@@ -1195,7 +1195,11 @@ export default function AdminPage() {
               <button
                 className="btn btn-sm btn-primary"
                 onClick={handleUpdateReminderTimes}
-                disabled={reminderTimesLoading}
+                disabled={reminderTimesLoading || (
+                  reminderTimesInput.weekday === reminderTimes.weekday &&
+                  reminderTimesInput.saturday === reminderTimes.saturday &&
+                  reminderTimesInput.sunday === reminderTimes.sunday
+                )}
               >
                 {reminderTimesLoading ? <><span className="btn-spinner" /> Saving…</> : "Save Times"}
               </button>

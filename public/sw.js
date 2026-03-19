@@ -1,8 +1,13 @@
-const CACHE_NAME = "tech-inventory-v4";
-const API_CACHE = "tech-inventory-api-v1";
+const CACHE_NAME = "tech-inventory-v5";
+const API_CACHE = "tech-inventory-api-v2";
 
 // App shell — pages & assets to pre-cache on install
-const APP_SHELL = ["/manifest.json", "/offline"];
+const APP_SHELL = [
+  "/manifest.json",
+  "/offline",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+];
 
 // API routes we want to cache for offline browsing
 const CACHEABLE_API = ["/api/items"];
