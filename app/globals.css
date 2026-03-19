@@ -134,6 +134,8 @@ a:hover {
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   padding: 0 24px;
+  /* Push content below iPhone status bar when installed as PWA */
+  padding-top: env(safe-area-inset-top);
 }
 
 .navbar-inner {
