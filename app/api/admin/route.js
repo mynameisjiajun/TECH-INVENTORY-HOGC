@@ -281,6 +281,11 @@ export async function POST(request) {
       return NextResponse.json({ message: `${pendingLoans.length} loan(s) approved` });
     }
 
+    if (action === "clear_activity") {
+      await supabase.from("activity_feed").delete().neq("id", 0);
+      return NextResponse.json({ message: "Activity log cleared" });
+    }
+
     // ===== SINGLE LOAN ACTIONS =====
     const { loan_id, admin_notes } = body;
     const { data: loan } = await supabase
@@ -568,11 +573,6 @@ export async function POST(request) {
       invalidateAll();
 
       return NextResponse.json({ message: "Loan deleted" });
-    }
-
-    if (action === "clear_activity") {
-      await supabase.from("activity_feed").delete().neq("id", 0);
-      return NextResponse.json({ message: "Activity log cleared" });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

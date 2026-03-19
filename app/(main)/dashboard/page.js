@@ -1155,7 +1155,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
               <h3 style={{ fontSize: 16, margin: 0 }}>Recent Activity</h3>
               <button className="btn btn-sm btn-outline" onClick={() => setShowClearActivityConfirm(true)}
-                style={{ color: 'var(--error)', borderColor: 'var(--error)', fontSize: 12, padding: '4px 10px', flexShrink: 0 }}>
+                style={{ color: 'var(--error)', borderColor: 'var(--error)', border: '1px solid var(--error)', fontSize: 12, padding: '4px 10px', flexShrink: 0 }}>
                 Clear all
               </button>
             </div>
