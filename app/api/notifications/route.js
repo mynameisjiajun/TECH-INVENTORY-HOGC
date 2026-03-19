@@ -50,3 +50,11 @@ export async function POST(request) {
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  await supabase.from("notifications").delete().eq("user_id", user.id);
+  return NextResponse.json({ ok: true });
+}

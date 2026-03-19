@@ -72,8 +72,20 @@ async function handleHelp(chatId) {
     "/overdue — Overdue items (need immediate attention)",
     "/status &lt;id&gt; — Check a specific loan (e.g. /status 5)",
     "/history — Your recent loan history",
+    "/mute — Mute Telegram notifications",
+    "/unmute — Unmute Telegram notifications",
     "/help — Show this message",
   ].join("\n"));
+}
+
+async function handleMute(chatId, userId, mute) {
+  await supabase.from("users").update({ mute_telegram: mute }).eq("id", userId);
+  await reply(
+    chatId,
+    mute
+      ? "🔕 Telegram notifications muted. Send /unmute to re-enable them."
+      : "🔔 Telegram notifications re-enabled.",
+  );
 }
 
 async function handleLoans(chatId, userId) {
@@ -203,7 +215,8 @@ async function handleStatus(chatId, userId, loanIdStr) {
     return;
   }
 
-  const items = await getLoanItems(loan.id);
+  const itemsByLoanMap = await fetchAllLoanItems([loan.id]);
+  const items = itemsByLoanMap.get(loan.id) || [];
   const statusMap = {
     pending: "⏳ Pending",
     approved: "✅ Approved",
@@ -315,6 +328,10 @@ export async function POST(request) {
       await handleStatus(chatId, user.id, arg);
     } else if (text === "/history") {
       await handleHistory(chatId, user.id);
+    } else if (text === "/mute") {
+      await handleMute(chatId, user.id, true);
+    } else if (text === "/unmute") {
+      await handleMute(chatId, user.id, false);
     } else {
       await reply(chatId, "I didn't understand that. Send /help to see what I can do.");
     }

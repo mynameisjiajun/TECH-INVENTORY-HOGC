@@ -3,7 +3,7 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
-import { RiUserLine, RiLockLine, RiCheckLine, RiMailLine } from 'react-icons/ri';
+import { RiUserLine, RiLockLine, RiCheckLine, RiMailLine, RiNotificationOffLine } from 'react-icons/ri';
 
 export default function ProfilePage() {
   const { user, loading, checkAuth } = useAuth();
@@ -18,6 +18,8 @@ export default function ProfilePage() {
   const [passwordMsg, setPasswordMsg] = useState('');
   const [profileErr, setProfileErr] = useState('');
   const [passwordErr, setPasswordErr] = useState('');
+  const [muteEmails, setMuteEmails] = useState(false);
+  const [muteTelegram, setMuteTelegram] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
@@ -36,6 +38,8 @@ export default function ProfilePage() {
         setProfile(data.profile);
         setDisplayName(data.profile.display_name);
         setEmail(data.profile.email || '');
+        setMuteEmails(!!data.profile.mute_emails);
+        setMuteTelegram(!!data.profile.mute_telegram);
       })
       .catch((err) => {
         setProfileErr(err.message || 'Could not load profile');
@@ -50,7 +54,7 @@ export default function ProfilePage() {
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_profile', display_name: displayName, email: email.trim() || null }),
+        body: JSON.stringify({ action: 'update_profile', display_name: displayName, email: email.trim() || null, mute_emails: muteEmails, mute_telegram: muteTelegram }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -180,6 +184,26 @@ export default function ProfilePage() {
                   </div>
                 )
               )}
+            </div>
+
+            {/* Notification mute toggles */}
+            <div style={{ marginBottom: 24, padding: 20, background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid var(--border)' }}>
+              <label style={{ display: 'block', marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>
+                <RiNotificationOffLine style={{ verticalAlign: 'middle', marginRight: 6 }} />Notification Mute Settings
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>Mute email notifications</span>
+                  <input type="checkbox" checked={muteEmails} onChange={e => setMuteEmails(e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }} />
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>Mute Telegram notifications</span>
+                  <input type="checkbox" checked={muteTelegram} onChange={e => setMuteTelegram(e.target.checked)}
+                    style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }} />
+                </label>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>You can also mute/unmute Telegram by sending /mute or /unmute to the bot.</p>
+              </div>
             </div>
 
             {profileMsg && <p style={{ color: 'var(--success)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(34,197,94,0.08)', borderRadius: 10 }}>✅ {profileMsg}</p>}

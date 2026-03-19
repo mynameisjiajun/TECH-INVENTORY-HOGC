@@ -99,14 +99,6 @@ export async function POST(request) {
         itemsByLoan.get(item.loan_request_id).push(item);
       }
 
-      // Batch fetch user telegram data for notifications
-      const uniqueUserIds = [...new Set(approvedLoans.map((l) => l.user_id))];
-      const { data: bulkUsers } = await supabase
-        .from("users")
-        .select("id, telegram_chat_id")
-        .in("id", uniqueUserIds);
-      const userMap = new Map((bulkUsers || []).map((u) => [u.id, u]));
-
       // Apply SQLite stock changes (synchronous, single-threaded)
       const sheetChangesMap = new Map();
       for (const loan of approvedLoans) {
@@ -152,11 +144,9 @@ export async function POST(request) {
 
       // Fire-and-forget Telegram notifications
       for (const loan of approvedLoans) {
-        const u = userMap.get(loan.user_id);
         sendTelegramMessage(
           loan.user_id,
           `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan.id} have been marked as returned.`,
-          u?.telegram_chat_id,
         ).catch(() => {});
       }
 
@@ -381,9 +371,9 @@ export async function POST(request) {
       if (deployedRows.length > 0) await syncDeployedToSheets(deployedRows);
 
       // Notifications
-      const { data: loanUser } = await supabase.from("users").select("email, display_name, telegram_chat_id").eq("id", loan.user_id).single();
+      const { data: loanUser } = await supabase.from("users").select("email, display_name, telegram_chat_id, mute_emails, mute_telegram").eq("id", loan.user_id).single();
       const backgroundTasks = [];
-      if (loanUser?.email) {
+      if (loanUser?.email && !loanUser?.mute_emails) {
         backgroundTasks.push(
           sendLoanStatusEmail({
             to: loanUser.email,
@@ -395,13 +385,14 @@ export async function POST(request) {
           }).catch(() => {}),
         );
       }
-      backgroundTasks.push(
-        sendTelegramMessage(
-          loan.user_id,
-          `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan_id} has been approved!${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
-          loanUser?.telegram_chat_id,
-        ),
-      );
+      if (!loanUser?.mute_telegram) {
+        backgroundTasks.push(
+          sendTelegramMessage(
+            loan.user_id,
+            `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan_id} has been approved!${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
+          ),
+        );
+      }
       await Promise.all(backgroundTasks);
 
       invalidateAll();
@@ -439,10 +430,10 @@ export async function POST(request) {
         details: `Rejected ${loan.loan_type} loan. ${admin_notes || ""}`,
       });
 
-      const { data: rejectUser } = await supabase.from("users").select("email, display_name, telegram_chat_id").eq("id", loan.user_id).single();
+      const { data: rejectUser } = await supabase.from("users").select("email, display_name, telegram_chat_id, mute_emails, mute_telegram").eq("id", loan.user_id).single();
       const { data: rejectItems } = await supabase.from("loan_items").select("item_name, quantity").eq("loan_request_id", loan_id);
       const rejectTasks = [];
-      if (rejectUser?.email) {
+      if (rejectUser?.email && !rejectUser?.mute_emails) {
         rejectTasks.push(
           sendLoanStatusEmail({
             to: rejectUser.email,
@@ -454,13 +445,14 @@ export async function POST(request) {
           }).catch(() => {}),
         );
       }
-      rejectTasks.push(
-        sendTelegramMessage(
-          loan.user_id,
-          `❌ <b>Loan Rejected</b>\nYour ${loan.loan_type} loan request #${loan_id} has been rejected.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
-          rejectUser?.telegram_chat_id,
-        ),
-      );
+      if (!rejectUser?.mute_telegram) {
+        rejectTasks.push(
+          sendTelegramMessage(
+            loan.user_id,
+            `❌ <b>Loan Rejected</b>\nYour ${loan.loan_type} loan request #${loan_id} has been rejected.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
+          ),
+        );
+      }
       await Promise.all(rejectTasks);
 
       invalidateAll();
@@ -515,11 +507,10 @@ export async function POST(request) {
       });
 
       await syncStockToSheets(returnChanges);
-      await sendTelegramMessage(
+      sendTelegramMessage(
         loan.user_id,
         `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`,
-        returnUser?.telegram_chat_id,
-      );
+      ).catch(() => {});
 
       invalidateAll();
       await supabase.from("activity_feed").insert({
@@ -577,6 +568,11 @@ export async function POST(request) {
       invalidateAll();
 
       return NextResponse.json({ message: "Loan deleted" });
+    }
+
+    if (action === "clear_activity") {
+      await supabase.from("activity_feed").delete().neq("id", 0);
+      return NextResponse.json({ message: "Activity log cleared" });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

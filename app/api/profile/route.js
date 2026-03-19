@@ -9,7 +9,7 @@ export async function GET() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("id, username, display_name, role, email, telegram_chat_id, created_at")
+    .select("id, username, display_name, role, email, telegram_chat_id, mute_emails, mute_telegram, created_at")
     .eq("id", user.id)
     .single();
 
@@ -23,7 +23,7 @@ export async function POST(request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { action, display_name, email, current_password, new_password } =
+  const { action, display_name, email, mute_emails, mute_telegram, current_password, new_password } =
     await request.json();
 
   if (action === "update_profile") {
@@ -40,7 +40,12 @@ export async function POST(request) {
 
     await supabase
       .from("users")
-      .update({ display_name: display_name.trim(), email: cleanEmail })
+      .update({
+        display_name: display_name.trim(),
+        email: cleanEmail,
+        mute_emails: mute_emails === true,
+        mute_telegram: mute_telegram === true,
+      })
       .eq("id", user.id);
 
     // Re-issue JWT so navbar reflects new display_name immediately

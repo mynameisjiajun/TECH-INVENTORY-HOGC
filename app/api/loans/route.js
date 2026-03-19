@@ -101,7 +101,7 @@ export async function GET(request) {
         .eq("end_date", tomorrow),
       supabase
         .from("users")
-        .select("email, display_name, telegram_chat_id")
+        .select("email, display_name, telegram_chat_id, mute_emails, mute_telegram")
         .eq("id", user.id)
         .single(),
     ]);
@@ -133,7 +133,7 @@ export async function GET(request) {
             link: "/loans",
           });
 
-          if (userRecord?.email) {
+          if (userRecord?.email && !userRecord?.mute_emails) {
             backgroundTasks.push(
               sendOverdueEmail({
                 to: userRecord.email,
@@ -144,13 +144,14 @@ export async function GET(request) {
               }).catch(() => {}),
             );
           }
-          backgroundTasks.push(
-            sendTelegramMessage(
-              user.id,
-              `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`,
-              userRecord?.telegram_chat_id,
-            ),
-          );
+          if (!userRecord?.mute_telegram) {
+            backgroundTasks.push(
+              sendTelegramMessage(
+                user.id,
+                `⚠️ <b>OVERDUE LOAN</b>\nYour loan #${loan.id} is overdue! Please return your items.\n\nItems: ${itemList}`,
+              ),
+            );
+          }
         }
       }),
       ...(dueSoonLoans || []).map(async (loan) => {
@@ -177,7 +178,7 @@ export async function GET(request) {
             link: "/loans",
           });
 
-          if (userRecord?.email) {
+          if (userRecord?.email && !userRecord?.mute_emails) {
             backgroundTasks.push(
               sendDueSoonEmail({
                 to: userRecord.email,
@@ -188,13 +189,14 @@ export async function GET(request) {
               }).catch(() => {}),
             );
           }
-          backgroundTasks.push(
-            sendTelegramMessage(
-              user.id,
-              `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`,
-              userRecord?.telegram_chat_id,
-            ),
-          );
+          if (!userRecord?.mute_telegram) {
+            backgroundTasks.push(
+              sendTelegramMessage(
+                user.id,
+                `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow.\n\nItems: ${itemList}`,
+              ),
+            );
+          }
         }
       }),
     ]);
@@ -307,7 +309,7 @@ export async function POST(request) {
     // Notify admins
     const { data: admins } = await supabase
       .from("users")
-      .select("id, email, display_name")
+      .select("id, email, display_name, mute_emails, mute_telegram")
       .eq("role", "admin");
 
     if (admins && admins.length > 0) {
@@ -324,14 +326,14 @@ export async function POST(request) {
     try {
       const { data: userRecord } = await supabase
         .from("users")
-        .select("email")
+        .select("email, mute_emails")
         .eq("id", user.id)
         .single();
 
       const itemListStr = resolvedItems.map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
       const itemsForEmail = resolvedItems.map((i) => ({ item: i.item_name, quantity: i.quantity }));
 
-      if (userRecord?.email) {
+      if (userRecord?.email && !userRecord?.mute_emails) {
         sendNewLoanUserEmail({
           to: userRecord.email,
           displayName: user.display_name || user.username,
@@ -342,20 +344,25 @@ export async function POST(request) {
         }).catch(() => {});
       }
 
-      sendNewLoanAdminEmails({
-        admins: admins || [],
-        userName: user.display_name || user.username,
-        loanId,
-        loanType: loan_type,
-        purpose,
-        items: itemsForEmail,
-      }).catch(() => {});
+      const unmutedAdminsEmail = (admins || []).filter((a) => !a.mute_emails);
+      if (unmutedAdminsEmail.length > 0) {
+        sendNewLoanAdminEmails({
+          admins: unmutedAdminsEmail,
+          userName: user.display_name || user.username,
+          loanId,
+          loanType: loan_type,
+          purpose,
+          items: itemsForEmail,
+        }).catch(() => {});
+      }
 
       for (const admin of admins || []) {
-        sendTelegramMessage(
-          admin.id,
-          `🔔 <b>New Loan Request</b>\n<b>${user.display_name || user.username}</b> requested a <b>${loan_type}</b> loan.\n\nPurpose: ${purpose}\nItems: ${itemListStr}`,
-        ).catch(() => {});
+        if (!admin.mute_telegram) {
+          sendTelegramMessage(
+            admin.id,
+            `🔔 <b>New Loan Request</b>\n<b>${user.display_name || user.username}</b> requested a <b>${loan_type}</b> loan.\n\nPurpose: ${purpose}\nItems: ${itemListStr}`,
+          ).catch(() => {});
+        }
       }
     } catch (notifErr) {
       console.error("Failed to send loan creation notifications:", notifErr);

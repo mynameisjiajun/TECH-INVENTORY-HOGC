@@ -56,6 +56,8 @@ export default function DashboardPage() {
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [error, setError] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showClearActivityConfirm, setShowClearActivityConfirm] = useState(false);
+  const [clearActivityLoading, setClearActivityLoading] = useState(false);
   const channelRef = useRef(null);
 
   // User-only state
@@ -151,6 +153,28 @@ export default function DashboardPage() {
       clearInterval(fallback);
     };
   }, [user, fetchDashboard, fetchMyLoans]);
+
+  const handleClearActivity = async () => {
+    setClearActivityLoading(true);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear_activity" }),
+      });
+      if (res.ok) {
+        setRecentActivity([]);
+        setShowClearActivityConfirm(false);
+        toast.success("Activity log cleared");
+      } else {
+        toast.error("Failed to clear activity log");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setClearActivityLoading(false);
+    }
+  };
 
   const handleDeleteLoan = async (loanId) => {
     if (
@@ -1104,10 +1128,37 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Clear Activity Confirmation Modal */}
+        {showClearActivityConfirm && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '0 16px' }}>
+            <div className="glass-card" style={{ padding: 28, maxWidth: 400, width: '100%', borderRadius: 16 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Clear Activity Log?</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 }}>
+                This will permanently delete all activity records for everyone. This cannot be undone.
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button className="btn btn-outline" onClick={() => setShowClearActivityConfirm(false)} disabled={clearActivityLoading}>
+                  Cancel
+                </button>
+                <button className="btn btn-danger" onClick={handleClearActivity} disabled={clearActivityLoading}
+                  style={{ background: 'var(--error)', color: '#fff', border: 'none' }}>
+                  {clearActivityLoading ? <><span className="btn-spinner" /> Clearing…</> : 'Yes, clear all'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Activity Feed */}
         {recentActivity.length > 0 && (
           <div className="activity-feed">
-            <h3 style={{ fontSize: 16, marginBottom: 12 }}>Recent Activity</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
+              <h3 style={{ fontSize: 16, margin: 0 }}>Recent Activity</h3>
+              <button className="btn btn-sm btn-outline" onClick={() => setShowClearActivityConfirm(true)}
+                style={{ color: 'var(--error)', borderColor: 'var(--error)', fontSize: 12, padding: '4px 10px', flexShrink: 0 }}>
+                Clear all
+              </button>
+            </div>
             {recentActivity.map((a) => (
               <div
                 key={a.id}

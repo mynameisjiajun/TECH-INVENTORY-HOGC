@@ -148,6 +148,18 @@ export default function Navbar() {
     }
   };
 
+  const clearAllNotifs = async () => {
+    try {
+      const res = await fetch("/api/notifications", { method: "DELETE" });
+      if (res.ok) {
+        setNotifications([]);
+        setUnreadCount(0);
+      }
+    } catch (err) {
+      console.warn("Failed to clear notifications:", err.message);
+    }
+  };
+
   if (!user) return null;
 
   const navLinks = [
@@ -218,14 +230,22 @@ export default function Navbar() {
                     <span style={{ fontWeight: 600, fontSize: 14 }}>
                       Notifications
                     </span>
-                    {unreadCount > 0 && (
-                      <button
-                        className="btn btn-sm btn-outline"
-                        onClick={markAllRead}
-                      >
-                        Mark all read
-                      </button>
-                    )}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {unreadCount > 0 && (
+                        <button className="btn btn-sm btn-outline" onClick={markAllRead}>
+                          Mark all read
+                        </button>
+                      )}
+                      {notifications.length > 0 && (
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={clearAllNotifs}
+                          style={{ color: "var(--error)", borderColor: "var(--error)" }}
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {notifications.length === 0 ? (
                     <div
