@@ -59,17 +59,17 @@ export async function GET(request) {
   // Batch-load items for all loans in a single query
   if (loans.length > 0) {
     const loanIds = loans.map((l) => l.id);
-    const placeholders = loanIds.map(() => "?").join(",");
+    // ⚡ Bolt: Batch fetch loan items using JOIN json_each(?) instead of IN clause to avoid SQLite parameter limits on Vercel and improve performance
     const allItems = db
       .prepare(
         `
       SELECT li.*, si.item, si.type, si.brand, si.model
       FROM loan_items li
       JOIN storage_items si ON li.item_id = si.id
-      WHERE li.loan_request_id IN (${placeholders})
+      JOIN json_each(?) as je ON je.value = li.loan_request_id
     `,
       )
-      .all(...loanIds);
+      .all(JSON.stringify(loanIds));
     const itemsByLoan = new Map();
     for (const item of allItems) {
       if (!itemsByLoan.has(item.loan_request_id))
