@@ -740,8 +740,9 @@ export default function AdminPage() {
                   disabled={selectedPendingLoans.size === 0 || bulkApproveLoading}
                   style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)" }}
                 >
-                  <RiCheckLine />{" "}
-                  {bulkApproveLoading ? "Approving..." : `Bulk Approve (${selectedPendingLoans.size})`}
+                  {bulkApproveLoading
+                    ? <><span className="btn-spinner" /> Approving…</>
+                    : <><RiCheckLine /> {`Bulk Approve (${selectedPendingLoans.size})`}</>}
                 </button>
               </div>
             )}
@@ -947,14 +948,14 @@ export default function AdminPage() {
                           onClick={() => handleAction(loan.id, "approve")}
                           disabled={actionLoading === loan.id}
                         >
-                          {actionLoading === loan.id ? "..." : <><RiCheckLine /> Approve</>}
+                          {actionLoading === loan.id ? <span className="btn-spinner" /> : <><RiCheckLine /> Approve</>}
                         </button>
                         <button
                           className="btn btn-danger btn-sm"
                           onClick={() => handleAction(loan.id, "reject")}
                           disabled={actionLoading === loan.id}
                         >
-                          {actionLoading === loan.id ? "..." : <><RiCloseLine /> Reject</>}
+                          {actionLoading === loan.id ? <span className="btn-spinner" /> : <><RiCloseLine /> Reject</>}
                         </button>
                       </div>
                     </div>
@@ -967,7 +968,7 @@ export default function AdminPage() {
                           onClick={() => handleAction(loan.id, "return")}
                           disabled={actionLoading === loan.id}
                         >
-                          {actionLoading === loan.id ? "Returning..." : <><RiArrowGoBackLine /> Mark as Returned</>}
+                          {actionLoading === loan.id ? <><span className="btn-spinner" /> Returning…</> : <><RiArrowGoBackLine /> Mark as Returned</>}
                         </button>
                       </div>
                     )}
@@ -1112,7 +1113,7 @@ export default function AdminPage() {
                   onClick={handleUpdateInviteCode}
                   disabled={inviteCodeInput.trim() === inviteCode || inviteCodeLoading}
                 >
-                  {inviteCodeLoading ? "Saving..." : "Update"}
+                  {inviteCodeLoading ? <><span className="btn-spinner" /> Saving…</> : "Update"}
                 </button>
               </div>
             </div>
@@ -1285,7 +1286,7 @@ export default function AdminPage() {
                               disabled={userActionLoading === `reset-${u.id}`}
                               title="Reset password"
                             >
-                              {userActionLoading === `reset-${u.id}` ? "..." : <RiLockLine />}
+                              {userActionLoading === `reset-${u.id}` ? <span className="btn-spinner" /> : <RiLockLine />}
                             </button>
                           </div>
                         </td>
@@ -1297,7 +1298,7 @@ export default function AdminPage() {
                               disabled={userActionLoading === `delete-${u.id}`}
                               title="Delete user"
                             >
-                              {userActionLoading === `delete-${u.id}` ? "..." : <RiDeleteBinLine />}
+                              {userActionLoading === `delete-${u.id}` ? <span className="btn-spinner" /> : <RiDeleteBinLine />}
                             </button>
                           )}
                         </td>

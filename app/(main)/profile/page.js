@@ -185,7 +185,7 @@ export default function ProfilePage() {
             {profileMsg && <p style={{ color: 'var(--success)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(34,197,94,0.08)', borderRadius: 10 }}>✅ {profileMsg}</p>}
             {profileErr && <p style={{ color: 'var(--error)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(239,68,68,0.08)', borderRadius: 10 }}>❌ {profileErr}</p>}
             <button type="submit" className="btn btn-primary" style={{ padding: '14px 28px', fontSize: 14, marginTop: 4 }} disabled={profileLoading}>
-              {profileLoading ? 'Saving...' : <><RiCheckLine /> Save Changes</>}
+              {profileLoading ? <><span className="btn-spinner" /> Saving…</> : <><RiCheckLine /> Save Changes</>}
             </button>
           </form>
         </div>
@@ -217,7 +217,7 @@ export default function ProfilePage() {
             {passwordMsg && <p style={{ color: 'var(--success)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(34,197,94,0.08)', borderRadius: 10 }}>✅ {passwordMsg}</p>}
             {passwordErr && <p style={{ color: 'var(--error)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(239,68,68,0.08)', borderRadius: 10 }}>❌ {passwordErr}</p>}
             <button type="submit" className="btn btn-primary" style={{ padding: '14px 28px', fontSize: 14, marginTop: 4 }} disabled={passwordLoading}>
-              {passwordLoading ? 'Updating...' : <><RiLockLine /> Change Password</>}
+              {passwordLoading ? <><span className="btn-spinner" /> Updating…</> : <><RiLockLine /> Change Password</>}
             </button>
           </form>
         </div>

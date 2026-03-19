@@ -393,8 +393,9 @@ export default function LoansPage() {
                       disabled={borrowAgainLoading[loan.id]}
                       style={{ fontSize: 12, color: 'var(--accent)', borderColor: 'rgba(99,102,241,0.4)' }}
                     >
-                      <RiRefreshLine style={{ marginRight: 4 }} />
-                      {borrowAgainLoading[loan.id] ? 'Loading...' : 'Borrow Again'}
+                      {borrowAgainLoading[loan.id]
+                        ? <><span className="btn-spinner" /> Loading…</>
+                        : <><RiRefreshLine style={{ marginRight: 4 }} />Borrow Again</>}
                     </button>
                   </div>
                 )}

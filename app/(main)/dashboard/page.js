@@ -1116,7 +1116,7 @@ export default function DashboardPage() {
                     {a.description}
                   </div>
                   <div className="activity-time">
-                    {new Date(a.created_at + "Z").toLocaleString()}
+                    {new Date(a.created_at).toLocaleString()}
                   </div>
                 </div>
               </div>
