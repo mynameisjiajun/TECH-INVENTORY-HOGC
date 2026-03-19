@@ -594,22 +594,23 @@ export async function GET() {
   await waitForSync();
   const db = getDb();
 
-  // Inventory stats from SQLite (still the source of truth)
+  // Inventory stats from SQLite
   const totalItems = db.prepare("SELECT SUM(quantity_spare) as total FROM storage_items").get().total || 0;
   const totalCurrent = db.prepare("SELECT SUM(current) as total FROM storage_items").get().total || 0;
   const deployedItems = db.prepare("SELECT SUM(quantity) as total FROM deployed_items").get().total || 0;
   const lowStock = db.prepare("SELECT COUNT(*) as count FROM storage_items WHERE current <= 2 AND quantity_spare > 0").get().count;
 
-  // Loan stats from Supabase
+  // Loan stats from Supabase (authoritative — not derived from ephemeral SQLite)
   const { count: pendingRequests } = await supabase
     .from("loan_requests")
     .select("*", { count: "exact", head: true })
     .eq("status", "pending");
 
+  // totalLoaned calculated later from approved loan_items (accurate across cold starts)
   const stats = {
     totalItems,
     totalCurrent,
-    totalLoaned: totalItems - totalCurrent,
+    totalLoaned: 0, // placeholder — filled in below after loan items are fetched
     pendingRequests: pendingRequests || 0,
     lowStock,
     deployedItems,
@@ -643,6 +644,14 @@ export async function GET() {
       itemsByLoan.get(item.loan_request_id).push({ ...item, item: item.item_name });
     }
     for (const loan of formattedLoans) loan.items = itemsByLoan.get(loan.id) || [];
+
+    // Compute totalLoaned from Supabase approved loan items (accurate across Vercel instances)
+    stats.totalLoaned = (allItems || [])
+      .filter((item) => {
+        const loan = formattedLoans.find((l) => l.id === item.loan_request_id);
+        return loan?.status === "approved";
+      })
+      .reduce((sum, item) => sum + item.quantity, 0);
   }
 
   // Due date warnings
