@@ -18,6 +18,8 @@ export default function ProfilePage() {
   const [passwordMsg, setPasswordMsg] = useState('');
   const [profileErr, setProfileErr] = useState('');
   const [passwordErr, setPasswordErr] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -43,6 +45,7 @@ export default function ProfilePage() {
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setProfileMsg(''); setProfileErr('');
+    setProfileLoading(true);
     try {
       const res = await fetch('/api/profile', {
         method: 'POST',
@@ -58,6 +61,8 @@ export default function ProfilePage() {
       }
     } catch (err) {
       setProfileErr('Network error — could not update profile');
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -68,6 +73,7 @@ export default function ProfilePage() {
       setPasswordErr('Passwords do not match');
       return;
     }
+    setPasswordLoading(true);
     try {
       const res = await fetch('/api/profile', {
         method: 'POST',
@@ -83,6 +89,8 @@ export default function ProfilePage() {
       }
     } catch (err) {
       setPasswordErr('Network error — could not change password');
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -176,8 +184,8 @@ export default function ProfilePage() {
 
             {profileMsg && <p style={{ color: 'var(--success)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(34,197,94,0.08)', borderRadius: 10 }}>✅ {profileMsg}</p>}
             {profileErr && <p style={{ color: 'var(--error)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(239,68,68,0.08)', borderRadius: 10 }}>❌ {profileErr}</p>}
-            <button type="submit" className="btn btn-primary" style={{ padding: '14px 28px', fontSize: 14, marginTop: 4 }}>
-              <RiCheckLine /> Save Changes
+            <button type="submit" className="btn btn-primary" style={{ padding: '14px 28px', fontSize: 14, marginTop: 4 }} disabled={profileLoading}>
+              {profileLoading ? 'Saving...' : <><RiCheckLine /> Save Changes</>}
             </button>
           </form>
         </div>
@@ -208,8 +216,8 @@ export default function ProfilePage() {
             </div>
             {passwordMsg && <p style={{ color: 'var(--success)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(34,197,94,0.08)', borderRadius: 10 }}>✅ {passwordMsg}</p>}
             {passwordErr && <p style={{ color: 'var(--error)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(239,68,68,0.08)', borderRadius: 10 }}>❌ {passwordErr}</p>}
-            <button type="submit" className="btn btn-primary" style={{ padding: '14px 28px', fontSize: 14, marginTop: 4 }}>
-              <RiLockLine /> Change Password
+            <button type="submit" className="btn btn-primary" style={{ padding: '14px 28px', fontSize: 14, marginTop: 4 }} disabled={passwordLoading}>
+              {passwordLoading ? 'Updating...' : <><RiLockLine /> Change Password</>}
             </button>
           </form>
         </div>

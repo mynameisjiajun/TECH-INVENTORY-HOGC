@@ -78,36 +78,47 @@ export default function Navbar() {
     fetchNotifs();
 
     // Realtime: refetch when a notification is inserted for this user
-    const channel = supabaseClient
-      .channel(`notifications-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => { fetchNotifs(); }
-      )
-      .subscribe();
+    let channel;
+    try {
+      channel = supabaseClient
+        .channel(`notifications-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => { fetchNotifs(); }
+        )
+        .subscribe((_status, err) => {
+          if (err) console.warn("Notification Realtime unavailable, using polling:", err.message);
+        });
+    } catch (err) {
+      console.warn("Notification Realtime not available on this device:", err.message);
+    }
 
     // Fallback poll every 60s in case Realtime drops
     const fallback = setInterval(fetchNotifs, 60000);
 
     return () => {
-      supabaseClient.removeChannel(channel);
+      if (channel) supabaseClient.removeChannel(channel);
       clearInterval(fallback);
     };
   }, [user]);
 
   useEffect(() => {
-    const handleClick = (e) => {
+    const handleClose = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target))
         setShowNotifs(false);
     };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("mousedown", handleClose);
+    document.addEventListener("touchstart", handleClose, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleClose);
+      document.removeEventListener("touchstart", handleClose);
+    };
   }, []);
 
   useEffect(() => {
@@ -188,7 +199,11 @@ export default function Navbar() {
               <button
                 aria-label="Notifications"
                 className="notification-btn"
-                onClick={() => setShowNotifs(!showNotifs)}
+                onClick={() => {
+                  const opening = !showNotifs;
+                  setShowNotifs(opening);
+                  if (opening && unreadCount > 0) markAllRead();
+                }}
               >
                 <RiNotification3Line />
                 {unreadCount > 0 && (

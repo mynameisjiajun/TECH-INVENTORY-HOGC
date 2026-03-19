@@ -164,6 +164,133 @@ export async function POST(request) {
       return NextResponse.json({ message: `${approvedLoans.length} loan(s) returned to stock` });
     }
 
+    // ===== BULK APPROVE =====
+    if (action === "bulk_approve") {
+      const { loan_ids } = body;
+      if (!loan_ids || !Array.isArray(loan_ids) || loan_ids.length === 0) {
+        return NextResponse.json({ error: "No loans selected" }, { status: 400 });
+      }
+
+      // Batch fetch all pending loans
+      const { data: pendingLoans } = await supabase
+        .from("loan_requests")
+        .select("*")
+        .in("id", loan_ids)
+        .eq("status", "pending");
+
+      if (!pendingLoans || pendingLoans.length === 0) {
+        return NextResponse.json({ error: "No pending loans found in selection" }, { status: 400 });
+      }
+
+      const validLoanIds = pendingLoans.map((l) => l.id);
+
+      // Batch fetch all loan items
+      const { data: allApproveItems } = await supabase
+        .from("loan_items")
+        .select("*")
+        .in("loan_request_id", validLoanIds);
+
+      const itemsByLoan = new Map();
+      for (const item of allApproveItems || []) {
+        if (!itemsByLoan.has(item.loan_request_id)) itemsByLoan.set(item.loan_request_id, []);
+        itemsByLoan.get(item.loan_request_id).push(item);
+      }
+
+      // Validate stock and apply deductions
+      const sheetChangesMap = new Map();
+      const deployedRows = [];
+      for (const loan of pendingLoans) {
+        for (const li of itemsByLoan.get(loan.id) || []) {
+          const si = li.sheet_row
+            ? db.prepare("SELECT * FROM storage_items WHERE sheet_row = ?").get(li.sheet_row)
+            : db.prepare("SELECT * FROM storage_items WHERE id = ?").get(li.item_id);
+
+          if (!si) throw new Error(`Item not found: ${li.item_name}`);
+          if (si.current < li.quantity) {
+            throw new Error(`Not enough stock for "${si.item}" (loan #${loan.id}). Available: ${si.current}`);
+          }
+
+          const result = db
+            .prepare("UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?")
+            .run(li.quantity, si.id, li.quantity);
+          if (result.changes === 0) throw new Error(`Stock conflict for "${si.item}" — please retry`);
+
+          sheetChangesMap.set(li.sheet_row, (sheetChangesMap.get(li.sheet_row) || 0) - li.quantity);
+
+          if (loan.loan_type === "permanent") {
+            const deployedRow = {
+              item: si.item, type: si.type, brand: si.brand, model: si.model,
+              quantity: li.quantity,
+              location: loan.location || si.location,
+              allocation: loan.department || loan.purpose,
+              status: "DEPLOYED",
+              remarks: `Perm loan #${loan.id} — ${loan.purpose}`,
+            };
+            db.prepare(
+              `INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).run(
+              deployedRow.item, deployedRow.type, deployedRow.brand, deployedRow.model,
+              deployedRow.quantity, deployedRow.location, deployedRow.allocation,
+              deployedRow.status, deployedRow.remarks,
+            );
+            deployedRows.push(deployedRow);
+          }
+        }
+      }
+
+      // Batch update loan statuses
+      await supabase
+        .from("loan_requests")
+        .update({ status: "approved", admin_notes: "Bulk approved", updated_at: new Date().toISOString() })
+        .in("id", validLoanIds);
+
+      // Batch fetch user telegram data
+      const uniqueUserIds = [...new Set(pendingLoans.map((l) => l.user_id))];
+      const { data: bulkApproveUsers } = await supabase
+        .from("users")
+        .select("id, telegram_chat_id")
+        .in("id", uniqueUserIds);
+      const approveUserMap = new Map((bulkApproveUsers || []).map((u) => [u.id, u]));
+
+      // Batch insert notifications
+      await supabase.from("notifications").insert(
+        pendingLoans.map((loan) => ({
+          user_id: loan.user_id,
+          message: `Your ${loan.loan_type} loan request #${loan.id} has been approved!`,
+          link: "/loans",
+        }))
+      );
+
+      // Batch insert audit logs
+      await supabase.from("audit_log").insert(
+        pendingLoans.map((loan) => ({
+          user_id: user.id,
+          action: "bulk_approve",
+          target_type: "loan",
+          target_id: loan.id,
+          details: `Approved via bulk action.`,
+        }))
+      );
+
+      const sheetChanges = [...sheetChangesMap.entries()].map(([sheetRow, delta]) => ({ sheetRow, delta }));
+      await syncStockToSheets(sheetChanges);
+      if (deployedRows.length > 0) await syncDeployedToSheets(deployedRows);
+
+      // Fire-and-forget Telegram notifications
+      for (const loan of pendingLoans) {
+        const u = approveUserMap.get(loan.user_id);
+        sendTelegramMessage(
+          loan.user_id,
+          `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan.id} has been approved!`,
+          u?.telegram_chat_id,
+        ).catch(() => {});
+      }
+
+      invalidateAll();
+      return NextResponse.json({ message: `${pendingLoans.length} loan(s) approved` });
+    }
+
     // ===== SINGLE LOAN ACTIONS =====
     const { loan_id, admin_notes } = body;
     const { data: loan } = await supabase

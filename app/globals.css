@@ -1205,9 +1205,10 @@ tr:last-child td {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
-  /* Tighter page padding */
+  /* Tighter page padding + space for fixed bottom nav */
   .page-container {
     padding: 12px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Smaller page header */
@@ -1432,10 +1433,11 @@ tr:last-child td {
     flex-wrap: wrap;
   }
 
-  /* Notification dropdown mobile */
+  /* Notification dropdown mobile — keep it fully on-screen */
   .notification-dropdown {
-    width: 300px;
-    right: -40px;
+    width: min(300px, calc(100vw - 20px));
+    right: 0;
+    left: auto;
   }
   .notification-item p {
     font-size: 12px;
@@ -1507,8 +1509,8 @@ tr:last-child td {
 
   .mobile-nav .nav-link {
     flex-direction: column;
-    font-size: 8px;
-    gap: 1px;
+    font-size: 10px;
+    gap: 2px;
     padding: 4px 6px;
   }
 

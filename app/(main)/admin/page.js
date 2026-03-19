@@ -1,7 +1,7 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabaseClient } from "@/lib/db/supabaseClient";
 import { useToast } from "@/lib/context/ToastContext";
 import Navbar from "@/components/Navbar";
@@ -146,6 +146,10 @@ export default function AdminPage() {
   const [adminNotes, setAdminNotes] = useState({});
   const [selectedLoans, setSelectedLoans] = useState(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [selectedPendingLoans, setSelectedPendingLoans] = useState(new Set());
+  const [bulkApproveLoading, setBulkApproveLoading] = useState(false);
+  const [userActionLoading, setUserActionLoading] = useState(null);
+  const [inviteCodeLoading, setInviteCodeLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("loans");
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditFetching, setAuditFetching] = useState(false);
@@ -314,20 +318,27 @@ export default function AdminPage() {
   useEffect(() => {
     if (user?.role !== "admin" || activeTab !== "loans") return;
 
-    const channel = supabaseClient
-      .channel("admin-loan-requests")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "loan_requests" },
-        () => { fetchLoans(); }
-      )
-      .subscribe();
+    let channel;
+    try {
+      channel = supabaseClient
+        .channel("admin-loan-requests")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "loan_requests" },
+          () => { fetchLoans(); }
+        )
+        .subscribe((_status, err) => {
+          if (err) console.warn('Realtime unavailable, using polling fallback:', err.message);
+        });
+    } catch (err) {
+      console.warn('Realtime not available on this device, using polling fallback:', err.message);
+    }
 
     // Fallback poll every 60s in case Realtime drops
     const fallback = setInterval(fetchLoans, 60000);
 
     return () => {
-      supabaseClient.removeChannel(channel);
+      if (channel) supabaseClient.removeChannel(channel);
       clearInterval(fallback);
     };
   }, [user, activeTab, fetchLoans]);
@@ -375,6 +386,34 @@ export default function AdminPage() {
     }
   };
 
+  const handleBulkApprove = async () => {
+    if (selectedPendingLoans.size === 0) return;
+    setBulkApproveLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "bulk_approve",
+          loan_ids: Array.from(selectedPendingLoans),
+        }),
+      });
+      if (res.ok) {
+        setSelectedPendingLoans(new Set());
+        fetchLoans();
+        toast.success(`${selectedPendingLoans.size} loan(s) approved successfully`);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || `Bulk approve failed (${res.status})`);
+      }
+    } catch {
+      toast.error("Network error — bulk approve could not be completed");
+    } finally {
+      setBulkApproveLoading(false);
+    }
+  };
+
   const handleBulkReturn = async () => {
     if (selectedLoans.size === 0) return;
     setBulkLoading(true);
@@ -419,51 +458,64 @@ export default function AdminPage() {
     setSelectedLoans(new Set(ids));
   };
 
+  const toggleSelectPending = (id) => {
+    setSelectedPendingLoans((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllPending = () => {
+    const ids = loans.filter((l) => l.status === "pending").map((l) => l.id);
+    setSelectedPendingLoans(new Set(ids));
+  };
+
   const handleResetPassword = async (userId) => {
     const pw = resetPasswords[userId];
     if (!pw || pw.length < 6) {
       setUserMsg("Password must be at least 6 characters");
       return;
     }
+    setUserActionLoading(`reset-${userId}`);
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "reset_password",
-          user_id: userId,
-          new_password: pw,
-        }),
+        body: JSON.stringify({ action: "reset_password", user_id: userId, new_password: pw }),
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
       if (res.ok) setResetPasswords((p) => ({ ...p, [userId]: "" }));
-    } catch (err) {
+    } catch {
       setUserMsg("Network error — could not reset password");
+    } finally {
+      setUserActionLoading(null);
     }
   };
 
   const handleChangeRole = async (userId, newRole) => {
+    setUserActionLoading(`role-${userId}`);
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "change_role",
-          user_id: userId,
-          new_role: newRole,
-        }),
+        body: JSON.stringify({ action: "change_role", user_id: userId, new_role: newRole }),
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
       if (res.ok) fetchUsers();
-    } catch (err) {
+    } catch {
       setUserMsg("Network error — could not change role");
+    } finally {
+      setUserActionLoading(null);
     }
   };
 
   const handleDeleteUser = async (userId, username) => {
     if (!confirm(`Delete user @${username}? This cannot be undone.`)) return;
+    setUserActionLoading(`delete-${userId}`);
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
@@ -473,8 +525,10 @@ export default function AdminPage() {
       const data = await res.json();
       setUserMsg(data.message || data.error);
       if (res.ok) fetchUsers();
-    } catch (err) {
+    } catch {
       setUserMsg("Network error — could not delete user");
+    } finally {
+      setUserActionLoading(null);
     }
   };
 
@@ -483,20 +537,20 @@ export default function AdminPage() {
       setUserMsg("Invite code must be at least 3 characters");
       return;
     }
+    setInviteCodeLoading(true);
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "set_invite_code",
-          invite_code: inviteCodeInput.trim(),
-        }),
+        body: JSON.stringify({ action: "set_invite_code", invite_code: inviteCodeInput.trim() }),
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
       if (res.ok) setInviteCode(inviteCodeInput.trim());
-    } catch (err) {
+    } catch {
       setUserMsg("Network error — could not update invite code");
+    } finally {
+      setInviteCodeLoading(false);
     }
   };
 
@@ -662,6 +716,36 @@ export default function AdminPage() {
               ))}
             </div>
 
+            {statusFilter === "pending" && loans.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                  padding: "12px 16px",
+                  background: "rgba(34,197,94,0.05)",
+                  borderRadius: 12,
+                  border: "1px solid var(--border)",
+                  marginBottom: 16,
+                }}
+              >
+                <button className="btn btn-sm btn-outline" onClick={selectAllPending}>Select All</button>
+                <button className="btn btn-sm btn-outline" onClick={() => setSelectedPendingLoans(new Set())}>Clear</button>
+                <span style={{ flex: 1, fontSize: 13, color: "var(--text-secondary)" }}>
+                  {selectedPendingLoans.size} selected
+                </span>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={handleBulkApprove}
+                  disabled={selectedPendingLoans.size === 0 || bulkApproveLoading}
+                  style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)" }}
+                >
+                  <RiCheckLine />{" "}
+                  {bulkApproveLoading ? "Approving..." : `Bulk Approve (${selectedPendingLoans.size})`}
+                </button>
+              </div>
+            )}
+
             {statusFilter === "approved" &&
               loans.some((l) => l.loan_type === "temporary") && (
                 <div
@@ -787,6 +871,19 @@ export default function AdminPage() {
                         #{loan.id} ·{" "}
                         {new Date(loan.created_at).toLocaleDateString()}
                       </span>
+                      {statusFilter === "pending" && (
+                        <label
+                          style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)" }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedPendingLoans.has(loan.id)}
+                            onChange={() => toggleSelectPending(loan.id)}
+                            style={{ width: 18, height: 18, accentColor: "#22c55e", cursor: "pointer" }}
+                          />
+                          Select
+                        </label>
+                      )}
                       {statusFilter === "approved" &&
                         loan.loan_type === "temporary" && (
                           <label
@@ -850,14 +947,14 @@ export default function AdminPage() {
                           onClick={() => handleAction(loan.id, "approve")}
                           disabled={actionLoading === loan.id}
                         >
-                          <RiCheckLine /> Approve
+                          {actionLoading === loan.id ? "..." : <><RiCheckLine /> Approve</>}
                         </button>
                         <button
                           className="btn btn-danger btn-sm"
                           onClick={() => handleAction(loan.id, "reject")}
                           disabled={actionLoading === loan.id}
                         >
-                          <RiCloseLine /> Reject
+                          {actionLoading === loan.id ? "..." : <><RiCloseLine /> Reject</>}
                         </button>
                       </div>
                     </div>
@@ -870,7 +967,7 @@ export default function AdminPage() {
                           onClick={() => handleAction(loan.id, "return")}
                           disabled={actionLoading === loan.id}
                         >
-                          <RiArrowGoBackLine /> Mark as Returned
+                          {actionLoading === loan.id ? "Returning..." : <><RiArrowGoBackLine /> Mark as Returned</>}
                         </button>
                       </div>
                     )}
@@ -1013,9 +1110,9 @@ export default function AdminPage() {
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={handleUpdateInviteCode}
-                  disabled={inviteCodeInput.trim() === inviteCode}
+                  disabled={inviteCodeInput.trim() === inviteCode || inviteCodeLoading}
                 >
-                  Update
+                  {inviteCodeLoading ? "Saving..." : "Update"}
                 </button>
               </div>
             </div>
@@ -1185,9 +1282,10 @@ export default function AdminPage() {
                             <button
                               className="btn btn-sm btn-outline"
                               onClick={() => handleResetPassword(u.id)}
+                              disabled={userActionLoading === `reset-${u.id}`}
                               title="Reset password"
                             >
-                              <RiLockLine />
+                              {userActionLoading === `reset-${u.id}` ? "..." : <RiLockLine />}
                             </button>
                           </div>
                         </td>
@@ -1196,9 +1294,10 @@ export default function AdminPage() {
                             <button
                               className="btn btn-sm btn-danger"
                               onClick={() => handleDeleteUser(u.id, u.username)}
+                              disabled={userActionLoading === `delete-${u.id}`}
                               title="Delete user"
                             >
-                              <RiDeleteBinLine />
+                              {userActionLoading === `delete-${u.id}` ? "..." : <RiDeleteBinLine />}
                             </button>
                           )}
                         </td>

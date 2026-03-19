@@ -131,16 +131,22 @@ export default function DashboardPage() {
       ? { event: "*", schema: "public", table: "loan_requests", filter }
       : { event: "*", schema: "public", table: "loan_requests" };
 
-    const channel = supabaseClient
-      .channel(`dashboard-${user.id}`)
-      .on("postgres_changes", channelOpts, () => { fetch(); })
-      .subscribe();
-
-    channelRef.current = channel;
+    let channel;
+    try {
+      channel = supabaseClient
+        .channel(`dashboard-${user.id}`)
+        .on("postgres_changes", channelOpts, () => { fetch(); })
+        .subscribe((_status, err) => {
+          if (err) console.warn('Realtime unavailable, using polling fallback:', err.message);
+        });
+      channelRef.current = channel;
+    } catch (err) {
+      console.warn('Realtime not available on this device, using polling fallback:', err.message);
+    }
     const fallback = setInterval(fetch, 60000);
 
     return () => {
-      supabaseClient.removeChannel(channel);
+      if (channel) supabaseClient.removeChannel(channel);
       channelRef.current = null;
       clearInterval(fallback);
     };
@@ -656,11 +662,15 @@ export default function DashboardPage() {
                         </div>
                       ))}
                     </div>
-                    {calendarData.weeks.map((week, wi) => (
+                    {calendarData.weeks.map((week, wi) => {
+                      const barsInWeek = calendarData.loanBars.filter(b => b.week === wi).length;
+                      const rowHeight = Math.max(90, 28 + barsInWeek * 24 + 8);
+                      return (
                       <div
                         key={wi}
-                        style={{ position: "relative", minHeight: 90 }}
+                        style={{ position: "relative", minHeight: rowHeight }}
                       >
+
                         <div
                           style={{
                             display: "grid",
@@ -757,7 +767,8 @@ export default function DashboardPage() {
                             );
                           })}
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
 
@@ -1161,8 +1172,11 @@ export default function DashboardPage() {
               </div>
 
               {/* Week rows with loan bars */}
-              {calendarData.weeks.map((week, wi) => (
-                <div key={wi} style={{ position: "relative", minHeight: 90 }}>
+              {calendarData.weeks.map((week, wi) => {
+                const barsInWeek = calendarData.loanBars.filter(b => b.week === wi).length;
+                const rowHeight = Math.max(90, 28 + barsInWeek * 24 + 8);
+                return (
+                <div key={wi} style={{ position: "relative", minHeight: rowHeight }}>
                   {/* Date cells */}
                   <div
                     style={{
@@ -1266,7 +1280,8 @@ export default function DashboardPage() {
                       );
                     })}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

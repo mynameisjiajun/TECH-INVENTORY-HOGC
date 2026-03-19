@@ -3,13 +3,14 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useToast } from '@/lib/context/ToastContext';
+import { useCart } from '@/lib/context/CartContext';
 import Navbar from '@/components/Navbar';
 import CartPanel from '@/components/CartPanel';
 import { supabaseClient } from '@/lib/db/supabaseClient';
 import {
   RiTimeLine, RiCheckLine, RiCloseLine, RiArrowGoBackLine,
   RiSearchLine, RiFilterLine, RiCameraLine, RiAlertLine,
-  RiCalendarLine, RiShoppingBag3Line,
+  RiCalendarLine, RiShoppingBag3Line, RiRefreshLine,
 } from 'react-icons/ri';
 
 export default function LoansPage() {
@@ -22,7 +23,9 @@ export default function LoansPage() {
   const [dateTo, setDateTo] = useState('');
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState('');
+  const [borrowAgainLoading, setBorrowAgainLoading] = useState({});
   const toast = useToast();
+  const { addItem, setIsOpen } = useCart();
   const channelRef = useRef(null);
 
   const [returnModalLoan, setReturnModalLoan] = useState(null);
@@ -87,6 +90,35 @@ export default function LoansPage() {
     }
   };
 
+  const handleBorrowAgain = async (loan) => {
+    setBorrowAgainLoading((p) => ({ ...p, [loan.id]: true }));
+    try {
+      const res = await fetch('/api/items?tab=storage');
+      const data = await res.json();
+      const storageItems = data.items || [];
+      let added = 0;
+      for (const loanItem of loan.items) {
+        const si = loanItem.sheet_row
+          ? storageItems.find((s) => s.sheet_row === loanItem.sheet_row)
+          : storageItems.find((s) => s.id === loanItem.item_id);
+        if (si && si.current > 0) {
+          addItem({ id: si.id, item: si.item, type: si.type, brand: si.brand, current: si.current });
+          added++;
+        }
+      }
+      if (added > 0) {
+        setIsOpen(true);
+        toast.success(`${added} item(s) added to cart`);
+      } else {
+        toast.error('No items are currently available in stock');
+      }
+    } catch {
+      toast.error('Could not load items — please try again');
+    } finally {
+      setBorrowAgainLoading((p) => ({ ...p, [loan.id]: false }));
+    }
+  };
+
   const fetchLoans = useCallback(async () => {
     if (!user) return;
     setFetching(true);
@@ -121,18 +153,27 @@ export default function LoansPage() {
     if (!user) return;
     if (channelRef.current) supabaseClient.removeChannel(channelRef.current);
 
-    const channel = supabaseClient
-      .channel(`loans-user-${user.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'loan_requests',
-        filter: `user_id=eq.${user.id}`,
-      }, () => { fetchLoans(); })
-      .subscribe();
-
-    channelRef.current = channel;
-    return () => { supabaseClient.removeChannel(channel); channelRef.current = null; };
+    let channel;
+    try {
+      channel = supabaseClient
+        .channel(`loans-user-${user.id}`)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'loan_requests',
+          filter: `user_id=eq.${user.id}`,
+        }, () => { fetchLoans(); })
+        .subscribe((_status, err) => {
+          if (err) console.warn('Realtime unavailable, using polling fallback:', err.message);
+        });
+      channelRef.current = channel;
+    } catch (err) {
+      console.warn('Realtime not available on this device, using polling fallback:', err.message);
+    }
+    return () => {
+      if (channel) supabaseClient.removeChannel(channel);
+      channelRef.current = null;
+    };
   }, [user, fetchLoans]);
 
   if (loading || !user) return <div className="loading-spinner"><div className="spinner" /></div>;
@@ -342,6 +383,19 @@ export default function LoansPage() {
                     <a href={loan.return_photo_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <RiCameraLine /> View Return Photo
                     </a>
+                  </div>
+                )}
+                {(loan.status === 'returned' || loan.status === 'rejected') && (
+                  <div style={{ marginTop: 12 }}>
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={() => handleBorrowAgain(loan)}
+                      disabled={borrowAgainLoading[loan.id]}
+                      style={{ fontSize: 12, color: 'var(--accent)', borderColor: 'rgba(99,102,241,0.4)' }}
+                    >
+                      <RiRefreshLine style={{ marginRight: 4 }} />
+                      {borrowAgainLoading[loan.id] ? 'Loading...' : 'Borrow Again'}
+                    </button>
                   </div>
                 )}
               </div>
