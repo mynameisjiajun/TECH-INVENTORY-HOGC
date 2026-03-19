@@ -1227,6 +1227,7 @@ tr:last-child td {
   /* Navbar compact */
   .navbar {
     padding: 0 12px;
+    padding-top: env(safe-area-inset-top);
   }
   .navbar-links {
     display: none;
