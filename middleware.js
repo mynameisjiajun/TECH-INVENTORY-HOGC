@@ -61,7 +61,6 @@ export default function middleware(request) {
 }
 
 export const config = {
-  runtime: "experimental-edge",
   matcher: [
     "/dashboard/:path*",
     "/inventory/:path*",

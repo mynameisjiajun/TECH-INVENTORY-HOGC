@@ -6,7 +6,7 @@ import {
   getTokenCookieOptions,
 } from "@/lib/utils/auth";
 import { sendWelcomeEmail } from "@/lib/services/email";
-import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
+import { resetRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
@@ -14,16 +14,6 @@ export async function POST(request) {
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       "unknown";
-    const { limited, retryAfterSeconds } = checkRateLimit(ip);
-    if (limited) {
-      return NextResponse.json(
-        {
-          error: `Too many attempts. Please try again in ${Math.ceil(retryAfterSeconds / 60)} minutes.`,
-        },
-        { status: 429 },
-      );
-    }
-
     const { action, username, password, display_name, invite_code, email, telegram_handle } =
       await request.json();
 
