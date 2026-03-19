@@ -16,6 +16,7 @@ import {
   RiLockLine,
   RiDeleteBinLine,
   RiKeyLine,
+  RiTimeLine,
   RiBookmarkLine,
   RiAddLine,
   RiDragMove2Fill,
@@ -160,6 +161,9 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [inviteCodeInput, setInviteCodeInput] = useState("");
+  const [reminderTimes, setReminderTimes] = useState({ weekday: "09:00", saturday: "10:00", sunday: "14:00" });
+  const [reminderTimesInput, setReminderTimesInput] = useState({ weekday: "09:00", saturday: "10:00", sunday: "14:00" });
+  const [reminderTimesLoading, setReminderTimesLoading] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [templatesFetching, setTemplatesFetching] = useState(false);
   const [templateForm, setTemplateForm] = useState({
@@ -226,6 +230,10 @@ export default function AdminPage() {
         if (data.invite_code) {
           setInviteCode(data.invite_code);
           setInviteCodeInput(data.invite_code);
+        }
+        if (data.reminder_times) {
+          setReminderTimes(data.reminder_times);
+          setReminderTimesInput(data.reminder_times);
         }
       } else {
         const data = await res.json().catch(() => ({}));
@@ -551,6 +559,24 @@ export default function AdminPage() {
       setUserMsg("Network error — could not update invite code");
     } finally {
       setInviteCodeLoading(false);
+    }
+  };
+
+  const handleUpdateReminderTimes = async () => {
+    setReminderTimesLoading(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_reminder_times", reminder_times: reminderTimesInput }),
+      });
+      const data = await res.json();
+      setUserMsg(data.message || data.error);
+      if (res.ok) setReminderTimes(reminderTimesInput);
+    } catch {
+      setUserMsg("Network error — could not update reminder times");
+    } finally {
+      setReminderTimesLoading(false);
     }
   };
 
@@ -1116,6 +1142,63 @@ export default function AdminPage() {
                   {inviteCodeLoading ? <><span className="btn-spinner" /> Saving…</> : "Update"}
                 </button>
               </div>
+            </div>
+
+            {/* Reminder Times */}
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 20,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>
+                <RiTimeLine style={{ verticalAlign: "middle", marginRight: 6 }} />
+                Due-Soon Reminder Times
+              </div>
+              <p style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 12 }}>
+                Set the time (SGT) to send due-tomorrow reminders. Overdue alerts fire regardless of this setting. The cron job should run hourly.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 12 }}>
+                {[
+                  { key: "weekday", label: "Weekdays (Mon–Fri)" },
+                  { key: "saturday", label: "Saturday" },
+                  { key: "sunday", label: "Sunday" },
+                ].map(({ key, label }) => (
+                  <div key={key}>
+                    <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+                      {label}
+                    </label>
+                    <input
+                      type="time"
+                      value={reminderTimesInput[key]}
+                      onChange={(e) =>
+                        setReminderTimesInput((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "7px 10px",
+                        background: "var(--bg-secondary)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        color: "var(--text-primary)",
+                        fontSize: 13,
+                        boxSizing: "border-box",
+                        colorScheme: "dark",
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={handleUpdateReminderTimes}
+                disabled={reminderTimesLoading}
+              >
+                {reminderTimesLoading ? <><span className="btn-spinner" /> Saving…</> : "Save Times"}
+              </button>
             </div>
 
             {usersFetching ? (

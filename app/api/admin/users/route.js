@@ -9,19 +9,28 @@ export async function GET() {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  const [{ data: users }, { data: setting }] = await Promise.all([
+  const [{ data: users }, { data: settings }] = await Promise.all([
     supabase
       .from("users")
       .select("id, username, display_name, role, email, telegram_chat_id, created_at")
       .order("created_at", { ascending: false }),
     supabase
       .from("app_settings")
-      .select("value")
-      .eq("key", "invite_code")
-      .single(),
+      .select("key, value")
+      .in("key", ["invite_code", "reminder_weekday", "reminder_saturday", "reminder_sunday"]),
   ]);
 
-  return NextResponse.json({ users: users || [], invite_code: setting?.value || "" });
+  const settingsMap = Object.fromEntries((settings || []).map((s) => [s.key, s.value]));
+
+  return NextResponse.json({
+    users: users || [],
+    invite_code: settingsMap.invite_code || "",
+    reminder_times: {
+      weekday: settingsMap.reminder_weekday || "09:00",
+      saturday: settingsMap.reminder_saturday || "10:00",
+      sunday: settingsMap.reminder_sunday || "14:00",
+    },
+  });
 }
 
 // POST: admin user management actions
@@ -32,7 +41,7 @@ export async function POST(request) {
   }
 
   const body = await request.json();
-  const { action, user_id, new_password, new_role, display_name, invite_code } = body;
+  const { action, user_id, new_password, new_role, display_name, invite_code, reminder_times } = body;
 
   if (action === "reset_password") {
     if (!user_id || !new_password) {
@@ -167,6 +176,33 @@ export async function POST(request) {
     });
 
     return NextResponse.json({ message: "Invite code updated" });
+  }
+
+  if (action === "set_reminder_times") {
+    if (!reminder_times || typeof reminder_times !== "object") {
+      return NextResponse.json({ error: "Invalid reminder times" }, { status: 400 });
+    }
+    const timeRegex = /^\d{2}:\d{2}$/;
+    const { weekday, saturday, sunday } = reminder_times;
+    if (!timeRegex.test(weekday) || !timeRegex.test(saturday) || !timeRegex.test(sunday)) {
+      return NextResponse.json({ error: "Times must be in HH:MM format" }, { status: 400 });
+    }
+
+    await supabase.from("app_settings").upsert([
+      { key: "reminder_weekday", value: weekday },
+      { key: "reminder_saturday", value: saturday },
+      { key: "reminder_sunday", value: sunday },
+    ]);
+
+    await supabase.from("audit_log").insert({
+      user_id: user.id,
+      action: "set_reminder_times",
+      target_type: "settings",
+      target_id: 0,
+      details: `Set reminder times — Weekday: ${weekday}, Saturday: ${saturday}, Sunday: ${sunday} (SGT)`,
+    });
+
+    return NextResponse.json({ message: "Reminder times updated" });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

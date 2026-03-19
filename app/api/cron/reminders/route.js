@@ -16,12 +16,38 @@ export async function GET(request) {
   }
 
   const now = new Date();
+
+  // Determine if due-soon reminders should fire based on configured SGT time window
+  // Overdue alerts are always sent regardless of time.
+  const sgt = new Date(now.getTime() + 8 * 60 * 60 * 1000); // UTC+8
+  const sgtDay = sgt.getUTCDay(); // 0=Sun, 1-5=Mon-Fri, 6=Sat
+  const dayKey = sgtDay === 0 ? "reminder_sunday" : sgtDay === 6 ? "reminder_saturday" : "reminder_weekday";
+
+  const { data: reminderSettings } = await supabase
+    .from("app_settings")
+    .select("key, value")
+    .in("key", ["reminder_weekday", "reminder_saturday", "reminder_sunday"]);
+
+  const settingsMap = Object.fromEntries((reminderSettings || []).map((s) => [s.key, s.value]));
+  const configuredTime = settingsMap[dayKey] || null;
+
+  let sendDueSoon = true;
+  if (configuredTime) {
+    const [cfgH, cfgM] = configuredTime.split(":").map(Number);
+    const cfgMinutes = cfgH * 60 + cfgM;
+    const nowMinutes = sgt.getUTCHours() * 60 + sgt.getUTCMinutes();
+    // Only send if within ±30 minutes of the configured time
+    if (Math.abs(nowMinutes - cfgMinutes) > 30) {
+      sendDueSoon = false;
+    }
+  }
+
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     .toLocaleDateString("en-CA");
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
     .toLocaleDateString("en-CA");
 
-  // Fetch overdue and due-soon loans in parallel
+  // Always fetch overdue; only fetch due-soon if within the time window
   const [{ data: overdueLoans }, { data: dueSoonLoans }] = await Promise.all([
     supabase
       .from("loan_requests")
@@ -30,12 +56,14 @@ export async function GET(request) {
       .eq("loan_type", "temporary")
       .not("end_date", "is", null)
       .lt("end_date", today),
-    supabase
-      .from("loan_requests")
-      .select("id, end_date, user_id, loan_type")
-      .eq("status", "approved")
-      .eq("loan_type", "temporary")
-      .eq("end_date", tomorrow),
+    sendDueSoon
+      ? supabase
+          .from("loan_requests")
+          .select("id, end_date, user_id, loan_type")
+          .eq("status", "approved")
+          .eq("loan_type", "temporary")
+          .eq("end_date", tomorrow)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const allLoanIds = [
@@ -44,7 +72,7 @@ export async function GET(request) {
   ];
 
   if (allLoanIds.length === 0) {
-    return NextResponse.json({ overdueNotified: 0, dueSoonNotified: 0 });
+    return NextResponse.json({ overdueNotified: 0, dueSoonNotified: 0, dueSoonSkipped: !sendDueSoon });
   }
 
   // Batch fetch items and users
@@ -171,5 +199,5 @@ export async function GET(request) {
     ...telegramTasks,
   ]);
 
-  return NextResponse.json({ overdueNotified, dueSoonNotified });
+  return NextResponse.json({ overdueNotified, dueSoonNotified, dueSoonSkipped: !sendDueSoon });
 }
