@@ -5,44 +5,55 @@ import { NextResponse } from "next/server";
 
 // Fuzzy search: handles word reordering, partial matches, and normalized comparisons.
 // e.g. "type c to HDMI cable" will match "HDMI to Type C Cable"
-function fuzzyMatch(text, search) {
-  if (!text || !search) return false;
+// ⚡ Bolt: Optimize fuzzy matching by pre-compiling search terms.
+// This avoids redundant parsing (normalizing/splitting) inside the filter loop.
+function compileFuzzySearch(search) {
+  if (!search) return () => false;
   const normalize = (s) => s.toLowerCase().replace(/[\s\-_\/\.]+/g, "");
-  const textStr = String(text);
-  const normalizedText = normalize(textStr);
+
   const normalizedSearch = normalize(search);
-
-  // Direct normalized substring match
-  if (normalizedText.includes(normalizedSearch)) return true;
-
-  // Split search into words and check all appear in text (any order)
-  const textLower = textStr.toLowerCase().replace(/[\-_\/\.]+/g, " ");
   const words = search
     .toLowerCase()
     .replace(/[\-_\/\.]+/g, " ")
     .split(/\s+/)
     .filter((w) => w.length > 0);
-  if (words.length > 0 && words.every((word) => textLower.includes(word)))
-    return true;
 
-  // Try with normalized words against normalized text
-  if (
-    words.length > 0 &&
-    words.every((word) => normalizedText.includes(normalize(word)))
-  )
-    return true;
+  const normalizedWords = words.map(normalize);
+  const wordCount = words.length;
 
-  // Combine adjacent word pairs and try matching
-  for (let i = 0; i < words.length - 1; i++) {
-    const pair = words[i] + words[i + 1];
-    if (normalizedText.includes(pair)) {
-      const remaining = [...words.slice(0, i), ...words.slice(i + 2)];
-      if (remaining.every((w) => normalizedText.includes(normalize(w))))
-        return true;
-    }
+  // Pre-compute adjacent pairs for the final fallback check
+  const pairs = [];
+  const remainders = [];
+  for (let i = 0; i < wordCount - 1; i++) {
+    pairs.push(words[i] + words[i + 1]);
+    remainders.push([...normalizedWords.slice(0, i), ...normalizedWords.slice(i + 2)]);
   }
 
-  return false;
+  return (text) => {
+    if (!text) return false;
+    const textStr = String(text);
+    const normalizedText = normalize(textStr);
+
+    // Direct normalized substring match
+    if (normalizedText.includes(normalizedSearch)) return true;
+
+    // Split search into words and check all appear in text (any order)
+    const textLower = textStr.toLowerCase().replace(/[\-_\/\.]+/g, " ");
+    if (wordCount > 0 && words.every((word) => textLower.includes(word))) return true;
+
+    // Try with normalized words against normalized text
+    if (wordCount > 0 && normalizedWords.every((word) => normalizedText.includes(word))) return true;
+
+    // Combine adjacent word pairs and try matching
+    for (let i = 0; i < pairs.length; i++) {
+      if (normalizedText.includes(pairs[i])) {
+        if (remainders[i].every((w) => normalizedText.includes(w))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
 }
 
 // Cache TTL: 30 seconds for inventory data (balances freshness vs performance)
@@ -100,13 +111,14 @@ export async function GET(request) {
     let items = db.prepare(query).all(...params);
 
     if (search) {
+      const matcher = compileFuzzySearch(search);
       items = items.filter(
         (item) =>
-          fuzzyMatch(item.item, search) ||
-          fuzzyMatch(item.brand, search) ||
-          fuzzyMatch(item.type, search) ||
-          fuzzyMatch(item.model, search) ||
-          fuzzyMatch(item.location, search),
+          matcher(item.item) ||
+          matcher(item.brand) ||
+          matcher(item.type) ||
+          matcher(item.model) ||
+          matcher(item.location),
       );
     }
 
@@ -129,12 +141,13 @@ export async function GET(request) {
     let items = db.prepare(query).all(...params);
 
     if (search) {
+      const matcher = compileFuzzySearch(search);
       items = items.filter(
         (item) =>
-          fuzzyMatch(item.item, search) ||
-          fuzzyMatch(item.brand, search) ||
-          fuzzyMatch(item.type, search) ||
-          fuzzyMatch(item.model, search),
+          matcher(item.item) ||
+          matcher(item.brand) ||
+          matcher(item.type) ||
+          matcher(item.model),
       );
     }
 
