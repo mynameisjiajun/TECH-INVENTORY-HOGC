@@ -321,13 +321,13 @@ export default function LoansPage() {
                 style={overdue ? { borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.03)' } : dueSoon ? { borderColor: 'rgba(245,158,11,0.4)' } : {}}
               >
                 {overdue && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(239,68,68,0.12)', borderRadius: '8px 8px 0 0', marginBottom: 4, fontSize: 12, color: 'var(--error)', fontWeight: 600, marginTop: -4, marginLeft: -4, marginRight: -4 }}>
-                    <RiAlertLine /> OVERDUE — Please return items or contact an admin
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, padding: '6px 10px', background: 'rgba(239,68,68,0.12)', borderRadius: 8, marginBottom: 8, fontSize: 12, color: 'var(--error)', fontWeight: 600 }}>
+                    <RiAlertLine style={{ flexShrink: 0 }} /> <span>OVERDUE — Please return items or contact an admin</span>
                   </div>
                 )}
                 {dueSoon && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(245,158,11,0.1)', borderRadius: '8px 8px 0 0', marginBottom: 4, fontSize: 12, color: 'var(--warning)', fontWeight: 600, marginTop: -4, marginLeft: -4, marginRight: -4 }}>
-                    <RiCalendarLine /> Due soon — return by {loan.end_date}
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, padding: '6px 10px', background: 'rgba(245,158,11,0.1)', borderRadius: 8, marginBottom: 8, fontSize: 12, color: 'var(--warning)', fontWeight: 600 }}>
+                    <RiCalendarLine style={{ flexShrink: 0 }} /> <span>Due soon — return by {loan.end_date}</span>
                   </div>
                 )}
 
