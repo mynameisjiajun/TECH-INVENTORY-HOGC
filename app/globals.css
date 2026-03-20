@@ -1480,9 +1480,10 @@ tr:last-child td {
     flex-wrap: wrap;
   }
 
-  /* Reminder times — stack vertically on mobile */
+  /* Reminder times — keep 3-col, compact on mobile */
   .reminder-times-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
   }
 
   /* Notification dropdown mobile — fixed so it never clips */

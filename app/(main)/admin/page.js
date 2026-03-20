@@ -1168,7 +1168,7 @@ export default function AdminPage() {
                   { key: "sunday", label: "Sunday" },
                 ].map(({ key, label }) => (
                   <div key={key}>
-                    <label style={{ display: "block", fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>
+                    <label style={{ display: "block", fontSize: 10, color: "var(--text-secondary)", marginBottom: 3 }}>
                       {label}
                     </label>
                     <input
@@ -1179,14 +1179,15 @@ export default function AdminPage() {
                       }
                       style={{
                         width: "100%",
-                        padding: "7px 10px",
+                        padding: "5px 4px",
                         background: "var(--bg-secondary)",
                         border: "1px solid var(--border)",
-                        borderRadius: 8,
+                        borderRadius: 6,
                         color: "var(--text-primary)",
-                        fontSize: 13,
+                        fontSize: 12,
                         boxSizing: "border-box",
                         colorScheme: "dark",
+                        minWidth: 0,
                       }}
                     />
                   </div>
