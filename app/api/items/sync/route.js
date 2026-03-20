@@ -9,6 +9,7 @@ const SHEETS_ENABLED = !!(process.env.GOOGLE_SHEETS_ID && process.env.GOOGLE_SER
 export async function POST() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
   if (!SHEETS_ENABLED) {
     return NextResponse.json({ error: 'Google Sheets not configured' }, { status: 400 });
@@ -69,7 +70,7 @@ export async function POST() {
         }
       }
 
-      db.prepare('DELETE FROM deployed_items').run();
+      db.prepare('DELETE FROM deployed_items WHERE loan_request_id IS NULL').run();
       let deployedUpdated = 0;
       for (let i = 2; i < deployedData.length; i++) {
         const row = deployedData[i];

@@ -1,42 +1,33 @@
-import { getDb, waitForSync } from "@/lib/db/db";
+import { supabase } from "@/lib/db/supabase";
+import { getCurrentUser } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
+// Redirect to the stored return photo URL (Supabase Storage or ImgBB).
+// Kept as a stable endpoint so old Telegram links continue to work.
 export async function GET(request, { params }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json({ error: "Loan ID is required" }, { status: 400 });
-    }
+    if (!id) return NextResponse.json({ error: "Loan ID is required" }, { status: 400 });
 
-    await waitForSync();
-    const db = getDb();
+    const { data: loan } = await supabase
+      .from("loan_requests")
+      .select("return_photo_url, user_id")
+      .eq("id", id)
+      .single();
 
-    const loan = db.prepare("SELECT return_photo_data FROM loan_requests WHERE id = ?").get(id);
-
-    if (!loan || !loan.return_photo_data) {
+    if (!loan || !loan.return_photo_url) {
       return NextResponse.json({ error: "Photo not found" }, { status: 404 });
     }
 
-    const base64Data = loan.return_photo_data;
-
-    // Extract mime type and raw base64
-    let mimeType = "image/jpeg";
-    let rawBase64 = base64Data;
-
-    if (base64Data.startsWith("data:")) {
-      const parts = base64Data.split(";base64,");
-      mimeType = parts[0].replace("data:", "");
-      rawBase64 = parts[1];
+    // Only the loan owner or an admin may view the photo
+    if (Number(loan.user_id) !== Number(user.id) && user.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const buffer = Buffer.from(rawBase64, "base64");
-
-    return new Response(buffer, {
-      headers: {
-        "Content-Type": mimeType,
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
-    });
+    return NextResponse.redirect(loan.return_photo_url, { status: 302 });
   } catch (error) {
     console.error("Serve return photo error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
