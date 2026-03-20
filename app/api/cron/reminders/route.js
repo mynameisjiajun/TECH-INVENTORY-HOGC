@@ -88,7 +88,7 @@ export async function GET(request) {
       .in("loan_request_id", allLoanIds),
     supabase
       .from("users")
-      .select("id, email, display_name, telegram_chat_id")
+      .select("id, email, display_name, mute_emails, mute_telegram")
       .in("id", allUserIds),
     supabase
       .from("notifications")
@@ -134,7 +134,7 @@ export async function GET(request) {
       link: "/loans",
     });
 
-    if (loanUser?.email) {
+    if (loanUser?.email && !loanUser?.mute_emails) {
       emailTasks.push(
         sendOverdueEmail({
           to: loanUser.email,
@@ -146,13 +146,14 @@ export async function GET(request) {
       );
     }
 
-    telegramTasks.push(
-      sendTelegramMessage(
-        loan.user_id,
-        `🚨 <b>Loan Overdue</b>\nYour loan #${loan.id} is OVERDUE!\n\nItems: ${itemList}\n\nPlease return items or contact an admin.`,
-        loanUser?.telegram_chat_id,
-      ).catch(() => {})
-    );
+    if (!loanUser?.mute_telegram) {
+      telegramTasks.push(
+        sendTelegramMessage(
+          loan.user_id,
+          `🚨 <b>Loan Overdue</b>\nYour loan #${loan.id} is OVERDUE!\n\nItems: ${itemList}\n\nPlease return items or contact an admin.`,
+        ).catch(() => {})
+      );
+    }
 
     overdueNotified++;
   }
@@ -169,7 +170,7 @@ export async function GET(request) {
       link: "/loans",
     });
 
-    if (loanUser?.email) {
+    if (loanUser?.email && !loanUser?.mute_emails) {
       emailTasks.push(
         sendDueSoonEmail({
           to: loanUser.email,
@@ -181,13 +182,14 @@ export async function GET(request) {
       );
     }
 
-    telegramTasks.push(
-      sendTelegramMessage(
-        loan.user_id,
-        `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow!\n\nItems: ${itemList}\n\nPlease prepare to return items.`,
-        loanUser?.telegram_chat_id,
-      ).catch(() => {})
-    );
+    if (!loanUser?.mute_telegram) {
+      telegramTasks.push(
+        sendTelegramMessage(
+          loan.user_id,
+          `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow!\n\nItems: ${itemList}\n\nPlease prepare to return items.`,
+        ).catch(() => {})
+      );
+    }
 
     dueSoonNotified++;
   }

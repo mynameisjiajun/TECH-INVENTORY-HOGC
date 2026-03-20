@@ -235,14 +235,6 @@ export async function POST(request) {
         .update({ status: "approved", admin_notes: "Bulk approved", updated_at: new Date().toISOString() })
         .in("id", validLoanIds);
 
-      // Batch fetch user telegram data
-      const uniqueUserIds = [...new Set(pendingLoans.map((l) => l.user_id))];
-      const { data: bulkApproveUsers } = await supabase
-        .from("users")
-        .select("id, telegram_chat_id")
-        .in("id", uniqueUserIds);
-      const approveUserMap = new Map((bulkApproveUsers || []).map((u) => [u.id, u]));
-
       // Batch insert notifications
       await supabase.from("notifications").insert(
         pendingLoans.map((loan) => ({
@@ -269,11 +261,9 @@ export async function POST(request) {
 
       // Fire-and-forget Telegram notifications
       for (const loan of pendingLoans) {
-        const u = approveUserMap.get(loan.user_id);
         sendTelegramMessage(
           loan.user_id,
           `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan.id} has been approved!`,
-          u?.telegram_chat_id,
         ).catch(() => {});
       }
 
@@ -478,7 +468,7 @@ export async function POST(request) {
 
       const [{ data: loanItems }, { data: returnUser }] = await Promise.all([
         supabase.from("loan_items").select("*").eq("loan_request_id", loan_id),
-        supabase.from("users").select("display_name, telegram_chat_id").eq("id", loan.user_id).single(),
+        supabase.from("users").select("display_name").eq("id", loan.user_id).single(),
       ]);
 
       const returnChanges = [];
