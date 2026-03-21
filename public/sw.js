@@ -1,8 +1,10 @@
-const CACHE_NAME = "tech-inventory-v5";
-const API_CACHE = "tech-inventory-api-v2";
+const CACHE_NAME = "tech-inventory-v6";
+const API_CACHE = "tech-inventory-api-v3";
 
 // App shell — pages & assets to pre-cache on install
 const APP_SHELL = [
+  "/",
+  "/inventory",
   "/manifest.json",
   "/offline",
   "/icons/icon-192.png",
@@ -14,7 +16,9 @@ const CACHEABLE_API = ["/api/items"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)),
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled(APP_SHELL.map((asset) => cache.add(asset))),
+    ),
   );
   self.skipWaiting();
 });
@@ -74,21 +78,39 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // --- Pages & static assets: network-first, cache fallback, offline page ---
+  // --- Page navigations: network-first, then cache, then offline page ---
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
+          }
+          return res;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || caches.match("/offline");
+        }),
+    );
+    return;
+  }
+
+  // --- Static assets: cache-first, then network fallback ---
   event.respondWith(
-    fetch(event.request)
-      .then((res) => {
-        if (res.status === 200) {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
-        }
-        return res;
-      })
-      .catch(() =>
-        caches
-          .match(event.request)
-          .then((cached) => cached || caches.match("/offline")),
-      ),
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      return fetch(event.request)
+        .then((res) => {
+          if (res.status === 200 && url.origin === self.location.origin) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
+          }
+          return res;
+        })
+        .catch(() => new Response("Offline", { status: 503 }));
+    }),
   );
 });
 

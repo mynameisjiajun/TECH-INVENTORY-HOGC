@@ -49,8 +49,17 @@ export default function InstallPrompt() {
       setDeferredPrompt(e);
       setShowBanner(true);
     };
+    const installedHandler = () => {
+      setShowBanner(false);
+      setDeferredPrompt(null);
+      localStorage.setItem("pwa-install-dismissed", Date.now().toString());
+    };
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", installedHandler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installedHandler);
+    };
   }, []);
 
   const handleInstall = async () => {

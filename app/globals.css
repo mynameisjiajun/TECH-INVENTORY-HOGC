@@ -1207,10 +1207,13 @@ tr:last-child td {
 /* Reminder times 3-col grid — collapses to 1-col on mobile */
 .reminder-times-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   width: 100%;
-  overflow: hidden;
+}
+
+.reminder-times-grid > div {
+  min-width: 0;
 }
 
 /* ===== LOADING ===== */
@@ -1480,9 +1483,9 @@ tr:last-child td {
     flex-wrap: wrap;
   }
 
-  /* Reminder times — keep 3-col, compact on mobile */
+  /* Reminder times — 2-col on mobile to prevent clipping in PWA width */
   .reminder-times-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -1540,17 +1543,9 @@ tr:last-child td {
     font-size: 12px;
   }
 
-  /* Cart FAB above bottom nav */
+  /* Cart is opened from mobile nav tab; hide FAB to avoid duplicate entry */
   .cart-fab {
-    bottom: 72px;
-    width: 48px;
-    height: 48px;
-    font-size: 20px;
-  }
-  .cart-fab .cart-count {
-    width: 18px;
-    height: 18px;
-    font-size: 10px;
+    display: none;
   }
 
   /* Mobile bottom nav */
@@ -1643,6 +1638,12 @@ tr:last-child td {
   /* Hide elements on mobile */
   .hide-mobile {
     display: none !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .reminder-times-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

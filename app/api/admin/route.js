@@ -634,13 +634,12 @@ export async function GET() {
     }
     for (const loan of formattedLoans) loan.items = itemsByLoan.get(loan.id) || [];
 
-    // Compute totalLoaned from Supabase approved loan items (accurate across Vercel instances)
-    stats.totalLoaned = (allItems || [])
-      .filter((item) => {
-        const loan = formattedLoans.find((l) => l.id === item.loan_request_id);
-        return loan?.status === "approved";
-      })
-      .reduce((sum, item) => sum + item.quantity, 0);
+    // Compute totalLoaned in O(N + M): sum pre-mapped items from approved loans only.
+    stats.totalLoaned = formattedLoans.reduce((sum, loan) => {
+      if (loan.status !== "approved") return sum;
+      const loanQty = loan.items.reduce((itemSum, item) => itemSum + item.quantity, 0);
+      return sum + loanQty;
+    }, 0);
   }
 
   // Due date warnings

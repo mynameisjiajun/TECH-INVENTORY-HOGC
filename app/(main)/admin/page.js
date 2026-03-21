@@ -176,6 +176,7 @@ export default function AdminPage() {
   const [allItems, setAllItems] = useState([]);
   const [templateMsg, setTemplateMsg] = useState("");
   const [editingTemplate, setEditingTemplate] = useState(null);
+  const [clockMs, setClockMs] = useState(Date.now());
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -321,6 +322,12 @@ export default function AdminPage() {
       }
     }
   }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers]);
+
+  useEffect(() => {
+    if (activeTab !== "loans") return;
+    const interval = setInterval(() => setClockMs(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   // Realtime subscription — refetch loans on any loan_requests change
   useEffect(() => {
@@ -643,6 +650,20 @@ export default function AdminPage() {
     );
   };
 
+  const formatDueTimer = (endDate) => {
+    if (!endDate) return null;
+    const target = new Date(`${endDate}T23:59:59`);
+    if (Number.isNaN(target.getTime())) return null;
+
+    const diff = target.getTime() - clockMs;
+    const absHours = Math.floor(Math.abs(diff) / (1000 * 60 * 60));
+    const days = Math.floor(absHours / 24);
+    const hours = absHours % 24;
+    const amount = days > 0 ? `${days}d ${hours}h` : `${hours}h`;
+
+    return diff >= 0 ? `⏳ Due in ${amount}` : `🚨 Overdue by ${amount}`;
+  };
+
   return (
     <>
       <Navbar />
@@ -953,6 +974,9 @@ export default function AdminPage() {
                       📅 {loan.start_date}
                       {loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}
                     </span>
+                    {loan.status === "approved" && loan.loan_type === "temporary" && loan.end_date && (
+                      <span>{formatDueTimer(loan.end_date)}</span>
+                    )}
                   </div>
                   {loan.status === "pending" && (
                     <div style={{ marginTop: 12 }}>

@@ -1130,19 +1130,20 @@ export default function DashboardPage() {
 
         {/* Clear Activity Confirmation Modal */}
         {showClearActivityConfirm && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '0 16px' }}>
-            <div className="glass-card" style={{ padding: 28, maxWidth: 400, width: '100%', borderRadius: 16 }}>
-              <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Clear Activity Log?</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 }}>
+          <div className="modal-overlay">
+            <div className="modal" style={{ maxWidth: 420 }}>
+              <div className="modal-body">
+                <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Clear Activity Log?</h3>
+                <p style={{ color: "var(--text-muted)", fontSize: 14, marginBottom: 0 }}>
                 This will permanently delete all activity records for everyone. This cannot be undone.
-              </p>
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                </p>
+              </div>
+              <div className="modal-footer">
                 <button className="btn btn-outline" onClick={() => setShowClearActivityConfirm(false)} disabled={clearActivityLoading}>
                   Cancel
                 </button>
-                <button className="btn btn-danger" onClick={handleClearActivity} disabled={clearActivityLoading}
-                  style={{ background: 'var(--error)', color: '#fff', border: 'none' }}>
-                  {clearActivityLoading ? <><span className="btn-spinner" /> Clearing…</> : 'Yes, clear all'}
+                <button className="btn btn-danger" onClick={handleClearActivity} disabled={clearActivityLoading}>
+                  {clearActivityLoading ? <><span className="btn-spinner" /> Clearing…</> : "Yes, clear all"}
                 </button>
               </div>
             </div>

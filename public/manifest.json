@@ -11,6 +11,32 @@
   "theme_color": "#6366f1",
   "orientation": "any",
   "categories": ["productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Inventory",
+      "short_name": "Inventory",
+      "url": "/inventory",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "My Loans",
+      "short_name": "Loans",
+      "url": "/loans",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
   "prefer_related_applications": false,
   "icons": [
     {
