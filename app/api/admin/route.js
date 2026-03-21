@@ -3,11 +3,7 @@ import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
 import { applyDeltasToCells, appendRows } from "@/lib/services/sheets";
-import {
-  sendOverdueEmail,
-  sendDueSoonEmail,
-  sendLoanStatusEmail,
-} from "@/lib/services/email";
+import { sendLoanStatusEmail } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
@@ -648,89 +644,11 @@ export async function GET() {
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toLocaleDateString("en-CA");
 
   const [{ data: overdueLoans }, { data: dueSoonLoans }] = await Promise.all([
-    supabase.from("loan_requests").select(`id, end_date, user_id, users (display_name)`)
+    supabase.from("loan_requests").select("id")
       .eq("status", "approved").eq("loan_type", "temporary").not("end_date", "is", null).lt("end_date", today),
-    supabase.from("loan_requests").select(`id, end_date, user_id, users (display_name)`)
+    supabase.from("loan_requests").select("id")
       .eq("status", "approved").eq("loan_type", "temporary").eq("end_date", tomorrow),
   ]);
-
-  // Overdue/due-soon reminders (admin-triggered, deduped, parallelized)
-  const adminReminderTasks = [];
-  await Promise.all([
-    ...(overdueLoans || []).map(async (loan) => {
-      const { data: existing } = await supabase
-        .from("notifications")
-        .select("id")
-        .eq("user_id", loan.user_id)
-        .ilike("message", "%overdue%")
-        .ilike("message", `%#${loan.id}%`)
-        .gte("created_at", today)
-        .single();
-
-      if (!existing) {
-        const [{ data: loanItems }, { data: loanUser }] = await Promise.all([
-          supabase.from("loan_items").select("item_name, quantity").eq("loan_request_id", loan.id),
-          supabase.from("users").select("email, display_name").eq("id", loan.user_id).single(),
-        ]);
-        const itemList = (loanItems || []).map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
-
-        await supabase.from("notifications").insert({
-          user_id: loan.user_id,
-          message: `⚠️ Your loan #${loan.id} is OVERDUE! Please return items or contact an admin.\n\nItems: ${itemList}`,
-          link: "/loans",
-        });
-
-        if (loanUser?.email) {
-          adminReminderTasks.push(
-            sendOverdueEmail({
-              to: loanUser.email,
-              displayName: loanUser.display_name,
-              loanId: loan.id,
-              items: (loanItems || []).map((i) => ({ item: i.item_name, quantity: i.quantity })),
-              endDate: loan.end_date,
-            }).catch(() => {}),
-          );
-        }
-      }
-    }),
-    ...(dueSoonLoans || []).map(async (loan) => {
-      const { data: existing } = await supabase
-        .from("notifications")
-        .select("id")
-        .eq("user_id", loan.user_id)
-        .ilike("message", "%due tomorrow%")
-        .ilike("message", `%#${loan.id}%`)
-        .gte("created_at", today)
-        .single();
-
-      if (!existing) {
-        const [{ data: loanItems }, { data: loanUser }] = await Promise.all([
-          supabase.from("loan_items").select("item_name, quantity").eq("loan_request_id", loan.id),
-          supabase.from("users").select("email, display_name").eq("id", loan.user_id).single(),
-        ]);
-        const itemList = (loanItems || []).map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
-
-        await supabase.from("notifications").insert({
-          user_id: loan.user_id,
-          message: `⏰ Your loan #${loan.id} is due tomorrow! Please prepare to return items.\n\nItems: ${itemList}`,
-          link: "/loans",
-        });
-
-        if (loanUser?.email) {
-          adminReminderTasks.push(
-            sendDueSoonEmail({
-              to: loanUser.email,
-              displayName: loanUser.display_name,
-              loanId: loan.id,
-              items: (loanItems || []).map((i) => ({ item: i.item_name, quantity: i.quantity })),
-              endDate: loan.end_date,
-            }).catch(() => {}),
-          );
-        }
-      }
-    }),
-  ]);
-  if (adminReminderTasks.length > 0) await Promise.all(adminReminderTasks);
 
   // Chart data
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();

@@ -478,6 +478,39 @@ select {
   position: relative;
 }
 
+.table-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.table-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.table-pagination label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.table-viewport {
+  overflow: auto;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -512,6 +545,12 @@ tr:hover td {
 
 tr:last-child td {
   border-bottom: none;
+}
+
+.virtual-spacer td {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
 }
 
 /* ===== BADGES ===== */
@@ -1373,6 +1412,20 @@ tr:last-child td {
   }
 
   /* ===== Table Mobile Optimizations ===== */
+  .table-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .table-pagination {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .table-pagination .filter-select {
+    min-width: 84px;
+    width: auto;
+  }
+
   table {
     font-size: 12px;
   }

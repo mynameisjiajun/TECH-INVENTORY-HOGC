@@ -1,6 +1,7 @@
 'use client';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useToast } from '@/lib/context/ToastContext';
 import { useCart } from '@/lib/context/CartContext';
@@ -430,7 +431,14 @@ export default function LoansPage() {
                 <div style={{ background: 'var(--bg-secondary)', border: '1px dashed var(--border)', borderRadius: 10, padding: returnPhoto ? 8 : 18, textAlign: 'center' }}>
                   {returnPhoto ? (
                     <div style={{ position: 'relative', display: 'inline-block' }}>
-                      <img src={returnPhoto} alt="Return proof" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, display: 'block' }} />
+                      <Image
+                        src={returnPhoto}
+                        alt="Return proof"
+                        width={1200}
+                        height={1200}
+                        unoptimized
+                        style={{ maxWidth: '100%', maxHeight: 200, width: 'auto', height: 'auto', borderRadius: 8, display: 'block' }}
+                      />
                       <button
                         onClick={() => setReturnPhoto(null)}
                         className="btn-close"
