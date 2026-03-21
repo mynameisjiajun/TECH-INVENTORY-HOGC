@@ -502,11 +502,6 @@ select {
   font-size: 12px;
 }
 
-.table-pagination label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
 .table-viewport {
   overflow: auto;
 }
@@ -657,6 +652,18 @@ tr:last-child td {
 
 .filter-select {
   min-width: 180px;
+}
+
+.inventory-filter-row {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-select-compact {
+  min-width: 145px;
+  max-width: 190px;
+  font-size: 12px;
+  padding: 8px 30px 8px 10px;
 }
 
 /* ===== CART ===== */
@@ -1400,6 +1407,19 @@ tr:last-child td {
     padding: 8px 30px 8px 10px;
   }
 
+  .inventory-filter-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .filter-select-compact {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    font-size: 12px;
+  }
+
   /* Tabs smaller */
   .tabs {
     margin-bottom: 14px;
@@ -1420,10 +1440,6 @@ tr:last-child td {
   .table-pagination {
     width: 100%;
     justify-content: flex-start;
-  }
-  .table-pagination .filter-select {
-    min-width: 84px;
-    width: auto;
   }
 
   table {

@@ -16,7 +16,7 @@ import {
 export default function InventoryPage() {
   const TABLE_TABS = ["storage", "deployed", "total_quantity", "total_breakdown", "low_stock"];
   const VIRTUAL_TABS = ["storage", "deployed", "total_breakdown", "low_stock"];
-  const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
+  const ROWS_PER_PAGE = 50;
   const TABLE_VIEWPORT_HEIGHT = 560;
   const OVERSCAN_ROWS = 6;
 
@@ -35,7 +35,6 @@ export default function InventoryPage() {
   const [templates, setTemplates] = useState([]);
   const [overdueCount, setOverdueCount] = useState(0);
   const [offline, setOffline] = useState(false);
-  const [rowsPerPage, setRowsPerPage] = useState(50);
   const [currentPage, setCurrentPage] = useState(1);
   const [tableScrollTop, setTableScrollTop] = useState(0);
   const tableViewportRef = useRef(null);
@@ -133,8 +132,8 @@ export default function InventoryPage() {
 
   const totalPages = useMemo(() => {
     if (!isTableTab) return 1;
-    return Math.max(1, Math.ceil(items.length / rowsPerPage));
-  }, [isTableTab, items.length, rowsPerPage]);
+    return Math.max(1, Math.ceil(items.length / ROWS_PER_PAGE));
+  }, [isTableTab, items.length]);
 
   useEffect(() => {
     if (!isTableTab) return;
@@ -149,9 +148,9 @@ export default function InventoryPage() {
 
   const pagedItems = useMemo(() => {
     if (!isTableTab) return items;
-    const start = (currentPage - 1) * rowsPerPage;
-    return items.slice(start, start + rowsPerPage);
-  }, [isTableTab, items, currentPage, rowsPerPage]);
+    const start = (currentPage - 1) * ROWS_PER_PAGE;
+    return items.slice(start, start + ROWS_PER_PAGE);
+  }, [isTableTab, items, currentPage]);
 
   const rowHeight = tab === "deployed" ? 56 : 52;
   const shouldVirtualize = isVirtualTab && pagedItems.length > 40;
@@ -183,10 +182,10 @@ export default function InventoryPage() {
   }, [pagedItems, shouldVirtualize, virtualWindow.start, virtualWindow.end]);
 
   const pageStart = isTableTab && items.length > 0
-    ? (currentPage - 1) * rowsPerPage + 1
+    ? (currentPage - 1) * ROWS_PER_PAGE + 1
     : 0;
   const pageEnd = isTableTab
-    ? Math.min(currentPage * rowsPerPage, items.length)
+    ? Math.min(currentPage * ROWS_PER_PAGE, items.length)
     : items.length;
 
   const handlePageChange = useCallback(
@@ -325,30 +324,32 @@ export default function InventoryPage() {
             </div>
             {(tab === "storage" || tab === "deployed") && (
               <>
-                <select
-                  className="filter-select"
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                >
-                  <option value="">All Types</option>
-                  {filters.types.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="filter-select"
-                  value={brandFilter}
-                  onChange={(e) => setBrandFilter(e.target.value)}
-                >
-                  <option value="">All Brands</option>
-                  {filters.brands.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
+                <div className="inventory-filter-row">
+                  <select
+                    className="filter-select filter-select-compact"
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                  >
+                    <option value="">All Types</option>
+                    {filters.types.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="filter-select filter-select-compact"
+                    value={brandFilter}
+                    onChange={(e) => setBrandFilter(e.target.value)}
+                  >
+                    <option value="">All Brands</option>
+                    {filters.brands.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </>
             )}
           </div>
@@ -480,24 +481,6 @@ export default function InventoryPage() {
                     Showing {pageStart}-{pageEnd} of {items.length}
                   </div>
                   <div className="table-pagination">
-                    <label htmlFor="storage-page-size">Rows</label>
-                    <select
-                      id="storage-page-size"
-                      className="filter-select"
-                      value={rowsPerPage}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setRowsPerPage(next);
-                        setCurrentPage(1);
-                        setTableScrollTop(0);
-                        tableViewportRef.current?.scrollTo({ top: 0 });
-                      }}
-                      style={{ minWidth: 90 }}
-                    >
-                      {PAGE_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>{size}</option>
-                      ))}
-                    </select>
                     <button
                       className="btn btn-sm btn-outline"
                       onClick={() => handlePageChange(currentPage - 1)}
@@ -634,24 +617,6 @@ export default function InventoryPage() {
                     Showing {pageStart}-{pageEnd} of {items.length}
                   </div>
                   <div className="table-pagination">
-                    <label htmlFor="deployed-page-size">Rows</label>
-                    <select
-                      id="deployed-page-size"
-                      className="filter-select"
-                      value={rowsPerPage}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setRowsPerPage(next);
-                        setCurrentPage(1);
-                        setTableScrollTop(0);
-                        tableViewportRef.current?.scrollTo({ top: 0 });
-                      }}
-                      style={{ minWidth: 90 }}
-                    >
-                      {PAGE_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>{size}</option>
-                      ))}
-                    </select>
                     <button
                       className="btn btn-sm btn-outline"
                       onClick={() => handlePageChange(currentPage - 1)}
@@ -748,22 +713,6 @@ export default function InventoryPage() {
                     Showing {pageStart}-{pageEnd} of {items.length}
                   </div>
                   <div className="table-pagination">
-                    <label htmlFor="total-qty-page-size">Rows</label>
-                    <select
-                      id="total-qty-page-size"
-                      className="filter-select"
-                      value={rowsPerPage}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setRowsPerPage(next);
-                        setCurrentPage(1);
-                      }}
-                      style={{ minWidth: 90 }}
-                    >
-                      {PAGE_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>{size}</option>
-                      ))}
-                    </select>
                     <button
                       className="btn btn-sm btn-outline"
                       onClick={() => handlePageChange(currentPage - 1)}
@@ -825,24 +774,6 @@ export default function InventoryPage() {
                     Showing {pageStart}-{pageEnd} of {items.length}
                   </div>
                   <div className="table-pagination">
-                    <label htmlFor="breakdown-page-size">Rows</label>
-                    <select
-                      id="breakdown-page-size"
-                      className="filter-select"
-                      value={rowsPerPage}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setRowsPerPage(next);
-                        setCurrentPage(1);
-                        setTableScrollTop(0);
-                        tableViewportRef.current?.scrollTo({ top: 0 });
-                      }}
-                      style={{ minWidth: 90 }}
-                    >
-                      {PAGE_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>{size}</option>
-                      ))}
-                    </select>
                     <button
                       className="btn btn-sm btn-outline"
                       onClick={() => handlePageChange(currentPage - 1)}
@@ -929,24 +860,6 @@ export default function InventoryPage() {
                     Showing {pageStart}-{pageEnd} of {items.length}
                   </div>
                   <div className="table-pagination">
-                    <label htmlFor="low-stock-page-size">Rows</label>
-                    <select
-                      id="low-stock-page-size"
-                      className="filter-select"
-                      value={rowsPerPage}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setRowsPerPage(next);
-                        setCurrentPage(1);
-                        setTableScrollTop(0);
-                        tableViewportRef.current?.scrollTo({ top: 0 });
-                      }}
-                      style={{ minWidth: 90 }}
-                    >
-                      {PAGE_SIZE_OPTIONS.map((size) => (
-                        <option key={size} value={size}>{size}</option>
-                      ))}
-                    </select>
                     <button
                       className="btn btn-sm btn-outline"
                       onClick={() => handlePageChange(currentPage - 1)}
