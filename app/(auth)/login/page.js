@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -13,10 +13,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [, setLogoTapCount] = useState(0);
+  const [, setSecretTapCount] = useState(0);
   const [easterMode, setEasterMode] = useState(false);
+  const [showRickRoll, setShowRickRoll] = useState(false);
   const requiredTaps = 7;
+  const rickRollTaps = 20;
   const audioContextRef = useRef(null);
+  const lastTapAtRef = useRef(0);
+  const rickRollOverlayRef = useRef(null);
+  const rickRollVideoRef = useRef(null);
 
   const playLogoTapFeedback = async () => {
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
@@ -65,6 +70,7 @@ export default function LoginPage() {
     yDuration: `${6.5 + (i % 5) * 1.1}s`,
     size: `${26 + (i % 6) * 6}px`,
     hue: `${(i * 37) % 360}deg`,
+    variant: i % 3 === 0 ? "text" : "gif",
   }));
 
   const handleSubmit = async (e) => {
@@ -83,17 +89,73 @@ export default function LoginPage() {
   };
 
   const handleLogoTap = () => {
+    const now = Date.now();
+    if (now - lastTapAtRef.current < 90) return;
+    lastTapAtRef.current = now;
+
     void playLogoTapFeedback();
 
-    setLogoTapCount((count) => {
+    setSecretTapCount((count) => {
       const next = count + 1;
-      if (next >= requiredTaps) {
+      if (next % requiredTaps === 0) {
         setEasterMode(true);
-        return 0;
+      }
+      if (next % rickRollTaps === 0) {
+        const reqFs =
+          document.documentElement.requestFullscreen ||
+          document.documentElement.webkitRequestFullscreen ||
+          document.documentElement.mozRequestFullScreen ||
+          document.documentElement.msRequestFullscreen;
+        if (reqFs) {
+          Promise.resolve(reqFs.call(document.documentElement)).catch(() => {});
+        }
+        setShowRickRoll(true);
       }
       return next;
     });
   };
+
+  useEffect(() => {
+    if (!showRickRoll) {
+      document.body.classList.remove("rickroll-lock");
+      return;
+    }
+
+    document.body.classList.add("rickroll-lock");
+
+    const overlayEl = rickRollOverlayRef.current;
+    const videoEl = rickRollVideoRef.current;
+
+    const requestFullscreen =
+      overlayEl?.requestFullscreen ||
+      overlayEl?.webkitRequestFullscreen ||
+      overlayEl?.mozRequestFullScreen ||
+      overlayEl?.msRequestFullscreen;
+
+    if (requestFullscreen) {
+      Promise.resolve(requestFullscreen.call(overlayEl)).catch(() => {});
+    }
+
+    if (videoEl) {
+      videoEl.currentTime = 0;
+      const playPromise = videoEl.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {});
+      }
+    }
+
+    return () => {
+      document.body.classList.remove("rickroll-lock");
+      const exitFullscreen =
+        document.exitFullscreen ||
+        document.webkitExitFullscreen ||
+        document.mozCancelFullScreen ||
+        document.msExitFullscreen;
+      if (document.fullscreenElement && exitFullscreen) {
+        Promise.resolve(exitFullscreen.call(document)).catch(() => {});
+      }
+    };
+  }, [showRickRoll]);
 
   return (
     <>
@@ -109,19 +171,33 @@ export default function LoginPage() {
                   "--x-range": `calc(100vw - ${p.size})`,
                   animationDuration: p.xDuration,
                   animationDelay: p.xDelay,
+                  width: p.size,
+                  height: p.size,
                 }}
               >
                 <span
-                  className="login-easter-number"
+                  className={`login-easter-number ${
+                    p.variant === "text" ? "login-easter-number-text" : ""
+                  }`}
                   style={{
                     "--y-range": `calc(100vh - ${p.size})`,
                     animationDuration: p.yDuration,
                     animationDelay: p.yDelay,
+                    "--hue": p.hue,
                     fontSize: p.size,
-                    filter: `hue-rotate(${p.hue})`,
                   }}
                 >
-                  67
+                  {p.variant === "text" ? (
+                    "67"
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src="/easter/67.gif"
+                      alt=""
+                      className="login-easter-gif"
+                      draggable="false"
+                    />
+                  )}
                 </span>
               </div>
             ))}
@@ -129,7 +205,11 @@ export default function LoginPage() {
         )}
         <div className="auth-card glass-panel">
           <div style={{ textAlign: "center", marginBottom: 8 }}>
-            <button type="button" className="logo-secret-hitbox" onClick={handleLogoTap}>
+            <button
+              type="button"
+              className="logo-secret-hitbox"
+              onPointerDown={handleLogoTap}
+            >
               <RiServerLine style={{ fontSize: 40, color: "var(--accent)" }} />
             </button>
           </div>
@@ -191,6 +271,18 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+      {showRickRoll && (
+        <div className="login-rickroll-fullscreen" ref={rickRollOverlayRef}>
+          <video
+            ref={rickRollVideoRef}
+            className="login-rickroll-video-fullscreen"
+            src="/easter/rickroll.mp4"
+            autoPlay
+            loop
+            playsInline
+          />
+        </div>
+      )}
     </>
   );
 }

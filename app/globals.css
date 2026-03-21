@@ -1191,7 +1191,14 @@ tr:last-child td {
 
 .auth-container.login-easter-egg .auth-card,
 .auth-container.login-easter-egg .auth-card * {
-  font-family: "Comic Sans MS", "Comic Sans", cursive !important;
+  font-family:
+    "Comic Sans MS",
+    "Comic Sans",
+    "Comic Neue",
+    "Chalkboard SE",
+    "Marker Felt",
+    "Bradley Hand",
+    cursive !important;
 }
 
 .auth-container.login-easter-egg .auth-card h1,
@@ -1237,20 +1244,88 @@ tr:last-child td {
 }
 
 .login-easter-number {
-  display: inline-block;
-  color: rgba(255, 255, 255, 0.2);
-  text-shadow:
-    0 0 10px rgba(255, 0, 102, 0.45),
-    0 0 16px rgba(59, 130, 246, 0.45),
-    0 0 22px rgba(34, 197, 94, 0.45);
-  font-weight: 700;
-  font-family: "Comic Sans MS", "Comic Sans", cursive;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.24))
+    hue-rotate(var(--hue, 0deg));
   animation-name: login-dvd-y;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-direction: alternate;
   will-change: transform;
+}
+
+.login-easter-number-text {
+  background: linear-gradient(
+    90deg,
+    #ff0000,
+    #ff7a00,
+    #ffd400,
+    #00d600,
+    #00d4ff,
+    #274bff,
+    #b100ff,
+    #ff006e
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  font-weight: 700;
+  line-height: 1;
+  font-family:
+    "Comic Sans MS",
+    "Comic Sans",
+    "Comic Neue",
+    "Chalkboard SE",
+    "Marker Felt",
+    "Bradley Hand",
+    cursive !important;
+  text-shadow:
+    0 0 10px rgba(255, 0, 102, 0.45),
+    0 0 16px rgba(59, 130, 246, 0.45),
+    0 0 22px rgba(34, 197, 94, 0.45);
+  animation: login-rgb-text 1.5s linear infinite;
+}
+
+.login-easter-gif {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.login-rickroll-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  width: 100dvw;
+  height: 100dvh;
+  z-index: 2147483647;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+}
+
+.login-rickroll-video-fullscreen {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  width: 100dvw;
+  height: 100dvh;
+  object-fit: cover;
+  background: #000;
+}
+
+body.rickroll-lock {
+  overflow: hidden !important;
 }
 
 @keyframes login-dvd-x {
