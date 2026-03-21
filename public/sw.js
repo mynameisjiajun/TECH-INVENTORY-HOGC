@@ -1,4 +1,4 @@
-const CACHE_NAME = "tech-inventory-v6";
+const CACHE_NAME = "tech-inventory-v16";
 const API_CACHE = "tech-inventory-api-v3";
 
 // App shell — pages & assets to pre-cache on install

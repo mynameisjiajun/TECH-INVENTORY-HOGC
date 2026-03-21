@@ -2,7 +2,7 @@
 import { useAuth } from "@/lib/context/AuthContext";
 import { useCart } from "@/lib/context/CartContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import { TypeBadge } from "@/lib/utils/typeColors";
@@ -15,11 +15,6 @@ import {
 
 export default function InventoryPage() {
   const TABLE_TABS = ["storage", "deployed", "total_quantity", "total_breakdown", "low_stock"];
-  const VIRTUAL_TABS = ["storage", "deployed", "total_breakdown", "low_stock"];
-  const ROWS_PER_PAGE = 50;
-  const TABLE_VIEWPORT_HEIGHT = 560;
-  const OVERSCAN_ROWS = 6;
-
   const { user, loading } = useAuth();
   const { addItem, updateQuantity } = useCart();
   const router = useRouter();
@@ -35,9 +30,7 @@ export default function InventoryPage() {
   const [templates, setTemplates] = useState([]);
   const [overdueCount, setOverdueCount] = useState(0);
   const [offline, setOffline] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [tableScrollTop, setTableScrollTop] = useState(0);
-  const tableViewportRef = useRef(null);
+  const [initialSyncChecked, setInitialSyncChecked] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -54,7 +47,7 @@ export default function InventoryPage() {
         type: typeFilter,
         brand: brandFilter,
       });
-      const res = await fetch(`/api/items?${params}`);
+      const res = await fetch(`/api/items?${params}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setItems(data.items);
@@ -72,9 +65,43 @@ export default function InventoryPage() {
   }, [user, tab, search, typeFilter, brandFilter]);
 
   useEffect(() => {
+    if (!user || initialSyncChecked) return;
+    let cancelled = false;
+
+    const runInitialSync = async () => {
+      if (user.role !== "admin") {
+        if (!cancelled) setInitialSyncChecked(true);
+        return;
+      }
+
+      setSyncing(true);
+      try {
+        const syncRes = await fetch("/api/items/sync", { method: "POST" });
+        if (!syncRes.ok) {
+          const data = await syncRes.json().catch(() => ({}));
+          if (!cancelled) setError(data.error || "Auto-sync failed");
+        }
+      } catch {
+        if (!cancelled) setError("Network error — could not auto-sync inventory");
+      } finally {
+        if (!cancelled) {
+          setSyncing(false);
+          setInitialSyncChecked(true);
+        }
+      }
+    };
+
+    void runInitialSync();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, initialSyncChecked]);
+
+  useEffect(() => {
+    if (!initialSyncChecked) return;
     const timer = setTimeout(fetchItems, 300);
     return () => clearTimeout(timer);
-  }, [fetchItems]);
+  }, [fetchItems, initialSyncChecked]);
 
   useEffect(() => {
     if (!user) return;
@@ -127,82 +154,6 @@ export default function InventoryPage() {
     await fetchItems();
   }, [fetchItems]);
 
-  const isTableTab = TABLE_TABS.includes(tab);
-  const isVirtualTab = VIRTUAL_TABS.includes(tab);
-
-  const totalPages = useMemo(() => {
-    if (!isTableTab) return 1;
-    return Math.max(1, Math.ceil(items.length / ROWS_PER_PAGE));
-  }, [isTableTab, items.length]);
-
-  useEffect(() => {
-    if (!isTableTab) return;
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [isTableTab, currentPage, totalPages]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-    setTableScrollTop(0);
-    tableViewportRef.current?.scrollTo({ top: 0 });
-  }, [tab, search, typeFilter, brandFilter]);
-
-  const pagedItems = useMemo(() => {
-    if (!isTableTab) return items;
-    const start = (currentPage - 1) * ROWS_PER_PAGE;
-    return items.slice(start, start + ROWS_PER_PAGE);
-  }, [isTableTab, items, currentPage]);
-
-  const rowHeight = tab === "deployed" ? 56 : 52;
-  const shouldVirtualize = isVirtualTab && pagedItems.length > 40;
-
-  const virtualWindow = useMemo(() => {
-    if (!shouldVirtualize) {
-      return { start: 0, end: pagedItems.length, topPad: 0, bottomPad: 0 };
-    }
-    const visibleRows = Math.ceil(TABLE_VIEWPORT_HEIGHT / rowHeight);
-    const start = Math.max(
-      0,
-      Math.floor(tableScrollTop / rowHeight) - OVERSCAN_ROWS,
-    );
-    const end = Math.min(
-      pagedItems.length,
-      start + visibleRows + OVERSCAN_ROWS * 2,
-    );
-    return {
-      start,
-      end,
-      topPad: start * rowHeight,
-      bottomPad: Math.max(0, (pagedItems.length - end) * rowHeight),
-    };
-  }, [shouldVirtualize, pagedItems.length, rowHeight, tableScrollTop]);
-
-  const visibleItems = useMemo(() => {
-    if (!shouldVirtualize) return pagedItems;
-    return pagedItems.slice(virtualWindow.start, virtualWindow.end);
-  }, [pagedItems, shouldVirtualize, virtualWindow.start, virtualWindow.end]);
-
-  const pageStart = isTableTab && items.length > 0
-    ? (currentPage - 1) * ROWS_PER_PAGE + 1
-    : 0;
-  const pageEnd = isTableTab
-    ? Math.min(currentPage * ROWS_PER_PAGE, items.length)
-    : items.length;
-
-  const handlePageChange = useCallback(
-    (nextPage) => {
-      const safe = Math.max(1, Math.min(nextPage, totalPages));
-      setCurrentPage(safe);
-      setTableScrollTop(0);
-      tableViewportRef.current?.scrollTo({ top: 0 });
-    },
-    [totalPages],
-  );
-
-  const onTableScroll = useCallback((e) => {
-    if (!shouldVirtualize) return;
-    setTableScrollTop(e.currentTarget.scrollTop);
-  }, [shouldVirtualize]);
-
   if (loading || !user)
     return (
       <div className="loading-spinner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -221,6 +172,7 @@ export default function InventoryPage() {
   const tabs = user.role === "admin" 
     ? allTabs 
     : [{ id: "presets", label: "Presets" }, { id: "storage", label: "Storage Spare" }];
+  const isTableTab = TABLE_TABS.includes(tab);
 
   return (
     <>
@@ -406,6 +358,12 @@ export default function InventoryPage() {
           </div>
         )}
 
+        {isTableTab && !fetching && (
+          <div className="table-summary">
+            {`Showing ${items.length} Item${items.length === 1 ? "" : "s"}`}
+          </div>
+        )}
+
         {fetching ? (
           <div className="loading-spinner">
             <div className="spinner" />
@@ -476,35 +434,7 @@ export default function InventoryPage() {
             {/* Storage Spare Table */}
             {tab === "storage" && (
               <div className="table-container">
-                <div className="table-controls">
-                  <div className="table-meta">
-                    Showing {pageStart}-{pageEnd} of {items.length}
-                  </div>
-                  <div className="table-pagination">
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage <= 1}
-                    >
-                      Prev
-                    </button>
-                    <span>Page {currentPage} / {totalPages}</span>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage >= totalPages}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-                <div
-                  ref={tableViewportRef}
-                  className="table-viewport"
-                  onScroll={onTableScroll}
-                  style={{ maxHeight: TABLE_VIEWPORT_HEIGHT }}
-                >
-                <table>
+                <table className="storage-table">
                   <thead>
                     <tr>
                       <th>Item</th>
@@ -520,18 +450,10 @@ export default function InventoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {shouldVirtualize && virtualWindow.topPad > 0 && (
-                      <tr className="virtual-spacer" aria-hidden="true">
-                        <td colSpan={10} style={{ height: virtualWindow.topPad }} />
-                      </tr>
-                    )}
-                    {visibleItems.map((item, i) => {
+                    {items.map((item, i) => {
                       const loaned = item.quantity_spare - item.current;
-                      const absoluteIndex = shouldVirtualize
-                        ? virtualWindow.start + i
-                        : i;
                       return (
-                        <tr key={`storage-${item.id}-${absoluteIndex}`}>
+                        <tr key={`storage-${item.id}-${i}`}>
                           <td style={{ fontWeight: 500 }}>{item.item}</td>
                           <td>
                             <TypeBadge type={item.type} />
@@ -592,14 +514,8 @@ export default function InventoryPage() {
                         </tr>
                       );
                     })}
-                    {shouldVirtualize && virtualWindow.bottomPad > 0 && (
-                      <tr className="virtual-spacer" aria-hidden="true">
-                        <td colSpan={10} style={{ height: virtualWindow.bottomPad }} />
-                      </tr>
-                    )}
                   </tbody>
                 </table>
-                </div>
                 {items.length === 0 && (
                   <div className="empty-state">
                     <h3>No items found</h3>
@@ -612,34 +528,6 @@ export default function InventoryPage() {
             {/* Deployed Table */}
             {tab === "deployed" && (
               <div className="table-container">
-                <div className="table-controls">
-                  <div className="table-meta">
-                    Showing {pageStart}-{pageEnd} of {items.length}
-                  </div>
-                  <div className="table-pagination">
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage <= 1}
-                    >
-                      Prev
-                    </button>
-                    <span>Page {currentPage} / {totalPages}</span>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage >= totalPages}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-                <div
-                  ref={tableViewportRef}
-                  className="table-viewport"
-                  onScroll={onTableScroll}
-                  style={{ maxHeight: TABLE_VIEWPORT_HEIGHT }}
-                >
                 <table>
                   <thead>
                     <tr>
@@ -655,13 +543,8 @@ export default function InventoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {shouldVirtualize && virtualWindow.topPad > 0 && (
-                      <tr className="virtual-spacer" aria-hidden="true">
-                        <td colSpan={9} style={{ height: virtualWindow.topPad }} />
-                      </tr>
-                    )}
-                    {visibleItems.map((item, i) => (
-                      <tr key={`deployed-${item.id}-${shouldVirtualize ? virtualWindow.start + i : i}`}>
+                    {items.map((item, i) => (
+                      <tr key={`deployed-${item.id}-${i}`}>
                         <td style={{ fontWeight: 500 }}>{item.item}</td>
                         <td>
                           <TypeBadge type={item.type} />
@@ -688,14 +571,8 @@ export default function InventoryPage() {
                         </td>
                       </tr>
                     ))}
-                    {shouldVirtualize && virtualWindow.bottomPad > 0 && (
-                      <tr className="virtual-spacer" aria-hidden="true">
-                        <td colSpan={9} style={{ height: virtualWindow.bottomPad }} />
-                      </tr>
-                    )}
                   </tbody>
                 </table>
-                </div>
                 {items.length === 0 && (
                   <div className="empty-state">
                     <h3>No deployed items</h3>
@@ -708,28 +585,6 @@ export default function InventoryPage() {
             {/* Total Quantity */}
             {tab === "total_quantity" && (
               <div className="table-container">
-                <div className="table-controls">
-                  <div className="table-meta">
-                    Showing {pageStart}-{pageEnd} of {items.length}
-                  </div>
-                  <div className="table-pagination">
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage <= 1}
-                    >
-                      Prev
-                    </button>
-                    <span>Page {currentPage} / {totalPages}</span>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage >= totalPages}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
                 <table>
                   <thead>
                     <tr>
@@ -740,7 +595,7 @@ export default function InventoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pagedItems.map((item, i) => (
+                    {items.map((item, i) => (
                       <tr key={`${item.type}-${i}`}>
                         <td style={{ fontWeight: 600 }}>{item.type}</td>
                         <td>{item.total_spare}</td>
@@ -769,34 +624,6 @@ export default function InventoryPage() {
             {/* Total Breakdown */}
             {tab === "total_breakdown" && (
               <div className="table-container">
-                <div className="table-controls">
-                  <div className="table-meta">
-                    Showing {pageStart}-{pageEnd} of {items.length}
-                  </div>
-                  <div className="table-pagination">
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage <= 1}
-                    >
-                      Prev
-                    </button>
-                    <span>Page {currentPage} / {totalPages}</span>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage >= totalPages}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-                <div
-                  ref={tableViewportRef}
-                  className="table-viewport"
-                  onScroll={onTableScroll}
-                  style={{ maxHeight: TABLE_VIEWPORT_HEIGHT }}
-                >
                 <table>
                   <thead>
                     <tr>
@@ -810,13 +637,8 @@ export default function InventoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {shouldVirtualize && virtualWindow.topPad > 0 && (
-                      <tr className="virtual-spacer" aria-hidden="true">
-                        <td colSpan={7} style={{ height: virtualWindow.topPad }} />
-                      </tr>
-                    )}
-                    {visibleItems.map((item, i) => (
-                      <tr key={`${item.item}-${item.type}-${item.brand}-${shouldVirtualize ? virtualWindow.start + i : i}`}>
+                    {items.map((item, i) => (
+                      <tr key={`${item.item}-${item.type}-${item.brand}-${i}`}>
                         <td style={{ fontWeight: 500 }}>{item.item}</td>
                         <td>
                           <TypeBadge type={item.type} />
@@ -841,48 +663,14 @@ export default function InventoryPage() {
                         </td>
                       </tr>
                     ))}
-                    {shouldVirtualize && virtualWindow.bottomPad > 0 && (
-                      <tr className="virtual-spacer" aria-hidden="true">
-                        <td colSpan={7} style={{ height: virtualWindow.bottomPad }} />
-                      </tr>
-                    )}
                   </tbody>
                 </table>
-                </div>
               </div>
             )}
 
             {/* Low in Stock */}
             {tab === "low_stock" && (
               <div className="table-container">
-                <div className="table-controls">
-                  <div className="table-meta">
-                    Showing {pageStart}-{pageEnd} of {items.length}
-                  </div>
-                  <div className="table-pagination">
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage <= 1}
-                    >
-                      Prev
-                    </button>
-                    <span>Page {currentPage} / {totalPages}</span>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage >= totalPages}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-                <div
-                  ref={tableViewportRef}
-                  className="table-viewport"
-                  onScroll={onTableScroll}
-                  style={{ maxHeight: TABLE_VIEWPORT_HEIGHT }}
-                >
                 <table>
                   <thead>
                     <tr>
@@ -896,13 +684,8 @@ export default function InventoryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {shouldVirtualize && virtualWindow.topPad > 0 && (
-                      <tr className="virtual-spacer" aria-hidden="true">
-                        <td colSpan={7} style={{ height: virtualWindow.topPad }} />
-                      </tr>
-                    )}
-                    {visibleItems.map((item, i) => (
-                      <tr key={`${item.id}-${shouldVirtualize ? virtualWindow.start + i : i}`}>
+                    {items.map((item, i) => (
+                      <tr key={`${item.id}-${i}`}>
                         <td style={{ fontWeight: 500 }}>{item.item}</td>
                         <td>
                           <TypeBadge type={item.type} />
@@ -930,14 +713,8 @@ export default function InventoryPage() {
                         </td>
                       </tr>
                     ))}
-                    {shouldVirtualize && virtualWindow.bottomPad > 0 && (
-                      <tr className="virtual-spacer" aria-hidden="true">
-                        <td colSpan={7} style={{ height: virtualWindow.bottomPad }} />
-                      </tr>
-                    )}
                   </tbody>
                 </table>
-                </div>
                 {items.length === 0 && (
                   <div className="empty-state">
                     <div className="empty-icon">✅</div>

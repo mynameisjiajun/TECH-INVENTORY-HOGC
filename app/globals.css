@@ -478,34 +478,6 @@ select {
   position: relative;
 }
 
-.table-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(15, 23, 42, 0.35);
-}
-
-.table-meta {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.table-pagination {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.table-viewport {
-  overflow: auto;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;
@@ -538,14 +510,24 @@ tr:hover td {
   background: rgba(99, 102, 241, 0.04);
 }
 
-tr:last-child td {
-  border-bottom: none;
+@media (min-width: 769px) {
+  .storage-table th:last-child,
+  .storage-table td:last-child {
+    background: #111827;
+    border-left: 1px solid #1f2937;
+  }
+
+  .storage-table th:last-child {
+    background: #0f1629;
+  }
+
+  .storage-table tr:hover td:last-child {
+    background: #1b2436;
+  }
 }
 
-.virtual-spacer td {
-  padding: 0 !important;
-  border: none !important;
-  background: transparent !important;
+tr:last-child td {
+  border-bottom: none;
 }
 
 /* ===== BADGES ===== */
@@ -664,6 +646,13 @@ tr:last-child td {
   max-width: 190px;
   font-size: 12px;
   padding: 8px 30px 8px 10px;
+}
+
+.table-summary {
+  margin: -8px 0 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 0 2px;
 }
 
 /* ===== CART ===== */
@@ -1171,6 +1160,126 @@ tr:last-child td {
   color: var(--text-secondary);
 }
 
+.logo-secret-hitbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.auth-container.login-easter-egg {
+  overflow: hidden;
+}
+
+.auth-container.login-easter-egg .auth-card {
+  position: relative;
+  z-index: 2;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 24px 48px rgba(14, 165, 233, 0.22),
+    0 10px 36px rgba(244, 63, 94, 0.2);
+}
+
+.auth-container.login-easter-egg .auth-card,
+.auth-container.login-easter-egg .auth-card * {
+  font-family: "Comic Sans MS", "Comic Sans", cursive !important;
+}
+
+.auth-container.login-easter-egg .auth-card h1,
+.auth-container.login-easter-egg .auth-card .auth-subtitle,
+.auth-container.login-easter-egg .auth-card .auth-footer,
+.auth-container.login-easter-egg .auth-card .input-group label {
+  background: linear-gradient(
+    90deg,
+    #ff0000,
+    #ff7a00,
+    #ffd400,
+    #00d600,
+    #00d4ff,
+    #274bff,
+    #b100ff,
+    #ff006e
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  animation: login-rgb-text 2.2s linear infinite;
+}
+
+.login-easter-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.login-easter-dvd {
+  position: absolute;
+  top: 0;
+  left: 0;
+  animation-name: login-dvd-x;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  will-change: transform;
+}
+
+.login-easter-number {
+  display: inline-block;
+  color: rgba(255, 255, 255, 0.2);
+  text-shadow:
+    0 0 10px rgba(255, 0, 102, 0.45),
+    0 0 16px rgba(59, 130, 246, 0.45),
+    0 0 22px rgba(34, 197, 94, 0.45);
+  font-weight: 700;
+  font-family: "Comic Sans MS", "Comic Sans", cursive;
+  line-height: 1;
+  animation-name: login-dvd-y;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  will-change: transform;
+}
+
+@keyframes login-dvd-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--x-range));
+  }
+}
+
+@keyframes login-dvd-y {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(var(--y-range));
+  }
+}
+
+@keyframes login-rgb-text {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 260% 50%;
+  }
+}
+
 .error-msg {
   background: var(--error-bg);
   color: var(--error);
@@ -1432,14 +1541,9 @@ tr:last-child td {
   }
 
   /* ===== Table Mobile Optimizations ===== */
-  .table-controls {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .table-pagination {
-    width: 100%;
-    justify-content: flex-start;
+  .table-summary {
+    margin: -4px 0 10px;
+    font-size: 11px;
   }
 
   table {
@@ -1455,7 +1559,7 @@ tr:last-child td {
     font-size: 11px;
   }
 
-  /* Sticky first and last columns */
+  /* Keep Item and Actions visible while horizontally scrolling on mobile */
   .table-container table thead th:first-child,
   .table-container table tbody td:first-child {
     position: sticky;
@@ -1480,7 +1584,7 @@ tr:last-child td {
     z-index: 11;
   }
 
-  /* Shadow indicators for scrollable content */
+  /* Light edge shadows so frozen columns blend into scrolling content */
   .table-container table thead th:first-child::after,
   .table-container table tbody td:first-child::after {
     content: "";
