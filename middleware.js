@@ -9,10 +9,9 @@ const PROTECTED_ROUTES = [
   "/loans",
   "/profile",
   "/admin",
-  "/laptop-loans",
 ];
 // Routes that require admin role
-const ADMIN_ROUTES = ["/admin", "/laptop-loans/admin"];
+const ADMIN_ROUTES = ["/admin"];
 // Routes only for unauthenticated users
 const AUTH_ROUTES = ["/login", "/register"];
 
@@ -32,8 +31,6 @@ function parseJwtPayload(token) {
 }
 
 export default function middleware(request) {
-  if (process.env.DEV_BYPASS_AUTH === "true") return NextResponse.next();
-
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(COOKIE_NAME)?.value;
   const user = token ? parseJwtPayload(token) : null;
@@ -70,7 +67,6 @@ export const config = {
     "/loans/:path*",
     "/profile/:path*",
     "/admin/:path*",
-    "/laptop-loans/:path*",
     "/login",
     "/register",
   ],
