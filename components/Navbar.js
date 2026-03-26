@@ -14,6 +14,7 @@ import {
   RiShoppingCart2Line,
   RiLogoutBoxLine,
   RiServerLine,
+  RiMacbookLine,
 } from "react-icons/ri";
 import InstallPrompt from "./InstallPrompt";
 
@@ -166,6 +167,7 @@ export default function Navbar() {
     { href: "/inventory", label: "Inventory", icon: <RiArchiveLine /> },
     { href: "/dashboard", label: "Dashboard", icon: <RiDashboardLine /> },
     { href: "/loans", label: "My Loans", icon: <RiFileListLine /> },
+    { href: "/laptop-loans", label: "Laptops", icon: <RiMacbookLine /> },
   ];
   if (user.role === "admin") {
     navLinks.push({
