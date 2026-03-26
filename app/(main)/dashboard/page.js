@@ -1152,7 +1152,7 @@ export default function DashboardPage() {
 
         {/* Activity Feed */}
         {recentActivity.length > 0 && (
-          <div className="activity-feed">
+          <div className="activity-feed" style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
               <h3 style={{ fontSize: 16, margin: 0 }}>Recent Activity</h3>
               <button className="btn btn-sm btn-outline" onClick={() => setShowClearActivityConfirm(true)}

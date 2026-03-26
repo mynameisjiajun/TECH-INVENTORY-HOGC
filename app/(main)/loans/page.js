@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useEffect, useState, useCallback, useRef } from 'react';
+import imageCompression from 'browser-image-compression';
 import { useToast } from '@/lib/context/ToastContext';
 import { useCart } from '@/lib/context/CartContext';
 import Navbar from '@/components/Navbar';
@@ -11,7 +12,7 @@ import { supabaseClient } from '@/lib/db/supabaseClient';
 import {
   RiTimeLine, RiCheckLine, RiCloseLine, RiArrowGoBackLine,
   RiSearchLine, RiFilterLine, RiCameraLine, RiAlertLine,
-  RiCalendarLine, RiShoppingBag3Line, RiRefreshLine,
+  RiCalendarLine, RiShoppingBag3Line, RiRefreshLine, RiEdit2Line,
 } from 'react-icons/ri';
 
 export default function LoansPage() {
@@ -26,7 +27,7 @@ export default function LoansPage() {
   const [error, setError] = useState('');
   const [borrowAgainLoading, setBorrowAgainLoading] = useState({});
   const toast = useToast();
-  const { addItem, setIsOpen } = useCart();
+  const { addItem, setIsOpen, setItems, setModifyingLoan } = useCart();
   const channelRef = useRef(null);
 
   const [returnModalLoan, setReturnModalLoan] = useState(null);
@@ -34,30 +35,29 @@ export default function LoansPage() {
   const [returnRemarks, setReturnRemarks] = useState('');
   const [returnLoading, setReturnLoading] = useState(false);
 
-  const handlePhotoChange = (e) => {
+  const handlePhotoChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
-        let width = img.width;
-        let height = img.height;
-        if (width > height) {
-          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-        } else {
-          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-        }
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        setReturnPhoto(canvas.toDataURL('image/jpeg', 0.8));
+    
+    try {
+      const options = {
+        maxSizeMB: 0.2, // ~200KB
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
       };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
+      
+      const compressedFile = await imageCompression(file, options);
+      
+      // Convert to Base64 to match existing payload expectations
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setReturnPhoto(event.target.result);
+      };
+      reader.readAsDataURL(compressedFile);
+    } catch (error) {
+      console.error('Error compressing image:', error);
+      toast.error('Failed to process the photo.');
+    }
   };
 
   const submitReturn = async () => {
@@ -117,6 +117,49 @@ export default function LoansPage() {
       }
     } catch {
       toast.error('Could not load items — please try again');
+    } finally {
+      setBorrowAgainLoading((p) => ({ ...p, [loan.id]: false }));
+    }
+  };
+
+  const handleModifyLoan = async (loan) => {
+    setBorrowAgainLoading((p) => ({ ...p, [loan.id]: true }));
+    try {
+      const res = await fetch('/api/items?tab=storage');
+      const data = await res.json();
+      const storageItems = data.items || [];
+      const newCart = [];
+      let missing = 0;
+      
+      for (const loanItem of loan.items) {
+        const si = loanItem.sheet_row
+          ? storageItems.find((s) => s.sheet_row === loanItem.sheet_row)
+          : storageItems.find((s) => s.id === loanItem.item_id);
+          
+        if (si) {
+          const isApproved = loan.status === 'approved';
+          const maxAllowed = isApproved ? si.current + loanItem.quantity : si.current;
+          
+          // only add if it's still theoretically in stock or was already held
+          if (maxAllowed >= loanItem.quantity) {
+            newCart.push({ 
+              id: si.id, item: si.item, type: si.type, brand: si.brand, 
+              current: si.current, quantity: loanItem.quantity, max: maxAllowed 
+            });
+          } else {
+            missing++;
+          }
+        } else {
+          missing++;
+        }
+      }
+      
+      setModifyingLoan(loan);
+      setItems(newCart);
+      setIsOpen(true);
+      if (missing > 0) toast.error(`${missing} item(s) could not be loaded for modification.`);
+    } catch {
+      toast.error('Could not load inventory for modification — please try again');
     } finally {
       setBorrowAgainLoading((p) => ({ ...p, [loan.id]: false }));
     }
@@ -365,19 +408,38 @@ export default function LoansPage() {
                   </div>
                 )}
 
-                {loan.status === 'approved' && loan.loan_type === 'temporary' && (
-                  <div style={{ marginTop: 16 }}>
+                {(loan.status === 'approved' || loan.status === 'pending') && (
+                  <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {loan.status === 'approved' && loan.loan_type === 'temporary' && (
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => setReturnModalLoan(loan)}
+                        style={{
+                          background: overdue ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)',
+                          color: overdue ? 'var(--error)' : '#3b82f6',
+                          border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                          fontWeight: 600,
+                        }}
+                      >
+                        <RiCameraLine style={{ marginRight: 6 }} /> Return
+                      </button>
+                    )}
                     <button
                       className="btn btn-sm"
-                      onClick={() => setReturnModalLoan(loan)}
+                      onClick={() => handleModifyLoan(loan)}
+                      disabled={borrowAgainLoading[loan.id]}
                       style={{
-                        background: overdue ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)',
-                        color: overdue ? 'var(--error)' : '#3b82f6',
-                        border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                        background: 'rgba(245, 158, 11, 0.1)',
+                        color: '#d97706',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
                         fontWeight: 600,
                       }}
                     >
-                      <RiCameraLine style={{ marginRight: 6 }} /> Return Items
+                      {borrowAgainLoading[loan.id] ? (
+                        <span className="btn-spinner" />
+                      ) : (
+                        <><RiEdit2Line style={{ marginRight: 6 }} /> Modify</>
+                      )}
                     </button>
                   </div>
                 )}

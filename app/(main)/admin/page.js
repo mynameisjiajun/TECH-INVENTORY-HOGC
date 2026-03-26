@@ -920,43 +920,44 @@ export default function AdminPage() {
                         {new Date(loan.created_at).toLocaleDateString()}
                       </span>
                       {statusFilter === "pending" && (
-                        <label
-                          style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)" }}
+                        <div
+                          style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}
+                          onClick={() => toggleSelectPending(loan.id)}
                         >
-                          <input
-                            type="checkbox"
-                            checked={selectedPendingLoans.has(loan.id)}
-                            onChange={() => toggleSelectPending(loan.id)}
-                            style={{ width: 18, height: 18, accentColor: "#22c55e", cursor: "pointer" }}
-                          />
+                          <div
+                            style={{
+                              width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                              border: selectedPendingLoans.has(loan.id) ? 'none' : '1.5px solid var(--border)',
+                              background: selectedPendingLoans.has(loan.id) ? '#10b981' : 'transparent',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {selectedPendingLoans.has(loan.id) && <RiCheckLine color="white" size={14} fontWeight="bold" />}
+                          </div>
                           Select
-                        </label>
+                        </div>
                       )}
                       {statusFilter === "approved" &&
                         loan.loan_type === "temporary" && (
-                          <label
-                            style={{
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                              fontSize: 12,
-                              color: "var(--text-secondary)",
-                            }}
+                          <div
+                            style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}
+                            onClick={() => toggleSelect(loan.id)}
                           >
-                            <input
-                              type="checkbox"
-                              checked={selectedLoans.has(loan.id)}
-                              onChange={() => toggleSelect(loan.id)}
+                            <div
                               style={{
-                                width: 18,
-                                height: 18,
-                                accentColor: "var(--accent)",
-                                cursor: "pointer",
+                                width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                                border: selectedLoans.has(loan.id) ? 'none' : '1.5px solid var(--border)',
+                                background: selectedLoans.has(loan.id) ? 'var(--accent)' : 'transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all 0.15s ease',
+                                boxShadow: selectedLoans.has(loan.id) ? '0 2px 6px rgba(99,102,241,0.25)' : 'none'
                               }}
-                            />
+                            >
+                              {selectedLoans.has(loan.id) && <RiCheckLine color="white" size={14} fontWeight="bold" />}
+                            </div>
                             Select
-                          </label>
+                          </div>
                         )}
                     </div>
                   </div>

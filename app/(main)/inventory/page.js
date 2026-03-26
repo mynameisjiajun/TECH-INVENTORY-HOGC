@@ -439,8 +439,12 @@ export default function InventoryPage() {
                     <tr>
                       <th>Item</th>
                       <th>Type</th>
-                      <th>Brand</th>
-                      <th>Model</th>
+                      {user.role === "admin" && (
+                        <>
+                          <th>Brand</th>
+                          <th>Model</th>
+                        </>
+                      )}
                       <th>Total</th>
                       <th>Available</th>
                       <th>Loaned</th>
@@ -458,8 +462,12 @@ export default function InventoryPage() {
                           <td>
                             <TypeBadge type={item.type} />
                           </td>
-                          <td>{item.brand}</td>
-                          <td>{item.model}</td>
+                          {user.role === "admin" && (
+                            <>
+                              <td>{item.brand}</td>
+                              <td>{item.model}</td>
+                            </>
+                          )}
                           <td>{item.quantity_spare}</td>
                           <td>
                             <span

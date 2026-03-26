@@ -1,6 +1,6 @@
 "use client";
 import { useCart } from "@/lib/context/CartContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   RiCloseLine,
   RiAddLine,
@@ -18,6 +18,8 @@ export default function CartPanel() {
     removeItem,
     clearCart,
     totalItems,
+    modifyingLoan,
+    setModifyingLoan,
   } = useCart();
   const [showLoanForm, setShowLoanForm] = useState(false);
   const [loanType, setLoanType] = useState("");
@@ -38,14 +40,32 @@ export default function CartPanel() {
     setFormData((prev) => ({ ...prev, start_date: today }));
   };
 
+  useEffect(() => {
+    if (modifyingLoan) {
+      setLoanType(modifyingLoan.loan_type);
+      setFormData({
+        purpose: modifyingLoan.purpose || "",
+        department: modifyingLoan.department || "",
+        start_date: modifyingLoan.start_date || "",
+        end_date: modifyingLoan.end_date || "",
+        location: modifyingLoan.location || "",
+      });
+      // Don't auto-open form here so they can add/remove items first
+    }
+  }, [modifyingLoan]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch("/api/loans", {
-        method: "POST",
+      const isModifying = !!modifyingLoan;
+      const endpoint = isModifying ? `/api/loans/${modifyingLoan.id}` : "/api/loans";
+      const method = isModifying ? "PUT" : "POST";
+      
+      const res = await fetch(endpoint, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           loan_type: loanType,
@@ -85,7 +105,7 @@ export default function CartPanel() {
             <RiShoppingCart2Line
               style={{ verticalAlign: "middle", marginRight: 8 }}
             />{" "}
-            Cart ({totalItems})
+            {modifyingLoan ? `Modifying Loan #${modifyingLoan.id}` : `Cart (${totalItems})`}
           </h2>
           <button
             aria-label="Close cart"
@@ -155,26 +175,36 @@ export default function CartPanel() {
                   {totalItems} item{totalItems !== 1 ? "s" : ""} selected
                 </p>
                 <div className="cart-checkout-buttons">
-                  <button
-                    className="btn btn-primary cart-checkout-btn"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, var(--temporary), #60a5fa)",
-                    }}
-                    onClick={() => handleCheckout("temporary")}
-                  >
-                    ⏱️ Temp Loan
-                  </button>
-                  <button
-                    className="btn btn-primary cart-checkout-btn"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, var(--permanent), #c084fc)",
-                    }}
-                    onClick={() => handleCheckout("permanent")}
-                  >
-                    📌 Perm Loan
-                  </button>
+                  {!modifyingLoan ? (
+                    <>
+                      <button
+                        className="btn btn-primary cart-checkout-btn"
+                        style={{
+                          background: "linear-gradient(135deg, var(--temporary), #60a5fa)",
+                        }}
+                        onClick={() => handleCheckout("temporary")}
+                      >
+                        ⏱️ Temp Loan
+                      </button>
+                      <button
+                        className="btn btn-primary cart-checkout-btn"
+                        style={{
+                          background: "linear-gradient(135deg, var(--permanent), #c084fc)",
+                        }}
+                        onClick={() => handleCheckout("permanent")}
+                      >
+                        📌 Perm Loan
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="btn btn-primary cart-checkout-btn"
+                      style={{ width: "100%", background: "linear-gradient(135deg, #f59e0b, #fbbf24)" }}
+                      onClick={() => setShowLoanForm(true)}
+                    >
+                      Continue Modifying Form →
+                    </button>
+                  )}
                 </div>
                 <button
                   className="btn btn-outline"
@@ -205,11 +235,10 @@ export default function CartPanel() {
                   className="btn btn-sm btn-outline"
                   onClick={() => setShowLoanForm(false)}
                 >
-                  ← Back
+                  ← Back to Items
                 </button>
                 <h3 style={{ fontSize: 16 }}>
-                  {loanType === "temporary" ? "⏱️ Temporary" : "📌 Permanent"}{" "}
-                  Loan Request
+                  {modifyingLoan ? "Update Loan Request" : loanType === "temporary" ? "⏱️ Temporary Loan Request" : "📌 Permanent Loan Request"}
                 </h3>
               </div>
 
@@ -336,7 +365,7 @@ export default function CartPanel() {
                 style={{ width: "100%" }}
                 disabled={loading}
               >
-                {loading ? "Submitting..." : "Submit Loan Request"}
+                {loading ? "Submitting..." : modifyingLoan ? "Update Loan Request" : "Submit Loan Request"}
               </button>
             </div>
           </form>
