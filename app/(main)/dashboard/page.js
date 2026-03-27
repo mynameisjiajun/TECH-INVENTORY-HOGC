@@ -64,6 +64,8 @@ export default function DashboardPage() {
   const [myLoans, setMyLoans] = useState([]);
   const [myFetching, setMyFetching] = useState(true);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [allActiveLoans, setAllActiveLoans] = useState([]);
+  const [showAllLoans, setShowAllLoans] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -89,6 +91,17 @@ export default function DashboardPage() {
     } catch (err) {
       setError("Network error — could not load dashboard data");
     }
+  }, []);
+
+  // Normal user: fetch all active loans (team visibility)
+  const fetchAllActiveLoans = useCallback(async () => {
+    try {
+      const res = await fetch("/api/loans?view=active", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setAllActiveLoans(data.loans || []);
+      }
+    } catch { /* silent */ }
   }, []);
 
   // Normal user: fetch own loans
@@ -117,14 +130,15 @@ export default function DashboardPage() {
       fetchDashboard();
     } else {
       fetchMyLoans();
+      fetchAllActiveLoans();
     }
-  }, [user, fetchDashboard, fetchMyLoans]);
+  }, [user, fetchDashboard, fetchMyLoans, fetchAllActiveLoans]);
 
   useEffect(() => {
     if (!user) return;
     if (channelRef.current) supabaseClient.removeChannel(channelRef.current);
 
-    const fetch = user.role === "admin" ? fetchDashboard : fetchMyLoans;
+    const fetch = user.role === "admin" ? fetchDashboard : () => { fetchMyLoans(); fetchAllActiveLoans(); };
     const filter = user.role === "admin"
       ? undefined
       : `user_id=eq.${user.id}`;
@@ -152,7 +166,7 @@ export default function DashboardPage() {
       channelRef.current = null;
       clearInterval(fallback);
     };
-  }, [user, fetchDashboard, fetchMyLoans]);
+  }, [user, fetchDashboard, fetchMyLoans, fetchAllActiveLoans]);
 
   const handleClearActivity = async () => {
     setClearActivityLoading(true);
@@ -211,14 +225,18 @@ export default function DashboardPage() {
 
   // Build calendar grid with continuous bars (all users)
   const calendarData = useMemo(() => {
-    // Admins see all active loans; normal users see only their own (non-permanent)
+    // Admins see all active loans; normal users see based on toggle
     const loansForCalendar = isAdmin
       ? activeLoans.filter((l) => l.loan_type !== "permanent")
-      : myLoans.filter(
-          (l) =>
-            l.loan_type !== "permanent" &&
-            ["approved", "pending"].includes(l.status),
-        );
+      : allActiveLoans.filter((l) => {
+          if (l.loan_type === "permanent") return false;
+          const isOwn = l.user_id === user?.id;
+          if (!showAllLoans) return isOwn; // default: own loans only
+          // "All" mode: own loans (all statuses) + others' approved non-overdue only
+          if (isOwn) return true;
+          const isOverdue = l.status === "approved" && l.end_date && new Date(l.end_date) < new Date();
+          return l.status === "approved" && !isOverdue;
+        });
 
     const year = calendarMonth.getFullYear();
     const month = calendarMonth.getMonth();
@@ -284,13 +302,14 @@ export default function DashboardPage() {
           type: loan.loan_type,
           status: loan.status,
           isOverdue,
+          isOwn: !isAdmin && loan.user_id === user?.id,
           loan,
         });
       }
     });
 
     return { weeks, loanBars, totalWeeks };
-  }, [calendarMonth, activeLoans, myLoans, isAdmin]);
+  }, [calendarMonth, activeLoans, myLoans, allActiveLoans, isAdmin, user, showAllLoans]);
 
   if (loading || !user)
     return (
@@ -347,6 +366,11 @@ export default function DashboardPage() {
         color: "#fde68a",
         border: "#f59e0b",
       };
+    // For non-admin: green = own loan, indigo = others' loan
+    if (bar.isOwn)
+      return { bg: "rgba(16,185,129,0.3)", color: "#6ee7b7", border: "#10b981" };
+    if (!isAdmin)
+      return { bg: "rgba(99,102,241,0.3)", color: "#c7d2fe", border: "#6366f1" };
     return { bg: "rgba(59,130,246,0.3)", color: "#bfdbfe", border: "#3b82f6" };
   };
 
@@ -630,33 +654,129 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Loan Calendar (user's own loans) */}
+              {/* All Active Team Loans */}
+              <div style={{ marginBottom: 32 }}>
+                <h2
+                  style={{
+                    fontSize: 16,
+                    marginBottom: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <RiArchiveLine style={{ color: "var(--accent)" }} /> All
+                  Active Loans
+                </h2>
+                {allActiveLoans.length === 0 ? (
+                  <div className="empty-state" style={{ padding: 32 }}>
+                    <h3>No active loans</h3>
+                    <p>No items are currently borrowed by anyone</p>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Borrower</th>
+                          <th>Items</th>
+                          <th>Purpose</th>
+                          <th>Due Date</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allActiveLoans.map((loan) => {
+                          const isOverdue =
+                            loan.status === "approved" &&
+                            loan.end_date &&
+                            new Date(loan.end_date) < new Date();
+                          return (
+                            <tr key={loan.id}>
+                              <td style={{ fontWeight: 500 }}>
+                                {loan.requester_name || loan.requester_username || "—"}
+                              </td>
+                              <td>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                  {loan.items.map((item) => (
+                                    <span key={item.id} className="loan-item-chip">
+                                      {item.item} × {item.quantity}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                                {loan.purpose}
+                              </td>
+                              <td style={{ fontSize: 13 }}>
+                                {loan.end_date ? (
+                                  <span style={{ color: isOverdue ? "var(--error)" : "inherit", fontWeight: isOverdue ? 700 : 400 }}>
+                                    {isOverdue ? "🚨 " : ""}{loan.end_date}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: "var(--text-muted)" }}>Ongoing</span>
+                                )}
+                              </td>
+                              <td>{statusBadge(loan.status)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Loan Calendar (all team loans) */}
               <div className="gantt-container">
                 <div className="gantt-header">
                   <h3>
-                    <RiCalendarLine style={{ verticalAlign: "middle" }} /> My
-                    Loan Calendar — {monthNames[calendarMonth.getMonth()]}{" "}
+                    <RiCalendarLine style={{ verticalAlign: "middle" }} /> Loan
+                    Calendar — {monthNames[calendarMonth.getMonth()]}{" "}
                     {calendarMonth.getFullYear()}
                   </h3>
-                  <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
-                  >
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={prevMonth}
-                    >
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 2, gap: 2 }}>
+                      <button
+                        onClick={() => setShowAllLoans(false)}
+                        style={{
+                          padding: "4px 12px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          border: "none",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          background: !showAllLoans ? "var(--accent)" : "transparent",
+                          color: !showAllLoans ? "white" : "var(--text-secondary)",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        My Loans
+                      </button>
+                      <button
+                        onClick={() => setShowAllLoans(true)}
+                        style={{
+                          padding: "4px 12px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          border: "none",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          background: showAllLoans ? "var(--accent)" : "transparent",
+                          color: showAllLoans ? "white" : "var(--text-secondary)",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        All Loans
+                      </button>
+                    </div>
+                    <button className="btn btn-sm btn-outline" onClick={prevMonth}>
                       <RiArrowLeftLine />
                     </button>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={goToday}
-                    >
+                    <button className="btn btn-sm btn-outline" onClick={goToday}>
                       Today
                     </button>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={nextMonth}
-                    >
+                    <button className="btn btn-sm btn-outline" onClick={nextMonth}>
                       <RiArrowRightLine />
                     </button>
                   </div>
@@ -763,6 +883,7 @@ export default function DashboardPage() {
                             return (
                               <div
                                 key={`${bar.loanId}-${wi}-${bi}`}
+                                onClick={() => setSelectedLoan(bar.loan)}
                                 style={{
                                   position: "absolute",
                                   top: 28 + bi * 24,
@@ -781,12 +902,13 @@ export default function DashboardPage() {
                                   overflow: "hidden",
                                   whiteSpace: "nowrap",
                                   textOverflow: "ellipsis",
+                                  cursor: "pointer",
                                   zIndex: 2,
                                 }}
-                                title={`#${bar.loanId} — ${bar.loan.purpose}`}
+                                title={`${bar.label || "Loan"} — Click for details`}
                               >
                                 {bar.isOverdue ? "🚨 " : ""}
-                                {bar.loan.purpose}
+                                {bar.label || bar.loan.purpose}
                               </div>
                             );
                           })}
@@ -806,46 +928,22 @@ export default function DashboardPage() {
                     color: "var(--text-secondary)",
                   }}
                 >
-                  <span
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
-                  >
-                    <span
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 3,
-                        background: "rgba(59,130,246,0.3)",
-                        borderLeft: "3px solid #3b82f6",
-                      }}
-                    />{" "}
-                    Approved
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(16,185,129,0.3)", borderLeft: "3px solid #10b981" }} />{" "}
+                    My Loan
                   </span>
-                  <span
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
-                  >
-                    <span
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 3,
-                        background: "rgba(245,158,11,0.3)",
-                        borderLeft: "3px solid #f59e0b",
-                      }}
-                    />{" "}
+                  {showAllLoans && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(99,102,241,0.3)", borderLeft: "3px solid #6366f1" }} />{" "}
+                      Others
+                    </span>
+                  )}
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(245,158,11,0.3)", borderLeft: "3px solid #f59e0b" }} />{" "}
                     Pending
                   </span>
-                  <span
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
-                  >
-                    <span
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 3,
-                        background: "rgba(239,68,68,0.35)",
-                        borderLeft: "3px solid #ef4444",
-                      }}
-                    />{" "}
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(239,68,68,0.35)", borderLeft: "3px solid #ef4444" }} />{" "}
                     Overdue
                   </span>
                 </div>
@@ -1473,7 +1571,7 @@ export default function DashboardPage() {
                   color: "white",
                 }}
               >
-                {selectedLoan.requester_name[0].toUpperCase()}
+                {(selectedLoan.requester_name || selectedLoan.requester_username || "?")[0].toUpperCase()}
               </div>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 16 }}>
@@ -1593,36 +1691,38 @@ export default function DashboardPage() {
                 </div>
               )}
 
-            <div
-              style={{
-                marginTop: 20,
-                paddingTop: 16,
-                borderTop: "1px solid var(--border)",
-                display: "flex",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                disabled={deleteLoading}
+            {isAdmin && (
+              <div
                 style={{
+                  marginTop: 20,
+                  paddingTop: 16,
+                  borderTop: "1px solid var(--border)",
                   display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 16px",
-                  background: "rgba(239,68,68,0.1)",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  borderRadius: 8,
-                  color: "var(--error)",
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: "pointer",
+                  justifyContent: "flex-end",
                 }}
-                onClick={() => handleDeleteLoan(selectedLoan.id)}
               >
-                <RiDeleteBinLine />{" "}
-                {deleteLoading ? "Deleting..." : "Delete Loan"}
-              </button>
-            </div>
+                <button
+                  disabled={deleteLoading}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 16px",
+                    background: "rgba(239,68,68,0.1)",
+                    border: "1px solid rgba(239,68,68,0.3)",
+                    borderRadius: 8,
+                    color: "var(--error)",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleDeleteLoan(selectedLoan.id)}
+                >
+                  <RiDeleteBinLine />{" "}
+                  {deleteLoading ? "Deleting..." : "Delete Loan"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

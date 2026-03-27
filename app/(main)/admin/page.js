@@ -501,10 +501,14 @@ export default function AdminPage() {
         body: JSON.stringify({ action: "reset_password", user_id: userId, new_password: pw }),
       });
       const data = await res.json();
-      setUserMsg(data.message || data.error);
-      if (res.ok) setResetPasswords((p) => ({ ...p, [userId]: "" }));
+      if (res.ok) {
+        setResetPasswords((p) => ({ ...p, [userId]: "" }));
+        toast.success(data.message || "Password changed successfully");
+      } else {
+        toast.error(data.error || "Failed to reset password");
+      }
     } catch {
-      setUserMsg("Network error — could not reset password");
+      toast.error("Network error — could not reset password");
     } finally {
       setUserActionLoading(null);
     }

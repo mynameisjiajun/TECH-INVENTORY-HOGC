@@ -29,10 +29,13 @@ export async function GET(request) {
     `)
     .order("created_at", { ascending: false });
 
-  if (view !== "all" || user.role !== "admin") {
+  if (view === "active") {
+    // Any authenticated user can see all approved loans (team visibility)
+    query = query.in("status", ["approved", "pending"]);
+  } else if (view !== "all" || user.role !== "admin") {
     query = query.eq("user_id", user.id);
   }
-  if (status) query = query.eq("status", status);
+  if (status && view !== "active") query = query.eq("status", status);
   if (dateFrom) query = query.gte("start_date", dateFrom);
   if (dateTo) query = query.lte("start_date", dateTo);
 

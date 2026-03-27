@@ -449,7 +449,7 @@ export default function InventoryPage() {
                       <th>Available</th>
                       <th>Loaned</th>
                       <th>Location</th>
-                      <th>Status</th>
+                      {user.role === "admin" && <th>Status</th>}
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -501,13 +501,15 @@ export default function InventoryPage() {
                           >
                             {item.location}
                           </td>
-                          <td>
-                            {item.status && (
-                              <span className="badge badge-success">
-                                {item.status}
-                              </span>
-                            )}
-                          </td>
+                          {user.role === "admin" && (
+                            <td>
+                              {item.status && (
+                                <span className="badge badge-success">
+                                  {item.status}
+                                </span>
+                              )}
+                            </td>
+                          )}
                           <td>
                             {item.current > 0 && (
                               <button
