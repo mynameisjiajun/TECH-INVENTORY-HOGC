@@ -177,6 +177,16 @@ export default function AdminPage() {
   const [templateMsg, setTemplateMsg] = useState("");
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [clockMs, setClockMs] = useState(Date.now());
+  const [loanSource, setLoanSource] = useState("all"); // 'all' | 'tech' | 'laptop'
+  // Laptops tab state
+  const [laptopsData, setLaptopsData] = useState([]); // tiers with laptops
+  const [laptopsFetching, setLaptopsFetching] = useState(false);
+  const [laptopForm, setLaptopForm] = useState({ name: "", screen_size: "", cpu: "", ram: "", storage: "", condition: "Good", tier_id: "" });
+  const [editingLaptop, setEditingLaptop] = useState(null);
+  const [permLoanModal, setPermLoanModal] = useState(null);
+  const [tierInput, setTierInput] = useState("");
+  const [editingTier, setEditingTier] = useState(null);
+  const [laptopActionLoading, setLaptopActionLoading] = useState(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -187,21 +197,43 @@ export default function AdminPage() {
     setFetching(true);
     setError("");
     try {
-      const params = new URLSearchParams({ view: "all", status: statusFilter });
-      const res = await fetch(`/api/loans?${params}`);
-      if (res.ok) {
+      let techLoans = [];
+      let laptopLoansArr = [];
+
+      if (loanSource !== "laptop") {
+        const params = new URLSearchParams({ view: "all", status: statusFilter });
+        const res = await fetch(`/api/loans?${params}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || `Failed to load loans (${res.status})`);
+          return;
+        }
         const data = await res.json();
-        setLoans(data.loans);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || `Failed to load loans (${res.status})`);
+        techLoans = (data.loans || []).map((l) => ({ ...l, _source: "tech" }));
       }
+
+      if (loanSource !== "tech") {
+        const params = new URLSearchParams({ view: "all", status: statusFilter });
+        const res = await fetch(`/api/laptop-loans?${params}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error || `Failed to load laptop loans (${res.status})`);
+          return;
+        }
+        const data = await res.json();
+        laptopLoansArr = data.loans || [];
+      }
+
+      const merged = [...techLoans, ...laptopLoansArr].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
+      setLoans(merged);
     } catch (err) {
       setError("Network error — could not load loans");
     } finally {
       setFetching(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, loanSource]);
 
   const fetchAuditLogs = useCallback(async () => {
     setAuditFetching(true);
@@ -311,6 +343,45 @@ export default function AdminPage() {
     }
   };
 
+  const fetchLaptopsData = useCallback(async () => {
+    setLaptopsFetching(true);
+    try {
+      const res = await fetch("/api/laptops");
+      if (res.ok) {
+        const data = await res.json();
+        setLaptopsData(data.tiers || []);
+      }
+    } catch { /* silent */ } finally {
+      setLaptopsFetching(false);
+    }
+  }, []);
+
+  const handleLaptopLoanAction = async (loanId, action) => {
+    setActionLoading(loanId);
+    setError("");
+    try {
+      const res = await fetch(`/api/laptop-loans/${loanId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, admin_notes: adminNotes[loanId] || "" }),
+      });
+      if (res.ok) {
+        fetchLoans();
+        setAdminNotes((p) => ({ ...p, [loanId]: "" }));
+        toast.success(
+          `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : "returned"} successfully`
+        );
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || `Action failed (${res.status})`);
+      }
+    } catch {
+      toast.error("Network error — action could not be completed");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   useEffect(() => {
     if (user?.role === "admin") {
       if (activeTab === "loans") fetchLoans();
@@ -320,8 +391,9 @@ export default function AdminPage() {
         fetchTemplates();
         fetchAllItems();
       }
+      if (activeTab === "laptops") fetchLaptopsData();
     }
-  }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers]);
+  }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers, fetchLaptopsData]);
 
   useEffect(() => {
     if (activeTab !== "loans") return;
@@ -468,7 +540,7 @@ export default function AdminPage() {
 
   const selectAll = () => {
     const ids = loans
-      .filter((l) => l.status === "approved" && l.loan_type === "temporary")
+      .filter((l) => l.status === "approved" && l.loan_type === "temporary" && l._source !== "laptop")
       .map((l) => l.id);
     setSelectedLoans(new Set(ids));
   };
@@ -483,7 +555,7 @@ export default function AdminPage() {
   };
 
   const selectAllPending = () => {
-    const ids = loans.filter((l) => l.status === "pending").map((l) => l.id);
+    const ids = loans.filter((l) => l.status === "pending" && l._source !== "laptop").map((l) => l.id);
     setSelectedPendingLoans(new Set(ids));
   };
 
@@ -715,6 +787,12 @@ export default function AdminPage() {
             />{" "}
             Templates
           </button>
+          <button
+            className={`tab ${activeTab === "laptops" ? "active" : ""}`}
+            onClick={() => setActiveTab("laptops")}
+          >
+            💻 Laptops
+          </button>
         </div>
 
         {error && (
@@ -752,6 +830,27 @@ export default function AdminPage() {
         {/* ====== LOANS TAB ====== */}
         {activeTab === "loans" && (
           <>
+            {/* Source filter */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+              {[
+                { key: "all", label: "All Sources" },
+                { key: "tech", label: "📦 Tech" },
+                { key: "laptop", label: "💻 Laptop" },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  className={`tab ${loanSource === key ? "active" : ""}`}
+                  style={{ fontSize: 12 }}
+                  onClick={() => {
+                    setLoanSource(key);
+                    setSelectedLoans(new Set());
+                    setSelectedPendingLoans(new Set());
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="tabs" style={{ maxWidth: 600 }}>
               {["pending", "approved", "rejected", "returned", ""].map((s) => (
                 <button
@@ -767,7 +866,7 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {statusFilter === "pending" && loans.length > 0 && (
+            {statusFilter === "pending" && loans.some((l) => l._source !== "laptop") && loans.length > 0 && (
               <div
                 style={{
                   display: "flex",
@@ -799,7 +898,7 @@ export default function AdminPage() {
             )}
 
             {statusFilter === "approved" &&
-              loans.some((l) => l.loan_type === "temporary") && (
+              loans.some((l) => l.loan_type === "temporary" && l._source !== "laptop") && (
                 <div
                   style={{
                     display: "flex",
@@ -887,6 +986,9 @@ export default function AdminPage() {
                             : "⏱️ Temporary"}
                         </span>
                         {statusBadge(loan.status)}
+                        {loan._source === "laptop" && (
+                          <span className="badge" style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}>💻 Laptop</span>
+                        )}
                         {loan.status === "approved" &&
                           loan.end_date &&
                           new Date(loan.end_date) < new Date() && (
@@ -923,7 +1025,7 @@ export default function AdminPage() {
                         #{loan.id} ·{" "}
                         {new Date(loan.created_at).toLocaleDateString()}
                       </span>
-                      {statusFilter === "pending" && (
+                      {statusFilter === "pending" && loan._source !== "laptop" && (
                         <div
                           style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}
                           onClick={() => toggleSelectPending(loan.id)}
@@ -943,7 +1045,7 @@ export default function AdminPage() {
                         </div>
                       )}
                       {statusFilter === "approved" &&
-                        loan.loan_type === "temporary" && (
+                        loan.loan_type === "temporary" && loan._source !== "laptop" && (
                           <div
                             style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}
                             onClick={() => toggleSelect(loan.id)}
@@ -966,11 +1068,18 @@ export default function AdminPage() {
                     </div>
                   </div>
                   <div className="loan-card-items">
-                    {loan.items.map((item) => (
-                      <span key={item.id} className="loan-item-chip">
-                        {item.item} × {item.quantity}
-                      </span>
-                    ))}
+                    {loan._source === "laptop"
+                      ? (loan.laptops || []).map((item) => (
+                          <span key={item.id} className="loan-item-chip">
+                            💻 {item.laptops?.name || `Laptop #${item.laptop_id}`}
+                          </span>
+                        ))
+                      : (loan.items || []).map((item) => (
+                          <span key={item.id} className="loan-item-chip">
+                            {item.item} × {item.quantity}
+                          </span>
+                        ))
+                    }
                   </div>
                   <div className="loan-card-meta">
                     <span>📝 {loan.purpose}</span>
@@ -1000,14 +1109,14 @@ export default function AdminPage() {
                       <div className="admin-actions">
                         <button
                           className="btn btn-success btn-sm"
-                          onClick={() => handleAction(loan.id, "approve")}
+                          onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "approve") : handleAction(loan.id, "approve")}
                           disabled={actionLoading === loan.id}
                         >
                           {actionLoading === loan.id ? <span className="btn-spinner" /> : <><RiCheckLine /> Approve</>}
                         </button>
                         <button
                           className="btn btn-danger btn-sm"
-                          onClick={() => handleAction(loan.id, "reject")}
+                          onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "reject") : handleAction(loan.id, "reject")}
                           disabled={actionLoading === loan.id}
                         >
                           {actionLoading === loan.id ? <span className="btn-spinner" /> : <><RiCloseLine /> Reject</>}
@@ -1016,11 +1125,11 @@ export default function AdminPage() {
                     </div>
                   )}
                   {loan.status === "approved" &&
-                    loan.loan_type === "temporary" && (
+                    (loan.loan_type === "temporary" || loan._source === "laptop") && (
                       <div style={{ marginTop: 12 }}>
                         <button
                           className="btn btn-outline btn-sm"
-                          onClick={() => handleAction(loan.id, "return")}
+                          onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "return") : handleAction(loan.id, "return")}
                           disabled={actionLoading === loan.id}
                         >
                           {actionLoading === loan.id ? <><span className="btn-spinner" /> Returning…</> : <><RiArrowGoBackLine /> Mark as Returned</>}
@@ -1048,36 +1157,38 @@ export default function AdminPage() {
                       </a>
                     </div>
                   )}
-                  <div
-                    style={{
-                      marginTop: 8,
-                      display: "flex",
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <button
-                      className="btn btn-sm"
-                      disabled={actionLoading === loan.id}
+                  {loan._source !== "laptop" && (
+                    <div
                       style={{
-                        color: "var(--error)",
-                        background: "none",
-                        border: "1px solid rgba(239,68,68,0.3)",
-                        fontSize: 11,
-                        padding: "4px 10px",
-                      }}
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Delete loan #${loan.id}?${loan.status === "approved" ? " Stock will be restored." : ""}`,
-                          )
-                        ) {
-                          handleAction(loan.id, "delete");
-                        }
+                        marginTop: 8,
+                        display: "flex",
+                        justifyContent: "flex-end",
                       }}
                     >
-                      <RiDeleteBinLine /> Delete
-                    </button>
-                  </div>
+                      <button
+                        className="btn btn-sm"
+                        disabled={actionLoading === loan.id}
+                        style={{
+                          color: "var(--error)",
+                          background: "none",
+                          border: "1px solid rgba(239,68,68,0.3)",
+                          fontSize: 11,
+                          padding: "4px 10px",
+                        }}
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Delete loan #${loan.id}?${loan.status === "approved" ? " Stock will be restored." : ""}`,
+                            )
+                          ) {
+                            handleAction(loan.id, "delete");
+                          }
+                        }}
+                      >
+                        <RiDeleteBinLine /> Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -1879,6 +1990,372 @@ export default function AdminPage() {
                   </div>
                 </SortableContext>
               </DndContext>
+            )}
+          </>
+        )}
+        {/* ====== LAPTOPS TAB ====== */}
+        {activeTab === "laptops" && (
+          <>
+            {/* Perm Loan Modal */}
+            {permLoanModal && (
+              <div
+                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+                onClick={(e) => e.target === e.currentTarget && setPermLoanModal(null)}
+              >
+                <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 420 }}>
+                  <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>
+                    {permLoanModal.is_perm_loaned ? "Remove Perm Loan" : "Mark as Perm Loaned"}: {permLoanModal.name}
+                  </h3>
+                  {!permLoanModal.is_perm_loaned && (
+                    <>
+                      <input
+                        placeholder="Person's name (optional)"
+                        value={permLoanModal.perm_loan_person || ""}
+                        onChange={(e) => setPermLoanModal((p) => ({ ...p, perm_loan_person: e.target.value }))}
+                        style={{ width: "100%", padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                      />
+                      <input
+                        placeholder="Reason / ministry (optional)"
+                        value={permLoanModal.perm_loan_reason || ""}
+                        onChange={(e) => setPermLoanModal((p) => ({ ...p, perm_loan_reason: e.target.value }))}
+                        style={{ width: "100%", padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, marginBottom: 16, boxSizing: "border-box" }}
+                      />
+                    </>
+                  )}
+                  {permLoanModal.is_perm_loaned && (
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
+                      This will mark the laptop as available again.
+                    </p>
+                  )}
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button className="btn btn-sm btn-outline" onClick={() => setPermLoanModal(null)}>Cancel</button>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      disabled={laptopActionLoading === `perm-${permLoanModal.id}`}
+                      style={{ background: permLoanModal.is_perm_loaned ? "linear-gradient(135deg, #10b981, #059669)" : "linear-gradient(135deg, #f59e0b, #d97706)" }}
+                      onClick={async () => {
+                        setLaptopActionLoading(`perm-${permLoanModal.id}`);
+                        const newPermState = !permLoanModal.is_perm_loaned;
+                        try {
+                          const res = await fetch(`/api/laptops/${permLoanModal.id}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              is_perm_loaned: newPermState,
+                              perm_loan_person: newPermState ? (permLoanModal.perm_loan_person || null) : null,
+                              perm_loan_reason: newPermState ? (permLoanModal.perm_loan_reason || null) : null,
+                            }),
+                          });
+                          if (res.ok) {
+                            toast.success(newPermState ? "Marked as permanently loaned" : "Perm loan removed");
+                            setPermLoanModal(null);
+                            fetchLaptopsData();
+                          } else {
+                            const d = await res.json().catch(() => ({}));
+                            toast.error(d.error || "Failed to update");
+                          }
+                        } catch { toast.error("Network error"); }
+                        finally { setLaptopActionLoading(null); }
+                      }}
+                    >
+                      {laptopActionLoading === `perm-${permLoanModal.id}`
+                        ? <span className="btn-spinner" />
+                        : (permLoanModal.is_perm_loaned ? "Remove Perm Loan" : "Confirm Perm Loan")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tier Management */}
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+              <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>Tiers</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                {laptopsData.map((tier) => (
+                  <div key={tier.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {editingTier?.id === tier.id ? (
+                      <>
+                        <input
+                          value={editingTier.name}
+                          onChange={(e) => setEditingTier((p) => ({ ...p, name: e.target.value }))}
+                          style={{ flex: 1, padding: "6px 10px", background: "var(--bg-secondary)", border: "1px solid var(--accent)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                        />
+                        <button
+                          className="btn btn-sm btn-primary"
+                          disabled={laptopActionLoading === `tier-${tier.id}`}
+                          onClick={async () => {
+                            setLaptopActionLoading(`tier-${tier.id}`);
+                            try {
+                              const res = await fetch(`/api/laptops/tiers/${tier.id}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ name: editingTier.name }),
+                              });
+                              if (res.ok) { toast.success("Tier renamed"); setEditingTier(null); fetchLaptopsData(); }
+                              else { const d = await res.json().catch(() => ({})); toast.error(d.error || "Failed"); }
+                            } catch { toast.error("Network error"); }
+                            finally { setLaptopActionLoading(null); }
+                          }}
+                        >
+                          {laptopActionLoading === `tier-${tier.id}` ? <span className="btn-spinner" /> : "Save"}
+                        </button>
+                        <button className="btn btn-sm btn-outline" onClick={() => setEditingTier(null)}>Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{tier.name}</span>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{tier.laptops?.length || 0} laptops</span>
+                        <button className="btn btn-sm btn-outline" onClick={() => setEditingTier({ id: tier.id, name: tier.name })}>Rename</button>
+                        <button
+                          className="btn btn-sm"
+                          style={{ color: "var(--error)", background: "none", border: "1px solid rgba(239,68,68,0.3)", fontSize: 11 }}
+                          onClick={async () => {
+                            if (!confirm(`Delete tier "${tier.name}"? Laptops will become untiered.`)) return;
+                            setLaptopActionLoading(`tier-del-${tier.id}`);
+                            try {
+                              const res = await fetch(`/api/laptops/tiers/${tier.id}`, { method: "DELETE" });
+                              if (res.ok) { toast.success("Tier deleted"); fetchLaptopsData(); }
+                              else { const d = await res.json().catch(() => ({})); toast.error(d.error || "Failed"); }
+                            } catch { toast.error("Network error"); }
+                            finally { setLaptopActionLoading(null); }
+                          }}
+                        ><RiDeleteBinLine /></button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {laptopsData.length === 0 && (
+                  <p style={{ fontSize: 13, color: "var(--text-muted)" }}>No tiers yet. Add one below.</p>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={tierInput}
+                  onChange={(e) => setTierInput(e.target.value)}
+                  placeholder="New tier name (e.g. MacBook Pro)"
+                  style={{ flex: 1, padding: "7px 10px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                />
+                <button
+                  className="btn btn-sm btn-primary"
+                  disabled={!tierInput.trim() || laptopActionLoading === "tier-new"}
+                  onClick={async () => {
+                    setLaptopActionLoading("tier-new");
+                    try {
+                      const res = await fetch("/api/laptops/tiers", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ name: tierInput.trim() }),
+                      });
+                      if (res.ok) { toast.success("Tier created"); setTierInput(""); fetchLaptopsData(); }
+                      else { const d = await res.json().catch(() => ({})); toast.error(d.error || "Failed"); }
+                    } catch { toast.error("Network error"); }
+                    finally { setLaptopActionLoading(null); }
+                  }}
+                >
+                  <RiAddLine /> Add Tier
+                </button>
+              </div>
+            </div>
+
+            {/* Add / Edit Laptop Form */}
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, marginBottom: 24 }}>
+              <h3 style={{ margin: "0 0 16px", fontSize: 15 }}>{editingLaptop ? "Edit Laptop" : "Add Laptop"}</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <input
+                  placeholder='Name (e.g. MacBook Pro 16")'
+                  value={laptopForm.name}
+                  onChange={(e) => setLaptopForm((p) => ({ ...p, name: e.target.value }))}
+                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                />
+                <select
+                  value={laptopForm.tier_id}
+                  onChange={(e) => setLaptopForm((p) => ({ ...p, tier_id: e.target.value }))}
+                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                >
+                  <option value="">No tier</option>
+                  {laptopsData.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                <input
+                  placeholder="Screen size (e.g. 14-inch)"
+                  value={laptopForm.screen_size}
+                  onChange={(e) => setLaptopForm((p) => ({ ...p, screen_size: e.target.value }))}
+                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                />
+                <input
+                  placeholder="CPU (e.g. M3 Pro)"
+                  value={laptopForm.cpu}
+                  onChange={(e) => setLaptopForm((p) => ({ ...p, cpu: e.target.value }))}
+                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                />
+                <input
+                  placeholder="RAM (e.g. 16GB)"
+                  value={laptopForm.ram}
+                  onChange={(e) => setLaptopForm((p) => ({ ...p, ram: e.target.value }))}
+                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                />
+                <input
+                  placeholder="Storage (e.g. 512GB SSD)"
+                  value={laptopForm.storage}
+                  onChange={(e) => setLaptopForm((p) => ({ ...p, storage: e.target.value }))}
+                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                />
+                <select
+                  value={laptopForm.condition}
+                  onChange={(e) => setLaptopForm((p) => ({ ...p, condition: e.target.value }))}
+                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                >
+                  <option value="Excellent">Excellent</option>
+                  <option value="Good">Good</option>
+                  <option value="Fair">Fair</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  className="btn btn-sm btn-primary"
+                  disabled={!laptopForm.name.trim() || laptopActionLoading === "laptop-save"}
+                  onClick={async () => {
+                    setLaptopActionLoading("laptop-save");
+                    try {
+                      const url = editingLaptop ? `/api/laptops/${editingLaptop}` : "/api/laptops";
+                      const method = editingLaptop ? "PUT" : "POST";
+                      const res = await fetch(url, {
+                        method,
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ...laptopForm, tier_id: laptopForm.tier_id || null }),
+                      });
+                      if (res.ok) {
+                        toast.success(editingLaptop ? "Laptop updated" : "Laptop added");
+                        setLaptopForm({ name: "", screen_size: "", cpu: "", ram: "", storage: "", condition: "Good", tier_id: "" });
+                        setEditingLaptop(null);
+                        fetchLaptopsData();
+                      } else {
+                        const d = await res.json().catch(() => ({}));
+                        toast.error(d.error || "Failed to save");
+                      }
+                    } catch { toast.error("Network error"); }
+                    finally { setLaptopActionLoading(null); }
+                  }}
+                >
+                  <RiAddLine /> {editingLaptop ? "Save Changes" : "Add Laptop"}
+                </button>
+                {editingLaptop && (
+                  <button
+                    className="btn btn-sm btn-outline"
+                    onClick={() => {
+                      setEditingLaptop(null);
+                      setLaptopForm({ name: "", screen_size: "", cpu: "", ram: "", storage: "", condition: "Good", tier_id: "" });
+                    }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Laptops List by Tier */}
+            {laptopsFetching ? (
+              <div>{[1, 2, 3].map((i) => <div key={i} className="skeleton skeleton-row" />)}</div>
+            ) : laptopsData.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">💻</div>
+                <h3>No laptops yet</h3>
+                <p>Add tiers and laptops above to get started</p>
+              </div>
+            ) : (
+              laptopsData.map((tier) => (
+                <div key={tier.id} style={{ marginBottom: 24 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                    {tier.name} <span style={{ fontWeight: 400, fontSize: 12 }}>({tier.laptops?.length || 0})</span>
+                  </h3>
+                  {(!tier.laptops || tier.laptops.length === 0) ? (
+                    <p style={{ fontSize: 13, color: "var(--text-muted)", padding: "8px 0" }}>No laptops in this tier</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {tier.laptops.map((laptop) => (
+                        <div key={laptop.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                          <div style={{ flex: 1, minWidth: 180 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                              {laptop.name}
+                              {laptop.is_perm_loaned && (
+                                <span className="badge" style={{ marginLeft: 8, background: "rgba(239,68,68,0.15)", color: "#f87171", fontSize: 10 }}>📌 Perm Loaned</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
+                              {laptop.screen_size && <span>{laptop.screen_size}</span>}
+                              {laptop.cpu && <span>{laptop.cpu}</span>}
+                              {laptop.ram && <span>{laptop.ram}</span>}
+                              {laptop.storage && <span>{laptop.storage}</span>}
+                              {laptop.condition && (
+                                <span style={{ color: laptop.condition === "Excellent" ? "#10b981" : laptop.condition === "Good" ? "#6366f1" : "#f59e0b" }}>
+                                  {laptop.condition}
+                                </span>
+                              )}
+                            </div>
+                            {laptop.is_perm_loaned && laptop.perm_loan_person && (
+                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                                → {laptop.perm_loan_person}{laptop.perm_loan_reason ? ` · ${laptop.perm_loan_reason}` : ""}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                            <button
+                              className="btn btn-sm btn-outline"
+                              style={{ fontSize: 11 }}
+                              onClick={() => setPermLoanModal({
+                                id: laptop.id,
+                                name: laptop.name,
+                                is_perm_loaned: laptop.is_perm_loaned,
+                                perm_loan_person: laptop.perm_loan_person || "",
+                                perm_loan_reason: laptop.perm_loan_reason || "",
+                              })}
+                            >
+                              {laptop.is_perm_loaned ? "↩ Unmark Perm" : "📌 Perm Loan"}
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline"
+                              style={{ fontSize: 11 }}
+                              onClick={() => {
+                                setEditingLaptop(laptop.id);
+                                setLaptopForm({
+                                  name: laptop.name,
+                                  screen_size: laptop.screen_size || "",
+                                  cpu: laptop.cpu || "",
+                                  ram: laptop.ram || "",
+                                  storage: laptop.storage || "",
+                                  condition: laptop.condition || "Good",
+                                  tier_id: laptop.tier_id ? String(laptop.tier_id) : "",
+                                });
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              style={{ color: "var(--error)", background: "none", border: "1px solid rgba(239,68,68,0.3)", fontSize: 11 }}
+                              disabled={laptopActionLoading === `del-${laptop.id}`}
+                              onClick={async () => {
+                                if (!confirm(`Delete laptop "${laptop.name}"? This cannot be undone.`)) return;
+                                setLaptopActionLoading(`del-${laptop.id}`);
+                                try {
+                                  const res = await fetch(`/api/laptops/${laptop.id}`, { method: "DELETE" });
+                                  if (res.ok) { toast.success("Laptop deleted"); fetchLaptopsData(); }
+                                  else { const d = await res.json().catch(() => ({})); toast.error(d.error || "Failed"); }
+                                } catch { toast.error("Network error"); }
+                                finally { setLaptopActionLoading(null); }
+                              }}
+                            >
+                              <RiDeleteBinLine />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
             )}
           </>
         )}
