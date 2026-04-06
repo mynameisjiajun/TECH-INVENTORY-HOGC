@@ -66,6 +66,7 @@ export default function DashboardPage() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [allActiveLoans, setAllActiveLoans] = useState([]);
   const [showAllLoans, setShowAllLoans] = useState(false);
+  const [calendarTypeFilter, setCalendarTypeFilter] = useState("all"); // 'all' | 'tech' | 'laptop'
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -260,9 +261,16 @@ export default function DashboardPage() {
   const calendarData = useMemo(() => {
     // Admins see all active loans; normal users see based on toggle
     const loansForCalendar = isAdmin
-      ? activeLoans.filter((l) => l.loan_type !== "permanent")
+      ? activeLoans.filter((l) => {
+          if (l.loan_type === "permanent") return false;
+          if (calendarTypeFilter === "tech") return l._loanKind !== "laptop";
+          if (calendarTypeFilter === "laptop") return l._loanKind === "laptop";
+          return true;
+        })
       : allActiveLoans.filter((l) => {
           if (l.loan_type === "permanent") return false;
+          if (calendarTypeFilter === "tech" && l._loanKind === "laptop") return false;
+          if (calendarTypeFilter === "laptop" && l._loanKind !== "laptop") return false;
           const isOwn = l.user_id === user?.id;
           if (!showAllLoans) return isOwn; // default: own loans only
           // "All" mode: own loans (all statuses) + others' approved non-overdue only
@@ -776,6 +784,27 @@ export default function DashboardPage() {
                       >
                         All Loans
                       </button>
+                    </div>
+                    <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 2, gap: 2 }}>
+                      {[{ value: "all", label: "All" }, { value: "tech", label: "📦 Tech" }, { value: "laptop", label: "💻 Laptop" }].map(({ value, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => setCalendarTypeFilter(value)}
+                          style={{
+                            padding: "4px 12px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            border: "none",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            background: calendarTypeFilter === value ? "var(--accent)" : "transparent",
+                            color: calendarTypeFilter === value ? "white" : "var(--text-secondary)",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
                     <button className="btn btn-sm btn-outline" onClick={prevMonth}>
                       <RiArrowLeftLine />

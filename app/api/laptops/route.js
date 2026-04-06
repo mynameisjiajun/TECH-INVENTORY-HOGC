@@ -28,21 +28,25 @@ export async function GET(request) {
   const returnDateMap = new Map(); // laptop_id -> earliest return date
 
   for (const loan of activeLoans || []) {
-    const loanEnd = loan.end_date || "9999-12-31";
+    // For overdue approved loans, treat effective end as "today" so they remain
+    // blocked until admin marks them returned — prevents booking a laptop that
+    // hasn't actually come back yet.
+    const effectiveEnd = loan.end_date && loan.end_date < today ? today : (loan.end_date || "9999-12-31");
 
     for (const item of loan.laptop_loan_items || []) {
       const lid = item.laptop_id;
 
       // Check date overlap if dates provided
       if (startDate && endDate) {
-        if (loan.start_date <= endDate && loanEnd >= startDate) {
+        if (loan.start_date <= endDate && effectiveEnd >= startDate) {
           unavailableIds.add(lid);
         }
       }
 
       // Track nearest return date for temp loans currently active
-      if (loan.loan_type === "temporary" && loan.end_date && loan.end_date >= today) {
-        if (!returnDateMap.has(lid) || loan.end_date < returnDateMap.get(lid)) {
+      if (loan.loan_type === "temporary" && loan.end_date) {
+        const displayDate = loan.end_date >= today ? loan.end_date : today;
+        if (!returnDateMap.has(lid) || displayDate < returnDateMap.get(lid)) {
           returnDateMap.set(lid, loan.end_date);
         }
       }
@@ -60,12 +64,13 @@ export async function GET(request) {
   const annotated = (laptops || []).map((laptop) => {
     const isPermLoaned = laptop.is_perm_loaned;
     const isBlocked = !isPermLoaned && (startDate && endDate) && unavailableIds.has(laptop.id);
+    // temp_loaned: has an active or overdue loan (includes overdue via returnDateMap)
     const hasTempLoan = !isPermLoaned && returnDateMap.has(laptop.id);
 
     let availability = "available";
     if (isPermLoaned) availability = "perm_loaned";
     else if (isBlocked) availability = "blocked";
-    else if (hasTempLoan) availability = "temp_loaned";
+    else if (hasTempLoan && !(startDate && endDate)) availability = "temp_loaned";
 
     return {
       ...laptop,

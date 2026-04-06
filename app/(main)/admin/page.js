@@ -196,12 +196,15 @@ export default function AdminPage() {
   const fetchLoans = useCallback(async () => {
     setFetching(true);
     setError("");
+    // "overdue" is a client-side pseudo-filter; fetch approved loans from API
+    const apiStatus = statusFilter === "overdue" ? "approved" : statusFilter;
+    const today = new Date().toISOString().split("T")[0];
     try {
       let techLoans = [];
       let laptopLoansArr = [];
 
       if (loanSource !== "laptop") {
-        const params = new URLSearchParams({ view: "all", status: statusFilter });
+        const params = new URLSearchParams({ view: "all", status: apiStatus });
         const res = await fetch(`/api/loans?${params}`);
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -213,7 +216,7 @@ export default function AdminPage() {
       }
 
       if (loanSource !== "tech") {
-        const params = new URLSearchParams({ view: "all", status: statusFilter });
+        const params = new URLSearchParams({ view: "all", status: apiStatus });
         const res = await fetch(`/api/laptop-loans?${params}`);
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -224,9 +227,17 @@ export default function AdminPage() {
         laptopLoansArr = data.loans || [];
       }
 
-      const merged = [...techLoans, ...laptopLoansArr].sort(
+      let merged = [...techLoans, ...laptopLoansArr].sort(
         (a, b) => new Date(b.created_at) - new Date(a.created_at)
       );
+
+      // Client-side filter for overdue: approved + temporary + end_date < today
+      if (statusFilter === "overdue") {
+        merged = merged.filter(
+          (l) => l.loan_type === "temporary" && l.end_date && l.end_date < today
+        );
+      }
+
       setLoans(merged);
     } catch (err) {
       setError("Network error — could not load loans");
@@ -851,17 +862,25 @@ export default function AdminPage() {
                 </button>
               ))}
             </div>
-            <div className="tabs" style={{ maxWidth: 600 }}>
-              {["pending", "approved", "rejected", "returned", ""].map((s) => (
+            <div className="tabs" style={{ maxWidth: 700, flexWrap: "wrap" }}>
+              {[
+                { value: "", label: "All" },
+                { value: "pending", label: "Pending" },
+                { value: "approved", label: "Approved" },
+                { value: "overdue", label: "⚠️ Overdue" },
+                { value: "rejected", label: "Rejected" },
+                { value: "returned", label: "Returned" },
+              ].map(({ value, label }) => (
                 <button
-                  key={s}
-                  className={`tab ${statusFilter === s ? "active" : ""}`}
+                  key={value}
+                  className={`tab ${statusFilter === value ? "active" : ""}`}
+                  style={value === "overdue" && statusFilter === "overdue" ? { background: "rgba(239,68,68,0.15)", color: "var(--error)", borderColor: "rgba(239,68,68,0.3)" } : {}}
                   onClick={() => {
-                    setStatusFilter(s);
+                    setStatusFilter(value);
                     setSelectedLoans(new Set());
                   }}
                 >
-                  {s || "All"}
+                  {label}
                 </button>
               ))}
             </div>

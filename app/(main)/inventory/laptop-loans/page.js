@@ -21,111 +21,130 @@ function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, o
   const isBlocked = laptop.availability === "blocked";
   const isPermLoaned = laptop.availability === "perm_loaned";
   const isTempLoaned = laptop.availability === "temp_loaned";
+  const isUnavailable = isBlocked || isPermLoaned || isTempLoaned;
 
   const canBorrow = isAvailable && startDate && (loanType === "temporary" ? endDate : true) && !isInCart;
+
+  const statusColor = isAvailable
+    ? { bg: "rgba(16,185,129,0.12)", color: "#10b981", border: "rgba(16,185,129,0.3)" }
+    : isBlocked
+    ? { bg: "rgba(239,68,68,0.1)", color: "#ef4444", border: "rgba(239,68,68,0.25)" }
+    : isTempLoaned
+    ? { bg: "rgba(245,158,11,0.1)", color: "#f59e0b", border: "rgba(245,158,11,0.25)" }
+    : { bg: "rgba(139,92,246,0.1)", color: "#8b5cf6", border: "rgba(139,92,246,0.25)" };
+
+  const statusLabel = isAvailable ? "Available"
+    : isBlocked ? `Unavailable${laptop.return_date ? ` · Returns ${laptop.return_date}` : ""}`
+    : isTempLoaned ? `On Loan · Returns ${laptop.return_date}`
+    : "Deployed";
 
   return (
     <div style={{
       background: "var(--bg-card)",
-      border: `1px solid ${isBlocked ? "rgba(239,68,68,0.3)" : isPermLoaned ? "rgba(139,92,246,0.3)" : "var(--border)"}`,
-      borderRadius: 14,
-      padding: 18,
-      opacity: (isBlocked || isPermLoaned) ? 0.65 : 1,
-      position: "relative",
+      border: `1.5px solid ${isUnavailable ? statusColor.border : "var(--border)"}`,
+      borderRadius: 18,
+      overflow: "hidden",
+      opacity: isUnavailable ? 0.7 : 1,
       display: "flex",
       flexDirection: "column",
-      gap: 10,
+      transition: "transform 0.15s, box-shadow 0.15s",
     }}>
-      {/* Header row */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {/* Top accent strip */}
+      <div style={{
+        height: 4,
+        background: isAvailable
+          ? "linear-gradient(90deg, #10b981, #34d399)"
+          : isBlocked
+          ? "linear-gradient(90deg, #ef4444, #f87171)"
+          : isTempLoaned
+          ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
+          : "linear-gradient(90deg, #8b5cf6, #a78bfa)",
+      }} />
+
+      {/* Card body */}
+      <div style={{ padding: "20px 22px", flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Icon + name */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{
-            width: 40, height: 40, borderRadius: 10,
-            background: "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))",
+            width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+            background: `linear-gradient(135deg, ${statusColor.bg}, rgba(255,255,255,0.03))`,
+            border: `1px solid ${statusColor.border}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--accent)", fontSize: 20,
+            color: statusColor.color, fontSize: 26,
           }}>
             <RiMacbookLine />
           </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>{laptop.name}</div>
-            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-              {laptop.screen_size && `${laptop.screen_size}`}{laptop.screen_size && laptop.cpu ? " · " : ""}{laptop.cpu}
-            </div>
-            {isAdmin && (
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                {laptop.ram && `${laptop.ram}`}{laptop.ram && laptop.storage ? " · " : ""}{laptop.storage}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.3 }}>{laptop.name}</div>
+            {(laptop.screen_size || laptop.cpu) && (
+              <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 3 }}>
+                {laptop.screen_size}{laptop.screen_size && laptop.cpu ? " · " : ""}{laptop.cpu}
+              </div>
+            )}
+            {isAdmin && (laptop.ram || laptop.storage) && (
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                {laptop.ram}{laptop.ram && laptop.storage ? " · " : ""}{laptop.storage}
               </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Status + perm loan info */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {isAvailable && (
-            <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}>
-              Available
-            </span>
-          )}
-          {isBlocked && (
-            <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "rgba(239,68,68,0.12)", color: "var(--error)", border: "1px solid rgba(239,68,68,0.3)" }}>
-              Blocked
-              {laptop.return_date ? ` · Returns ${laptop.return_date}` : ""}
-            </span>
-          )}
-          {isTempLoaned && (
-            <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "rgba(245,158,11,0.12)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}>
-              On Loan · Returns {laptop.return_date}
-            </span>
-          )}
-          {isPermLoaned && (
-            <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: "rgba(139,92,246,0.12)", color: "#8b5cf6", border: "1px solid rgba(139,92,246,0.3)" }}>
-              <RiPushpinLine style={{ verticalAlign: "middle", marginRight: 3 }} />Deployed
-            </span>
-          )}
+        {/* Status badge */}
+        <div>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 20,
+            background: statusColor.bg, color: statusColor.color, border: `1px solid ${statusColor.border}`,
+          }}>
+            {isPermLoaned && <RiPushpinLine style={{ fontSize: 12 }} />}
+            {statusLabel}
+          </span>
         </div>
 
-        {/* Borrow or Notify */}
-        {isAvailable && (
-          <button
-            className="btn btn-sm btn-primary"
-            disabled={!canBorrow}
-            onClick={() => onBorrow(laptop)}
-            title={isInCart ? "Already in cart" : !startDate ? "Select a borrow date first" : !endDate && loanType === "temporary" ? "Select a return date" : "Add to cart"}
-            style={{
-              opacity: canBorrow ? 1 : 0.5,
-              background: isInCart ? "rgba(16,185,129,0.15)" : undefined,
-              borderColor: isInCart ? "rgba(16,185,129,0.4)" : undefined,
-              color: isInCart ? "#10b981" : undefined,
-            }}
-          >
-            {isInCart ? <><RiCheckLine /> Added</> : <><RiAddLine /> Borrow</>}
-          </button>
-        )}
-        {isBlocked && !isPermLoaned && (
-          <button
-            onClick={() => onNotify(laptop)}
-            style={{
-              display: "flex", alignItems: "center", gap: 4, padding: "5px 12px",
-              fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: "pointer",
-              background: laptop.notify_me ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${laptop.notify_me ? "var(--accent)" : "var(--border)"}`,
-              color: laptop.notify_me ? "var(--accent)" : "var(--text-secondary)",
-            }}
-          >
-            {laptop.notify_me ? <RiBellLine /> : <RiBellLine style={{ opacity: 0.35 }} />}
-            {laptop.notify_me ? "Notified" : "Notify Me"}
-          </button>
+        {/* Perm loan person */}
+        {isPermLoaned && laptop.perm_loan_person && (
+          <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: -8 }}>
+            Assigned to <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{laptop.perm_loan_person}</span>
+            {laptop.perm_loan_reason && <div style={{ color: "var(--text-muted)", marginTop: 2 }}>{laptop.perm_loan_reason}</div>}
+          </div>
         )}
       </div>
 
-      {/* Perm loan person/reason */}
-      {isPermLoaned && laptop.perm_loan_person && (
-        <div style={{ fontSize: 12, color: "var(--text-muted)", paddingTop: 4, borderTop: "1px solid var(--border)" }}>
-          <span style={{ fontWeight: 600 }}>{laptop.perm_loan_person}</span>
-          {laptop.perm_loan_reason && <span> · {laptop.perm_loan_reason}</span>}
+      {/* Footer action */}
+      {(isAvailable || (isBlocked && !isPermLoaned)) && (
+        <div style={{ padding: "14px 22px", borderTop: "1px solid var(--border)", background: "rgba(255,255,255,0.02)" }}>
+          {isAvailable && (
+            <button
+              className="btn btn-primary"
+              disabled={!canBorrow}
+              onClick={() => onBorrow(laptop)}
+              title={isInCart ? "Already in cart" : !startDate ? "Select a borrow date first" : !endDate && loanType === "temporary" ? "Select a return date" : "Add to cart"}
+              style={{
+                width: "100%", justifyContent: "center",
+                opacity: canBorrow ? 1 : 0.45,
+                background: isInCart ? "rgba(16,185,129,0.15)" : undefined,
+                borderColor: isInCart ? "rgba(16,185,129,0.4)" : undefined,
+                color: isInCart ? "#10b981" : undefined,
+              }}
+            >
+              {isInCart ? <><RiCheckLine /> Added to Cart</> : <><RiAddLine /> Borrow</>}
+            </button>
+          )}
+          {isBlocked && (
+            <button
+              onClick={() => onNotify(laptop)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                padding: "9px 0", fontSize: 13, fontWeight: 600, borderRadius: 10, cursor: "pointer",
+                background: laptop.notify_me ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.04)",
+                border: `1px solid ${laptop.notify_me ? "var(--accent)" : "var(--border)"}`,
+                color: laptop.notify_me ? "var(--accent)" : "var(--text-secondary)",
+              }}
+            >
+              <RiBellLine style={{ opacity: laptop.notify_me ? 1 : 0.4 }} />
+              {laptop.notify_me ? "Notify Me — On" : "Notify Me When Available"}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -134,7 +153,7 @@ function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, o
 
 export default function LaptopLoansPage() {
   const { user, loading } = useAuth();
-  const { addLaptopItem, cartType, items: cartItems } = useCart();
+  const { addLaptopItem, items: cartItems } = useCart();
   const router = useRouter();
 
   const [tab, setTab] = useState("available"); // "available" | "perm"
@@ -336,7 +355,7 @@ export default function LaptopLoansPage() {
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
                           {tier.name}
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
                           {availableLaptops.map((laptop) => (
                             <LaptopCard
                               key={laptop.id}
@@ -432,7 +451,7 @@ export default function LaptopLoansPage() {
                 <p>No laptops are currently on permanent loan</p>
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
                 {permLoanedLaptops.map((laptop) => (
                   <div key={laptop.id} style={{
                     background: "var(--bg-card)", border: "1px solid rgba(139,92,246,0.25)",
