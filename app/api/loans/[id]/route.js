@@ -207,3 +207,36 @@ export async function PUT(request, { params }) {
     return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
+
+// DELETE: Cancel own pending loan request
+export async function DELETE(_request, { params }) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+
+  const { data: loan } = await supabase
+    .from("loan_requests")
+    .select("id, user_id, status")
+    .eq("id", id)
+    .single();
+
+  if (!loan) return NextResponse.json({ error: "Loan not found" }, { status: 404 });
+  if (Number(loan.user_id) !== Number(user.id) && user.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+  if (loan.status !== "pending") {
+    return NextResponse.json({ error: "Only pending loans can be cancelled" }, { status: 400 });
+  }
+
+  await supabase.from("loan_items").delete().eq("loan_request_id", id);
+  await supabase.from("loan_requests").delete().eq("id", id);
+
+  await supabase.from("notifications").insert({
+    user_id: user.id,
+    message: `Your loan request #${id} has been cancelled.`,
+    link: "/loans",
+  });
+
+  return NextResponse.json({ message: "Loan cancelled successfully." });
+}

@@ -1177,7 +1177,7 @@ tr:last-child td {
 }
 
 .auth-container.login-easter-egg {
-  overflow: hidden;
+  position: relative;
 }
 
 .auth-container.login-easter-egg .auth-card {
@@ -1225,7 +1225,7 @@ tr:last-child td {
 }
 
 .login-easter-bg {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 1;
@@ -1887,6 +1887,35 @@ body.rickroll-lock {
   .hide-mobile {
     display: none !important;
   }
+
+  /* Admin loan card — stack header on narrow screens */
+  .admin-loan-card-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .admin-loan-card-header-right {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Admin loan card return button full-width on mobile */
+  .admin-loan-return-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Loans filter bar on mobile — wrap nicely */
+  .loans-filter-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .loans-filter-status-pills {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
 }
 
 @media (max-width: 520px) {
@@ -2221,5 +2250,85 @@ body.rickroll-lock {
     max-width: 100%;
     font-size: 12px;
     padding: 10px 14px;
+  }
+}
+
+/* ===== LAPTOP LOANS PAGE — RESPONSIVE ===== */
+.laptop-sticky-bar {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 24px;
+  position: sticky;
+  top: 70px;
+  z-index: 10;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.laptop-loan-type-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.laptop-date-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.laptop-date-grid.single-col {
+  grid-template-columns: 1fr;
+}
+
+.laptop-content-grid {
+  display: grid;
+  gap: 24px;
+  align-items: start;
+}
+
+.laptop-content-grid.with-sidebar {
+  grid-template-columns: 1fr 280px;
+}
+
+.laptop-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .laptop-sticky-bar {
+    top: calc(52px + env(safe-area-inset-top, 0px));
+    border-radius: 0 0 14px 14px;
+    margin-left: -12px;
+    margin-right: -12px;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    padding: 12px 16px;
+  }
+
+  .laptop-date-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .laptop-loan-type-toggle button {
+    font-size: 12px !important;
+    padding: 8px 4px !important;
+  }
+
+  .laptop-content-grid.with-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .laptop-sidebar {
+    order: -1;
+  }
+
+  .laptop-cards-grid {
+    grid-template-columns: 1fr;
   }
 }

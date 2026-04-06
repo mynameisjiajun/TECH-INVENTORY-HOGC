@@ -178,6 +178,8 @@ export default function AdminPage() {
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [clockMs, setClockMs] = useState(Date.now());
   const [loanSource, setLoanSource] = useState("all"); // 'all' | 'tech' | 'laptop'
+  const [pendingCount, setPendingCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
   // Laptops tab state
   const [laptopsData, setLaptopsData] = useState([]); // tiers with laptops
   const [laptopsFetching, setLaptopsFetching] = useState(false);
@@ -382,6 +384,18 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const [r1, r2] = await Promise.all([
+        fetch("/api/loans?view=all&status=pending"),
+        fetch("/api/laptop-loans?view=all&status=pending"),
+      ]);
+      const d1 = r1.ok ? await r1.json() : {};
+      const d2 = r2.ok ? await r2.json() : {};
+      setPendingCount((d1.loans?.length || 0) + (d2.loans?.length || 0));
+    } catch { /* silent */ }
+  }, []);
+
   const handleLaptopLoanAction = async (loanId, action) => {
     setActionLoading(loanId);
     setError("");
@@ -393,6 +407,7 @@ export default function AdminPage() {
       });
       if (res.ok) {
         fetchLoans();
+        fetchPendingCount();
         setAdminNotes((p) => ({ ...p, [loanId]: "" }));
         toast.success(
           `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : "returned"} successfully`
@@ -410,6 +425,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (user?.role === "admin") {
+      fetchPendingCount();
       if (activeTab === "loans") fetchLoans();
       if (activeTab === "audit") fetchAuditLogs();
       if (activeTab === "users") fetchUsers();
@@ -419,7 +435,7 @@ export default function AdminPage() {
       }
       if (activeTab === "laptops") { fetchLaptopsData(); fetchCurrentlyOut(); }
     }
-  }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers, fetchLaptopsData, fetchCurrentlyOut]);
+  }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers, fetchLaptopsData, fetchCurrentlyOut, fetchPendingCount]);
 
   useEffect(() => {
     if (activeTab !== "loans") return;
@@ -484,6 +500,7 @@ export default function AdminPage() {
         }
         
         fetchLoans();
+        fetchPendingCount();
         setAdminNotes((p) => ({ ...p, [loanId]: "" }));
         toast.success(
           `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "return" ? "returned" : action + "d"} successfully`
@@ -504,22 +521,30 @@ export default function AdminPage() {
     setBulkApproveLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "bulk_approve",
-          loan_ids: Array.from(selectedPendingLoans),
-        }),
-      });
-      if (res.ok) {
-        setSelectedPendingLoans(new Set());
-        fetchLoans();
-        toast.success(`${selectedPendingLoans.size} loan(s) approved successfully`);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error || `Bulk approve failed (${res.status})`);
+      const selectedIds = Array.from(selectedPendingLoans);
+      const techIds = selectedIds.filter((id) => loans.find((l) => l.id === id)?._source !== "laptop");
+      const laptopIds = selectedIds.filter((id) => loans.find((l) => l.id === id)?._source === "laptop");
+
+      const tasks = [];
+      if (techIds.length > 0) {
+        tasks.push(fetch("/api/admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "bulk_approve", loan_ids: techIds }),
+        }));
       }
+      for (const lid of laptopIds) {
+        tasks.push(fetch(`/api/laptop-loans/${lid}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "approve" }),
+        }));
+      }
+
+      await Promise.all(tasks);
+      setSelectedPendingLoans(new Set());
+      fetchLoans();
+      toast.success(`${selectedPendingLoans.size} loan(s) approved successfully`);
     } catch {
       toast.error("Network error — bulk approve could not be completed");
     } finally {
@@ -581,7 +606,7 @@ export default function AdminPage() {
   };
 
   const selectAllPending = () => {
-    const ids = loans.filter((l) => l.status === "pending" && l._source !== "laptop").map((l) => l.id);
+    const ids = loans.filter((l) => l.status === "pending").map((l) => l.id);
     setSelectedPendingLoans(new Set(ids));
   };
 
@@ -783,8 +808,14 @@ export default function AdminPage() {
           <button
             className={`tab ${activeTab === "loans" ? "active" : ""}`}
             onClick={() => setActiveTab("loans")}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
             📋 Loans
+            {pendingCount > 0 && (
+              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18, height: 18, padding: "0 5px", borderRadius: 10, background: "#f59e0b", color: "white", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>
+                {pendingCount}
+              </span>
+            )}
           </button>
           <button
             className={`tab ${activeTab === "users" ? "active" : ""}`}
@@ -872,6 +903,15 @@ export default function AdminPage() {
                   ))}
                 </div>
               </div>
+              <div style={{ marginBottom: 10 }}>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, department, or item..."
+                  style={{ width: "100%", fontSize: 13, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.04)", color: "var(--text-primary)", outline: "none" }}
+                />
+              </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {[
                   { value: "", label: "All" },
@@ -905,7 +945,7 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {statusFilter === "pending" && loans.some((l) => l._source !== "laptop") && loans.length > 0 && (
+            {statusFilter === "pending" && loans.length > 0 && (
               <div
                 style={{
                   display: "flex",
@@ -998,14 +1038,33 @@ export default function AdminPage() {
               <div className="empty-state">
                 <div className="empty-icon">✨</div>
                 <h3>No {statusFilter || ""} requests</h3>
-                <p>
-                  {statusFilter === "pending"
-                    ? "All caught up!"
-                    : "No loan requests found."}
-                </p>
+                <p>{statusFilter === "pending" ? "All caught up!" : "No loan requests found."}</p>
+              </div>
+            ) : loans.filter((loan) => {
+                if (!searchQuery.trim()) return true;
+                const q = searchQuery.toLowerCase();
+                return (loan.requester_name || loan.requester_username || "").toLowerCase().includes(q) ||
+                  (loan.department || "").toLowerCase().includes(q) ||
+                  (loan._source === "laptop"
+                    ? (loan.laptops || []).some((i) => (i.laptops?.name || "").toLowerCase().includes(q))
+                    : (loan.items || []).some((i) => (i.item || "").toLowerCase().includes(q)));
+              }).length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">🔍</div>
+                <h3>No results for &quot;{searchQuery}&quot;</h3>
+                <p>Try a different name or item.</p>
               </div>
             ) : (
-              loans.map((loan) => {
+              loans.filter((loan) => {
+                if (!searchQuery.trim()) return true;
+                const q = searchQuery.toLowerCase();
+                const nameMatch = (loan.requester_name || loan.requester_username || "").toLowerCase().includes(q);
+                const deptMatch = (loan.department || "").toLowerCase().includes(q);
+                const itemMatch = loan._source === "laptop"
+                  ? (loan.laptops || []).some((i) => (i.laptops?.name || "").toLowerCase().includes(q))
+                  : (loan.items || []).some((i) => (i.item || "").toLowerCase().includes(q));
+                return nameMatch || deptMatch || itemMatch;
+              }).map((loan) => {
                 const todayStr = new Date().toISOString().split("T")[0];
                 const isOverdue = loan.status === "approved" && loan.loan_type === "temporary" && loan.end_date && loan.end_date < todayStr;
                 const accentColor = isOverdue ? "#ef4444" : loan.status === "pending" ? "#f59e0b" : loan.status === "approved" ? "#10b981" : loan.status === "rejected" ? "#6b7280" : "#6366f1";
@@ -1015,7 +1074,7 @@ export default function AdminPage() {
                   <div key={loan.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: `4px solid ${accentColor}`, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
 
                     {/* Header */}
-                    <div style={{ padding: "14px 18px 10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div className="admin-loan-card-header" style={{ padding: "14px 18px 10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 7, flexWrap: "wrap" }}>
                           <span className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}>
@@ -1030,9 +1089,9 @@ export default function AdminPage() {
                           <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 8, fontSize: 12 }}>@{loan.requester_username}</span>
                         </div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                      <div className="admin-loan-card-header-right" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
                         <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>#{loan.id} · {timeAgo(loan.created_at)}</span>
-                        {statusFilter === "pending" && loan._source !== "laptop" && (
+                        {statusFilter === "pending" && (
                           <div style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }} onClick={() => toggleSelectPending(loan.id)}>
                             <div style={{ width: 18, height: 18, borderRadius: 5, border: selectedPendingLoans.has(loan.id) ? "none" : "1.5px solid var(--border)", background: selectedPendingLoans.has(loan.id) ? "#10b981" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
                               {selectedPendingLoans.has(loan.id) && <RiCheckLine color="white" size={13} />}
@@ -1104,6 +1163,7 @@ export default function AdminPage() {
                         <button
                           disabled={actionLoading === loan.id}
                           onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "return") : handleAction(loan.id, "return")}
+                          className="admin-loan-return-btn"
                           style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: actionLoading === loan.id ? "not-allowed" : "pointer", border: "none", background: isOverdue ? "linear-gradient(135deg, #ef4444, #dc2626)" : "linear-gradient(135deg, #10b981, #059669)", color: "white", opacity: actionLoading === loan.id ? 0.7 : 1, boxShadow: isOverdue ? "0 2px 8px rgba(239,68,68,0.35)" : "0 2px 8px rgba(16,185,129,0.3)" }}
                         >
                           {actionLoading === loan.id ? <><span className="btn-spinner" /> Returning…</> : <><RiArrowGoBackLine /> {isOverdue ? "⚠ Mark as Returned" : "Mark as Returned"}</>}
@@ -1330,6 +1390,8 @@ export default function AdminPage() {
                                 background:
                                   u.role === "admin"
                                     ? "linear-gradient(135deg, #f59e0b, #ef4444)"
+                                    : u.role === "tech"
+                                    ? "linear-gradient(135deg, #10b981, #059669)"
                                     : "linear-gradient(135deg, var(--accent), #818cf8)",
                                 display: "flex",
                                 alignItems: "center",
@@ -1374,53 +1436,37 @@ export default function AdminPage() {
                           )}
                         </td>
                         <td>
-                          <button
-                            onClick={() =>
-                              u.id !== user.id &&
-                              handleChangeRole(
-                                u.id,
-                                u.role === "admin" ? "user" : "admin",
-                              )
-                            }
-                            disabled={u.id === user.id}
-                            title={
-                              u.id === user.id
-                                ? "Cannot change own role"
-                                : `Change to ${u.role === "admin" ? "user" : "admin"}`
-                            }
+                          <select
+                            value={u.role}
+                            disabled={u.id === user.id || userActionLoading === `role-${u.id}`}
+                            onChange={(e) => handleChangeRole(u.id, e.target.value)}
                             style={{
+                              padding: "5px 8px",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              borderRadius: 7,
+                              border: "1px solid var(--border)",
                               background:
                                 u.role === "admin"
-                                  ? "rgba(245,158,11,0.15)"
-                                  : "rgba(99,102,241,0.1)",
-                              border:
-                                "1px solid " +
-                                (u.role === "admin"
-                                  ? "rgba(245,158,11,0.3)"
-                                  : "var(--border)"),
-                              borderRadius: 6,
-                              padding: "4px 8px",
-                              fontSize: 16,
-                              cursor:
-                                u.id === user.id ? "not-allowed" : "pointer",
+                                  ? "rgba(245,158,11,0.12)"
+                                  : u.role === "tech"
+                                  ? "rgba(16,185,129,0.12)"
+                                  : "rgba(99,102,241,0.08)",
+                              color:
+                                u.role === "admin"
+                                  ? "#f59e0b"
+                                  : u.role === "tech"
+                                  ? "#10b981"
+                                  : "var(--text-secondary)",
+                              cursor: u.id === user.id ? "not-allowed" : "pointer",
                               opacity: u.id === user.id ? 0.5 : 1,
-                              lineHeight: 1,
-                              minWidth: 32,
-                              textAlign: "center",
+                              fontFamily: "inherit",
                             }}
                           >
-                            {u.role === "admin" ? "🛡️" : "👤"}
-                            <span
-                              className="hide-mobile"
-                              style={{
-                                marginLeft: 4,
-                                fontSize: 13,
-                                color: "#fff",
-                              }}
-                            >
-                              {u.role === "admin" ? "Admin" : "User"}
-                            </span>
-                          </button>
+                            <option value="admin">🛡️ Admin</option>
+                            <option value="tech">🔧 Tech</option>
+                            <option value="user">👤 User</option>
+                          </select>
                         </td>
                         <td
                           style={{ fontSize: 12, color: "var(--text-muted)" }}
@@ -2026,38 +2072,48 @@ export default function AdminPage() {
                 <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>All laptops are currently in.</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 0, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
-                  {/* Header */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "8px 14px", background: "rgba(255,255,255,0.04)", borderBottom: "1px solid var(--border)" }}>
-                    {["Laptop(s)", "Borrower", "Due Date", "Status"].map((h) => (
-                      <div key={h} style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--text-muted)" }}>{h}</div>
-                    ))}
-                  </div>
                   {(() => {
                     const today = new Date().toISOString().split("T")[0];
+                    const in3Days = new Date(); in3Days.setDate(in3Days.getDate() + 3);
+                    const in3DaysStr = in3Days.toISOString().split("T")[0];
                     return currentlyOut.map((loan, i) => {
                       const laptopNames = (loan.laptops || []).map((item) => item.laptops?.name || `Laptop #${item.laptop_id}`).join(", ");
                       const isOverdue = loan.loan_type === "temporary" && loan.end_date && loan.end_date < today;
+                      const isDueSoon = !isOverdue && loan.loan_type === "temporary" && loan.end_date && loan.end_date >= today && loan.end_date <= in3DaysStr;
                       const isPerm = loan.loan_type === "permanent";
                       return (
                         <div key={loan.id} style={{
-                          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr",
-                          padding: "10px 14px", alignItems: "center",
+                          padding: "12px 14px",
                           borderBottom: i < currentlyOut.length - 1 ? "1px solid var(--border)" : "none",
-                          background: isOverdue ? "rgba(239,68,68,0.05)" : "transparent",
+                          background: isOverdue ? "rgba(239,68,68,0.05)" : isDueSoon ? "rgba(245,158,11,0.04)" : "transparent",
                         }}>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{laptopNames || "—"}</div>
-                          <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{loan.requester_name || "—"}</div>
-                          <div style={{ fontSize: 13, color: isOverdue ? "#ef4444" : "var(--text-secondary)", fontWeight: isOverdue ? 700 : 400 }}>
-                            {isPerm ? "Permanent" : loan.end_date || "—"}
-                          </div>
-                          <div>
-                            {isOverdue ? (
-                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>⚠ Overdue</span>
-                            ) : isPerm ? (
-                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(139,92,246,0.12)", color: "#8b5cf6", border: "1px solid rgba(139,92,246,0.25)" }}>Permanent</span>
-                            ) : (
-                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(16,185,129,0.12)", color: "#10b981", border: "1px solid rgba(16,185,129,0.25)" }}>Out</span>
-                            )}
+                          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{laptopNames || "—"}</div>
+                              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                                {loan.requester_name || "—"}
+                                {loan.department ? <span style={{ color: "var(--text-muted)" }}> · {loan.department}</span> : null}
+                              </div>
+                              {loan.purpose && (
+                                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {loan.purpose}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                              {isOverdue ? (
+                                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>⚠ Overdue</span>
+                              ) : isDueSoon ? (
+                                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}>⏰ Due Soon</span>
+                              ) : isPerm ? (
+                                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(139,92,246,0.12)", color: "#8b5cf6", border: "1px solid rgba(139,92,246,0.25)" }}>Permanent</span>
+                              ) : (
+                                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(16,185,129,0.12)", color: "#10b981", border: "1px solid rgba(16,185,129,0.25)" }}>Out</span>
+                              )}
+                              <span style={{ fontSize: 11, color: isOverdue ? "#ef4444" : "var(--text-muted)", fontWeight: isOverdue ? 700 : 400 }}>
+                                {isPerm ? "No return date" : loan.end_date || "—"}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       );

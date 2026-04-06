@@ -105,6 +105,9 @@ export async function POST(request) {
     if (!purpose || !purpose.trim()) {
       return NextResponse.json({ error: "Purpose is required" }, { status: 400 });
     }
+    if (loan_type === "permanent" && !["admin", "tech"].includes(user.role)) {
+      return NextResponse.json({ error: "Only Tech team members can request permanent loans" }, { status: 403 });
+    }
     if (!start_date) {
       return NextResponse.json({ error: "Start date is required" }, { status: 400 });
     }

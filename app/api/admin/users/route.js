@@ -84,7 +84,7 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    if (!["admin", "user"].includes(new_role)) {
+    if (!["admin", "tech", "user"].includes(new_role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
     if (Number(user_id) === Number(user.id)) {

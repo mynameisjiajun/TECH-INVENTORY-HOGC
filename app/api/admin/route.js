@@ -586,30 +586,45 @@ export async function GET() {
   const lowStock = db.prepare("SELECT COUNT(*) as count FROM storage_items WHERE current <= 2 AND quantity_spare > 0").get().count;
 
   // Loan stats from Supabase (authoritative — not derived from ephemeral SQLite)
-  const { count: pendingRequests } = await supabase
-    .from("loan_requests")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "pending");
+  const [
+    { count: pendingRequests },
+    { count: laptopPending },
+    { count: laptopActive },
+  ] = await Promise.all([
+    supabase.from("loan_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("laptop_loan_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("laptop_loan_requests").select("*", { count: "exact", head: true }).eq("status", "approved"),
+  ]);
 
   // totalLoaned calculated later from approved loan_items (accurate across cold starts)
   const stats = {
     totalItems,
     totalCurrent,
     totalLoaned: 0, // placeholder — filled in below after loan items are fetched
-    pendingRequests: pendingRequests || 0,
+    pendingRequests: (pendingRequests || 0) + (laptopPending || 0),
+    laptopPending: laptopPending || 0,
+    laptopActive: laptopActive || 0,
     lowStock,
     deployedItems,
   };
 
-  // Active loans from Supabase
-  const { data: activeLoans } = await supabase
-    .from("loan_requests")
-    .select(`*, users (display_name, username)`)
-    .in("status", ["approved", "pending"])
-    .order("start_date", { ascending: true });
+  // Active loans from Supabase — tech + laptop in parallel
+  const [{ data: activeLoans }, { data: activeLaptopLoans }] = await Promise.all([
+    supabase
+      .from("loan_requests")
+      .select(`*, users (display_name, username)`)
+      .in("status", ["approved", "pending"])
+      .order("start_date", { ascending: true }),
+    supabase
+      .from("laptop_loan_requests")
+      .select(`*, users (display_name, username), laptop_loan_items(*, laptops(id, name))`)
+      .in("status", ["approved", "pending"])
+      .order("start_date", { ascending: true }),
+  ]);
 
   const formattedLoans = (activeLoans || []).map((lr) => ({
     ...lr,
+    _loanKind: "tech",
     requester_name: lr.users?.display_name || null,
     requester_username: lr.users?.username || null,
     users: undefined,
@@ -638,15 +653,37 @@ export async function GET() {
     }, 0);
   }
 
+  const formattedLaptopLoans = (activeLaptopLoans || []).map((lr) => ({
+    ...lr,
+    _loanKind: "laptop",
+    requester_name: lr.users?.display_name || null,
+    requester_username: lr.users?.username || null,
+    users: undefined,
+    laptops: lr.laptop_loan_items || [],
+    items: (lr.laptop_loan_items || []).map((item) => ({
+      id: item.id,
+      item: item.laptops?.name || "Unknown laptop",
+      quantity: 1,
+    })),
+    laptop_loan_items: undefined,
+  }));
+
+  const mergedActiveLoans = [...formattedLoans, ...formattedLaptopLoans]
+    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+
   // Due date warnings
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toLocaleDateString("en-CA");
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toLocaleDateString("en-CA");
 
-  const [{ data: overdueLoans }, { data: dueSoonLoans }] = await Promise.all([
+  const [{ data: overdueLoans }, { data: dueSoonLoans }, { data: overdueLaptopLoans }, { data: dueSoonLaptopLoans }] = await Promise.all([
     supabase.from("loan_requests").select("id")
       .eq("status", "approved").eq("loan_type", "temporary").not("end_date", "is", null).lt("end_date", today),
     supabase.from("loan_requests").select("id")
+      .eq("status", "approved").eq("loan_type", "temporary").eq("end_date", tomorrow),
+    supabase.from("laptop_loan_requests").select("id")
+      .eq("status", "approved").eq("loan_type", "temporary").not("end_date", "is", null).lt("end_date", today),
+    supabase.from("laptop_loan_requests").select("id")
       .eq("status", "approved").eq("loan_type", "temporary").eq("end_date", tomorrow),
   ]);
 
@@ -700,9 +737,9 @@ export async function GET() {
 
   return NextResponse.json({
     stats,
-    activeLoans: formattedLoans,
-    overdueCount: (overdueLoans || []).length,
-    dueSoonCount: (dueSoonLoans || []).length,
+    activeLoans: mergedActiveLoans,
+    overdueCount: (overdueLoans || []).length + (overdueLaptopLoans || []).length,
+    dueSoonCount: (dueSoonLoans || []).length + (dueSoonLaptopLoans || []).length,
     charts: { loansTrend, topItems, inventoryDistribution },
     recentActivity,
   }, {

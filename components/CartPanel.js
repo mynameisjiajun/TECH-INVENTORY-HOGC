@@ -1,5 +1,6 @@
 "use client";
 import { useCart } from "@/lib/context/CartContext";
+import { useAuth } from "@/lib/context/AuthContext";
 import { useState, useEffect } from "react";
 import {
   RiCloseLine,
@@ -14,6 +15,8 @@ import {
 } from "react-icons/ri";
 
 export default function CartPanel() {
+  const { user } = useAuth();
+  const canPermanent = ["admin", "tech"].includes(user?.role);
   const {
     items,
     isOpen,
@@ -28,6 +31,7 @@ export default function CartPanel() {
   } = useCart();
 
   const [showForm, setShowForm] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [techLoanType, setTechLoanType] = useState("temporary");
   const [formData, setFormData] = useState({
     purpose: "",
@@ -97,47 +101,67 @@ export default function CartPanel() {
       const errors = [];
       const results = [];
 
-      // Submit tech loan
-      if (techItems.length > 0) {
-        const isModifying = !!modifyingLoan;
-        const endpoint = isModifying ? `/api/loans/${modifyingLoan.id}` : "/api/loans";
-        const method = isModifying ? "PUT" : "POST";
-
-        const res = await fetch(endpoint, {
-          method,
+      // Modifying an existing laptop loan
+      if (modifyingLoan?._loanKind === "laptop") {
+        const firstItem = laptopItems[0];
+        const res = await fetch(`/api/laptop-loans/${modifyingLoan.id}`, {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            loan_type: techLoanType,
+            laptop_ids: laptopItems.map((i) => i.id),
+            loan_type: firstItem?.loan_type || "temporary",
+            start_date: firstItem?.start_date || "",
+            end_date: firstItem?.end_date || null,
             purpose: formData.purpose,
             department: formData.department,
-            start_date: formData.start_date,
-            end_date: techLoanType === "temporary" ? formData.end_date : null,
-            location: techLoanType === "permanent" ? formData.location : "",
-            items: techItems.map((i) => ({ item_id: i.id, quantity: i.quantity })),
           }),
         });
         const data = await res.json();
-        if (!res.ok) errors.push(data.error || "Tech loan failed");
-        else results.push("tech");
-      }
-
-      // Submit laptop loans
-      if (laptopItems.length > 0) {
-        const loan_groups = laptopGroups.map((g) => ({
-          loan_type: g.loan_type,
-          start_date: g.start_date,
-          end_date: g.end_date || null,
-          laptop_ids: g.laptops.map((l) => l.id),
-        }));
-
-        const res = await fetch("/api/laptop-loans", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ loan_groups, purpose: formData.purpose, department: formData.department }),
-        });
-        const data = await res.json();
-        if (!res.ok) errors.push(data.error || "Laptop loan failed");
+        if (!res.ok) errors.push(data.error || "Laptop loan modification failed");
         else results.push("laptop");
+      } else {
+        // Submit tech loan
+        if (techItems.length > 0) {
+          const isModifying = !!modifyingLoan;
+          const endpoint = isModifying ? `/api/loans/${modifyingLoan.id}` : "/api/loans";
+          const method = isModifying ? "PUT" : "POST";
+
+          const res = await fetch(endpoint, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              loan_type: techLoanType,
+              purpose: formData.purpose,
+              department: formData.department,
+              start_date: formData.start_date,
+              end_date: techLoanType === "temporary" ? formData.end_date : null,
+              location: techLoanType === "permanent" ? formData.location : "",
+              items: techItems.map((i) => ({ item_id: i.id, quantity: i.quantity })),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) errors.push(data.error || "Tech loan failed");
+          else results.push("tech");
+        }
+
+        // Submit laptop loans (new)
+        if (laptopItems.length > 0) {
+          const loan_groups = laptopGroups.map((g) => ({
+            loan_type: g.loan_type,
+            start_date: g.start_date,
+            end_date: g.end_date || null,
+            laptop_ids: g.laptops.map((l) => l.id),
+          }));
+
+          const res = await fetch("/api/laptop-loans", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ loan_groups, purpose: formData.purpose, department: formData.department }),
+          });
+          const data = await res.json();
+          if (!res.ok) errors.push(data.error || "Laptop loan failed");
+          else results.push("laptop");
+        }
       }
 
       if (errors.length > 0) {
@@ -147,8 +171,7 @@ export default function CartPanel() {
 
       clearCart();
       setShowForm(false);
-      setIsOpen(false);
-      window.location.href = "/loans";
+      setSubmitted(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -178,15 +201,60 @@ export default function CartPanel() {
           </button>
         </div>
 
+        {/* ====== SUCCESS SCREEN ====== */}
+        {submitted && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, textAlign: "center", gap: 16 }}>
+            <div style={{ fontSize: 56 }}>🎉</div>
+            <h3 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Request Submitted!</h3>
+            <p style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+              Your loan request has been sent for approval. We&apos;ll notify you when it&apos;s reviewed.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", marginTop: 8 }}>
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%" }}
+                onClick={() => { setSubmitted(false); setIsOpen(false); window.location.href = "/loans"; }}
+              >
+                View My Loans →
+              </button>
+              <button
+                className="btn btn-outline"
+                style={{ width: "100%" }}
+                onClick={() => { setSubmitted(false); setIsOpen(false); }}
+              >
+                Continue Browsing
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ====== CART VIEW ====== */}
-        {!showForm && (
+        {!showForm && !submitted && (
           <>
             <div className="cart-items">
               {items.length === 0 ? (
-                <div className="empty-state" style={{ padding: 40 }}>
+                <div className="empty-state" style={{ padding: 32, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
                   <div className="empty-icon">🛒</div>
-                  <h3>Cart is empty</h3>
-                  <p>Borrow laptops or inventory items to get started</p>
+                  <div style={{ textAlign: "center" }}>
+                    <h3 style={{ marginBottom: 6 }}>Cart is empty</h3>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Browse items to get started</p>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
+                    <button
+                      className="btn btn-outline"
+                      style={{ width: "100%", justifyContent: "center", gap: 8 }}
+                      onClick={() => { setIsOpen(false); window.location.href = "/inventory/tech-inventory"; }}
+                    >
+                      📦 Browse Tech Inventory →
+                    </button>
+                    <button
+                      className="btn btn-outline"
+                      style={{ width: "100%", justifyContent: "center", gap: 8 }}
+                      onClick={() => { setIsOpen(false); window.location.href = "/inventory/laptop-loans"; }}
+                    >
+                      💻 Browse Laptop Loans →
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -428,17 +496,19 @@ export default function CartPanel() {
                         >
                           ⏱️ Temporary
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setTechLoanType("permanent")}
-                          style={{
-                            flex: 1, padding: "9px 0", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer", border: "none",
-                            background: techLoanType === "permanent" ? "linear-gradient(135deg, #8b5cf6, #a78bfa)" : "rgba(255,255,255,0.05)",
-                            color: techLoanType === "permanent" ? "white" : "var(--text-secondary)",
-                          }}
-                        >
-                          📌 Permanent
-                        </button>
+                        {canPermanent && (
+                          <button
+                            type="button"
+                            onClick={() => setTechLoanType("permanent")}
+                            style={{
+                              flex: 1, padding: "9px 0", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer", border: "none",
+                              background: techLoanType === "permanent" ? "linear-gradient(135deg, #8b5cf6, #a78bfa)" : "rgba(255,255,255,0.05)",
+                              color: techLoanType === "permanent" ? "white" : "var(--text-secondary)",
+                            }}
+                          >
+                            📌 Permanent
+                          </button>
+                        )}
                       </div>
                     )}
 

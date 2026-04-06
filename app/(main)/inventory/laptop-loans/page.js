@@ -2,7 +2,7 @@
 import { useAuth } from "@/lib/context/AuthContext";
 import { useCart } from "@/lib/context/CartContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import {
@@ -16,7 +16,7 @@ import {
   RiCheckLine,
 } from "react-icons/ri";
 
-function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, onNotify, isInCart }) {
+const LaptopCard = memo(function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, onNotify, isInCart }) {
   const isAvailable = laptop.availability === "available";
   const isBlocked = laptop.availability === "blocked";
   const isPermLoaned = laptop.availability === "perm_loaned";
@@ -81,7 +81,7 @@ function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, o
                 {laptop.screen_size}{laptop.screen_size && laptop.cpu ? " · " : ""}{laptop.cpu}
               </div>
             )}
-            {isAdmin && (laptop.ram || laptop.storage) && (
+            {(isAdmin || user?.role === "tech") && (laptop.ram || laptop.storage) && (
               <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
                 {laptop.ram}{laptop.ram && laptop.storage ? " · " : ""}{laptop.storage}
               </div>
@@ -149,7 +149,7 @@ function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, o
       )}
     </div>
   );
-}
+});
 
 export default function LaptopLoansPage() {
   const { user, loading } = useAuth();
@@ -164,6 +164,8 @@ export default function LaptopLoansPage() {
   const [returningSoon, setReturningSoon] = useState([]);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
+  const abortRef = useRef(null);
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -171,35 +173,45 @@ export default function LaptopLoansPage() {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const fetchLaptops = useCallback(async () => {
+  const fetchLaptops = useCallback((signal) => {
     if (!user) return;
     setFetching(true);
     setError("");
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.set("start_date", startDate);
-      if (endDate && loanType === "temporary") params.set("end_date", endDate);
-      else if (startDate && loanType === "permanent") params.set("end_date", "9999-12-31");
+    const params = new URLSearchParams();
+    if (startDate) params.set("start_date", startDate);
+    if (endDate && loanType === "temporary") params.set("end_date", endDate);
+    else if (startDate && loanType === "permanent") params.set("end_date", "9999-12-31");
 
-      const res = await fetch(`/api/laptops?${params}`, { cache: "no-store" });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error || "Failed to load laptops");
-        return;
-      }
-      const data = await res.json();
-      setTiers(data.tiers || []);
-      setReturningSoon(data.returningSoon || []);
-    } catch {
-      setError("Network error — could not load laptops");
-    } finally {
-      setFetching(false);
-    }
+    fetch(`/api/laptops?${params}`, { cache: "no-store", signal })
+      .then((res) => {
+        if (!res.ok) return res.json().catch(() => ({})).then((d) => { throw new Error(d.error || "Failed to load laptops"); });
+        return res.json();
+      })
+      .then((data) => {
+        setTiers(data.tiers || []);
+        setReturningSoon(data.returningSoon || []);
+        setFetching(false);
+      })
+      .catch((err) => {
+        if (err.name === "AbortError") return; // stale request cancelled — ignore
+        setError(err.message || "Network error — could not load laptops");
+        setFetching(false);
+      });
   }, [user, startDate, endDate, loanType]);
 
   useEffect(() => {
-    if (user) fetchLaptops();
-  }, [fetchLaptops, user]);
+    if (!user) return;
+    // Cancel any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    // Debounce 300ms so rapid date changes don't fire multiple requests
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      fetchLaptops(controller.signal);
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [user, fetchLaptops]);
 
   const handleBorrow = useCallback((laptop) => {
     addLaptopItem(laptop, startDate, loanType === "temporary" ? endDate : null, loanType);
@@ -218,13 +230,14 @@ export default function LaptopLoansPage() {
   }, []);
 
   const isAdmin = user?.role === "admin";
+  const canPermanent = ["admin", "tech"].includes(user?.role);
 
   // Set of laptop IDs already in the cart (for the current date selection)
-  const cartLaptopIds = new Set(
+  const cartLaptopIds = useMemo(() => new Set(
     cartItems
       .filter((i) => i._cartType === "laptop" && i.start_date === startDate && i.end_date === (loanType === "temporary" ? endDate : null))
       .map((i) => i.id)
-  );
+  ), [cartItems, startDate, endDate, loanType]);
 
   // All perm-loaned laptops across all tiers
   const permLoanedLaptops = tiers.flatMap((t) => t.laptops.filter((l) => l.is_perm_loaned));
@@ -273,9 +286,9 @@ export default function LaptopLoansPage() {
         {tab === "available" && (
           <>
             {/* Loan type toggle + date pickers */}
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: 20, marginBottom: 24, position: "sticky", top: 70, zIndex: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
+            <div className="laptop-sticky-bar">
               {/* Loan type toggle */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <div className="laptop-loan-type-toggle">
                 <button
                   onClick={() => { setLoanType("temporary"); setEndDate(""); }}
                   style={{
@@ -287,21 +300,23 @@ export default function LaptopLoansPage() {
                 >
                   <RiTimeLine style={{ verticalAlign: "middle", marginRight: 4 }} />⏱️ Temporary Loan
                 </button>
-                <button
-                  onClick={() => { setLoanType("permanent"); setEndDate(""); }}
-                  style={{
-                    flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer", border: "none",
-                    background: loanType === "permanent" ? "linear-gradient(135deg, #8b5cf6, #a78bfa)" : "rgba(255,255,255,0.05)",
-                    color: loanType === "permanent" ? "white" : "var(--text-secondary)",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  <RiPushpinLine style={{ verticalAlign: "middle", marginRight: 4 }} />📌 Permanent Loan
-                </button>
+                {canPermanent && (
+                  <button
+                    onClick={() => { setLoanType("permanent"); setEndDate(""); }}
+                    style={{
+                      flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer", border: "none",
+                      background: loanType === "permanent" ? "linear-gradient(135deg, #8b5cf6, #a78bfa)" : "rgba(255,255,255,0.05)",
+                      color: loanType === "permanent" ? "white" : "var(--text-secondary)",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <RiPushpinLine style={{ verticalAlign: "middle", marginRight: 4 }} />📌 Permanent Loan
+                  </button>
+                )}
               </div>
 
               {/* Date pickers */}
-              <div style={{ display: "grid", gridTemplateColumns: loanType === "temporary" ? "1fr 1fr" : "1fr", gap: 12 }}>
+              <div className={`laptop-date-grid${loanType !== "temporary" ? " single-col" : ""}`}>
                 <div className="input-group" style={{ margin: 0 }}>
                   <label style={{ fontSize: 12, marginBottom: 6, display: "block" }}>
                     {loanType === "temporary" ? "Borrow Date *" : "Start Date *"}
@@ -310,7 +325,12 @@ export default function LaptopLoansPage() {
                     type="date"
                     value={startDate}
                     min={today}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setStartDate(val);
+                      // Clear end date if it's now before the new start date
+                      if (endDate && val && endDate < val) setEndDate("");
+                    }}
                     style={{ width: "100%" }}
                   />
                 </div>
@@ -321,8 +341,12 @@ export default function LaptopLoansPage() {
                       type="date"
                       value={endDate}
                       min={startDate || today}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      style={{ width: "100%" }}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (startDate && val < startDate) return; // silently reject invalid range
+                        setEndDate(val);
+                      }}
+                      style={{ width: "100%", borderColor: endDate && startDate && endDate < startDate ? "var(--error)" : undefined }}
                     />
                   </div>
                 )}
@@ -336,7 +360,7 @@ export default function LaptopLoansPage() {
             </div>
 
             {/* Main content: tiers + optional returning soon sidebar */}
-            <div style={{ display: "grid", gridTemplateColumns: showReturningSidebar ? "1fr 280px" : "1fr", gap: 24, alignItems: "start" }}>
+            <div className={`laptop-content-grid${showReturningSidebar ? " with-sidebar" : ""}`}>
               {/* Laptop tiers */}
               <div>
                 {fetching ? (
@@ -355,7 +379,7 @@ export default function LaptopLoansPage() {
                         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
                           {tier.name}
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+                        <div className="laptop-cards-grid">
                           {availableLaptops.map((laptop) => (
                             <LaptopCard
                               key={laptop.id}
@@ -378,7 +402,7 @@ export default function LaptopLoansPage() {
 
               {/* Returning Soon sidebar */}
               {showReturningSidebar && (
-                <div style={{ position: "sticky", top: 80 }}>
+                <div className="laptop-sidebar" style={{ position: "sticky", top: 80 }}>
                   <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: 18 }}>
                     <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
                       <RiCalendarLine style={{ color: "var(--accent)" }} /> Returning Soon

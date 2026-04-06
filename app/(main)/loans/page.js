@@ -27,8 +27,9 @@ export default function LoansPage() {
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState('');
   const [borrowAgainLoading, setBorrowAgainLoading] = useState({});
+  const [cancelLoading, setCancelLoading] = useState({});
   const toast = useToast();
-  const { addItem, setIsOpen, setItems, setModifyingLoan } = useCart();
+  const { addItem, addLaptopItem, setIsOpen, setItems, setModifyingLoan } = useCart();
   const channelRef = useRef(null);
 
   const [returnModalLoan, setReturnModalLoan] = useState(null);
@@ -88,6 +89,28 @@ export default function LoansPage() {
     }
   };
 
+  const handleCancelLoan = async (loan) => {
+    if (!confirm('Cancel this loan request? This cannot be undone.')) return;
+    setCancelLoading((p) => ({ ...p, [loan.id]: true }));
+    try {
+      const endpoint = loan._loanKind === 'laptop'
+        ? `/api/laptop-loans/${loan.id}`
+        : `/api/loans/${loan.id}`;
+      const res = await fetch(endpoint, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Loan request cancelled.');
+        fetchLoans();
+      } else {
+        toast.error(data.error || 'Could not cancel loan');
+      }
+    } catch {
+      toast.error('Network error — could not cancel loan');
+    } finally {
+      setCancelLoading((p) => ({ ...p, [loan.id]: false }));
+    }
+  };
+
   const handleBorrowAgain = async (loan) => {
     setBorrowAgainLoading((p) => ({ ...p, [loan.id]: true }));
     try {
@@ -112,6 +135,76 @@ export default function LoansPage() {
       }
     } catch {
       toast.error('Could not load items — please try again');
+    } finally {
+      setBorrowAgainLoading((p) => ({ ...p, [loan.id]: false }));
+    }
+  };
+
+  const handleBorrowAgainLaptop = async (loan) => {
+    setBorrowAgainLoading((p) => ({ ...p, [loan.id]: true }));
+    try {
+      const res = await fetch('/api/laptops');
+      const data = await res.json();
+      const allLaptops = (data.tiers || []).flatMap((t) => t.laptops || []);
+      let added = 0;
+      let skipped = 0;
+      for (const item of loan.laptops || []) {
+        const laptop = allLaptops.find((l) => l.id === item.laptop_id);
+        if (!laptop) { skipped++; continue; }
+        if (laptop.availability === "perm_loaned" || laptop.availability === "temp_loaned" || laptop.availability === "blocked") {
+          skipped++;
+          continue;
+        }
+        addLaptopItem(laptop, '', '', 'temporary');
+        added++;
+      }
+      if (added > 0) {
+        setIsOpen(true);
+        if (skipped > 0) toast.success(`${added} laptop(s) added to cart (${skipped} currently unavailable)`);
+        else toast.success(`${added} laptop(s) added to cart`);
+      } else {
+        toast.error('No laptops from this loan are currently available');
+      }
+    } catch {
+      toast.error('Could not load laptops — please try again');
+    } finally {
+      setBorrowAgainLoading((p) => ({ ...p, [loan.id]: false }));
+    }
+  };
+
+  const handleModifyLaptopLoan = async (loan) => {
+    setBorrowAgainLoading((p) => ({ ...p, [loan.id]: true }));
+    try {
+      const res = await fetch('/api/laptops');
+      const data = await res.json();
+      const allLaptops = (data.tiers || []).flatMap((t) => t.laptops || []);
+      const cartItems = [];
+      let missing = 0;
+
+      for (const item of loan.laptops || []) {
+        const laptop = allLaptops.find((l) => l.id === item.laptop_id);
+        if (laptop) {
+          cartItems.push({
+            id: laptop.id,
+            name: laptop.name,
+            screen_size: laptop.screen_size,
+            cpu: laptop.cpu,
+            loan_type: loan.loan_type,
+            start_date: loan.start_date || '',
+            end_date: loan.end_date || '',
+            _cartType: 'laptop',
+          });
+        } else {
+          missing++;
+        }
+      }
+
+      setModifyingLoan({ ...loan, _loanKind: 'laptop' });
+      setItems(cartItems);
+      setIsOpen(true);
+      if (missing > 0) toast.error(`${missing} laptop(s) could not be loaded for modification.`);
+    } catch {
+      toast.error('Could not load laptops — please try again');
     } finally {
       setBorrowAgainLoading((p) => ({ ...p, [loan.id]: false }));
     }
@@ -396,18 +489,16 @@ export default function LoansPage() {
                 <RiCameraLine style={{ marginRight: 6 }} /> Return
               </button>
             )}
-            {!isLaptop && (
-              <button
-                className="btn btn-sm"
-                onClick={() => handleModifyLoan(loan)}
-                disabled={borrowAgainLoading[loan.id]}
-                style={{ background: 'rgba(245,158,11,0.1)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)', fontWeight: 600 }}
-              >
-                {borrowAgainLoading[loan.id]
-                  ? <span className="btn-spinner" />
-                  : <><RiEdit2Line style={{ marginRight: 6 }} />Modify</>}
-              </button>
-            )}
+            <button
+              className="btn btn-sm"
+              onClick={() => isLaptop ? handleModifyLaptopLoan(loan) : handleModifyLoan(loan)}
+              disabled={borrowAgainLoading[loan.id]}
+              style={{ background: 'rgba(245,158,11,0.1)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)', fontWeight: 600 }}
+            >
+              {borrowAgainLoading[loan.id]
+                ? <span className="btn-spinner" />
+                : <><RiEdit2Line style={{ marginRight: 6 }} />Modify</>}
+            </button>
           </div>
         )}
 
@@ -419,11 +510,26 @@ export default function LoansPage() {
           </div>
         )}
 
-        {!isLaptop && (loan.status === 'returned' || loan.status === 'rejected') && (
+        {loan.status === 'pending' && (
+          <div style={{ marginTop: 12 }}>
+            <button
+              className="btn btn-sm"
+              onClick={() => handleCancelLoan(loan)}
+              disabled={cancelLoading[loan.id]}
+              style={{ fontSize: 12, color: 'var(--error)', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', fontWeight: 600 }}
+            >
+              {cancelLoading[loan.id]
+                ? <><span className="btn-spinner" /> Cancelling…</>
+                : <>✕ Cancel Request</>}
+            </button>
+          </div>
+        )}
+
+        {(loan.status === 'returned' || loan.status === 'rejected') && (
           <div style={{ marginTop: 12 }}>
             <button
               className="btn btn-sm btn-outline"
-              onClick={() => handleBorrowAgain(loan)}
+              onClick={() => isLaptop ? handleBorrowAgainLaptop(loan) : handleBorrowAgain(loan)}
               disabled={borrowAgainLoading[loan.id]}
               style={{ fontSize: 12, color: 'var(--accent)', borderColor: 'rgba(99,102,241,0.4)' }}
             >
@@ -490,7 +596,7 @@ export default function LoansPage() {
               placeholder="Search by item or purpose..."
             />
           </div>
-          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ flexShrink: 0 }}>
+          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ flexShrink: 0, fontSize: 12, padding: '7px 10px', width: 'auto' }}>
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
@@ -501,11 +607,11 @@ export default function LoansPage() {
             <RiFilterLine style={{ color: 'var(--text-muted)', fontSize: 14 }} />
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
               title="From date"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', fontSize: 13 }} />
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', color: 'var(--text-primary)', fontSize: 12, width: 130 }} />
             <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>–</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
               title="To date"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', fontSize: 13 }} />
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', color: 'var(--text-primary)', fontSize: 12, width: 130 }} />
           </div>
           {(search || dateFrom || dateTo || statusFilter) && (
             <button className="btn btn-sm btn-outline" onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setStatusFilter(''); }}>

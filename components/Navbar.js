@@ -26,6 +26,7 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const [notifPermission, setNotifPermission] = useState("default");
+  const [adminPendingCount, setAdminPendingCount] = useState(0);
   const notifRef = useRef(null);
   const prevUnreadRef = useRef(-1);
 
@@ -106,6 +107,24 @@ export default function Navbar() {
       if (channel) supabaseClient.removeChannel(channel);
       clearInterval(fallback);
     };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role !== "admin") return;
+    const fetchPending = async () => {
+      try {
+        const [r1, r2] = await Promise.all([
+          fetch("/api/loans?view=all&status=pending"),
+          fetch("/api/laptop-loans?view=all&status=pending"),
+        ]);
+        const d1 = r1.ok ? await r1.json() : { loans: [] };
+        const d2 = r2.ok ? await r2.json() : { loans: [] };
+        setAdminPendingCount((d1.loans?.length || 0) + (d2.loans?.length || 0));
+      } catch { /* silent */ }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 60000);
+    return () => clearInterval(interval);
   }, [user]);
 
   useEffect(() => {
@@ -329,9 +348,21 @@ export default function Navbar() {
             key={link.href}
             href={link.href}
             className={`nav-link ${pathname === link.href ? "active" : ""}`}
+            style={{ position: "relative" }}
           >
             {link.icon}
             <span>{link.label}</span>
+            {link.href === "/admin" && adminPendingCount > 0 && (
+              <span style={{
+                position: "absolute", top: 4, right: 4,
+                background: "#f59e0b", color: "white",
+                minWidth: 16, height: 16, borderRadius: 8,
+                fontSize: 9, display: "flex", alignItems: "center", justifyContent: "center",
+                fontWeight: 700, padding: "0 3px",
+              }}>
+                {adminPendingCount > 99 ? "99+" : adminPendingCount}
+              </span>
+            )}
           </Link>
         ))}
         <button

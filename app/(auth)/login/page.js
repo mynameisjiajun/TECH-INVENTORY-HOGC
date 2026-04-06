@@ -168,7 +168,7 @@ export default function LoginPage() {
                 key={p.id}
                 className="login-easter-dvd"
                 style={{
-                  "--x-range": `calc(100vw - ${p.size})`,
+                  "--x-range": `calc(100dvw - ${p.size})`,
                   animationDuration: p.xDuration,
                   animationDelay: p.xDelay,
                   width: p.size,
@@ -180,7 +180,7 @@ export default function LoginPage() {
                     p.variant === "text" ? "login-easter-number-text" : ""
                   }`}
                   style={{
-                    "--y-range": `calc(100vh - ${p.size})`,
+                    "--y-range": `calc(100dvh - ${p.size})`,
                     animationDuration: p.yDuration,
                     animationDelay: p.yDelay,
                     "--hue": p.hue,

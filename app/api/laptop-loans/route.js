@@ -16,10 +16,15 @@ export async function GET(request) {
     .select("*, users(display_name, username)")
     .order("created_at", { ascending: false });
 
-  if (view !== "all" || user.role !== "admin") {
-    query = query.eq("user_id", user.id);
+  if (view === "active") {
+    // All approved + pending loans for calendar display (any authenticated user)
+    query = query.in("status", ["approved", "pending"]);
+  } else {
+    if (view !== "all" || user.role !== "admin") {
+      query = query.eq("user_id", user.id);
+    }
+    if (status) query = query.eq("status", status);
   }
-  if (status) query = query.eq("status", status);
 
   const { data: loanRows, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -61,6 +66,11 @@ export async function POST(request) {
 
   if (!loan_groups?.length) return NextResponse.json({ error: "No laptops selected" }, { status: 400 });
   if (!purpose?.trim()) return NextResponse.json({ error: "Purpose is required" }, { status: 400 });
+
+  const hasPermanent = loan_groups.some((g) => g.loan_type === "permanent");
+  if (hasPermanent && !["admin", "tech"].includes(user.role)) {
+    return NextResponse.json({ error: "Only Tech team members can request permanent loans" }, { status: 403 });
+  }
 
   const createdLoans = [];
 

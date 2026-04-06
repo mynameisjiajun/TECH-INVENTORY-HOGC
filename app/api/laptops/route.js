@@ -10,18 +10,16 @@ export async function GET(request) {
   const startDate = searchParams.get("start_date");
   const endDate = searchParams.get("end_date");
 
-  const [{ data: tiers }, { data: laptops }] = await Promise.all([
+  const today = new Date().toISOString().split("T")[0];
+
+  const [{ data: tiers }, { data: laptops }, { data: activeLoans }, { data: notifs }] = await Promise.all([
     supabase.from("laptop_tiers").select("*").order("display_order"),
     supabase.from("laptops").select("*").order("name"),
+    supabase.from("laptop_loan_requests")
+      .select("id, start_date, end_date, loan_type, laptop_loan_items(laptop_id)")
+      .in("status", ["approved", "pending"]),
+    supabase.from("laptop_notifications").select("laptop_id").eq("user_id", user.id),
   ]);
-
-  // Get all active (approved/pending) loans with their items
-  const { data: activeLoans } = await supabase
-    .from("laptop_loan_requests")
-    .select("id, start_date, end_date, loan_type, laptop_loan_items(laptop_id)")
-    .in("status", ["approved", "pending"]);
-
-  const today = new Date().toISOString().split("T")[0];
 
   // Build maps: which laptops are unavailable for the requested dates, and their return dates
   const unavailableIds = new Set();
@@ -53,11 +51,6 @@ export async function GET(request) {
     }
   }
 
-  // Get user's notify-me subscriptions
-  const { data: notifs } = await supabase
-    .from("laptop_notifications")
-    .select("laptop_id")
-    .eq("user_id", user.id);
   const notifiedIds = new Set((notifs || []).map((n) => n.laptop_id));
 
   // Annotate each laptop
@@ -74,9 +67,9 @@ export async function GET(request) {
 
     return {
       ...laptop,
-      // Strip admin-only fields for regular users
-      ram: user.role === "admin" ? laptop.ram : undefined,
-      storage: user.role === "admin" ? laptop.storage : undefined,
+      // Strip sensitive fields from regular users; tech team and admins can see specs
+      ram: ["admin", "tech"].includes(user.role) ? laptop.ram : undefined,
+      storage: ["admin", "tech"].includes(user.role) ? laptop.storage : undefined,
       availability,
       return_date: returnDateMap.get(laptop.id) || null,
       notify_me: notifiedIds.has(laptop.id),

@@ -24,7 +24,34 @@ export default function InventoryLanding() {
     <>
       <Navbar />
       <CartPanel />
-      <div className="page-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 64px)" }}>
+      <style>{`
+        @keyframes orb1 {
+          0%   { transform: translate(0, 0) scale(1); }
+          33%  { transform: translate(60px, -40px) scale(1.08); }
+          66%  { transform: translate(-30px, 50px) scale(0.95); }
+          100% { transform: translate(0, 0) scale(1); }
+        }
+        @keyframes orb2 {
+          0%   { transform: translate(0, 0) scale(1); }
+          33%  { transform: translate(-50px, 60px) scale(1.06); }
+          66%  { transform: translate(40px, -30px) scale(0.97); }
+          100% { transform: translate(0, 0) scale(1); }
+        }
+        @keyframes orb3 {
+          0%   { transform: translate(0, 0) scale(1); }
+          50%  { transform: translate(30px, 40px) scale(1.05); }
+          100% { transform: translate(0, 0) scale(1); }
+        }
+      `}</style>
+      <div style={{ position: "relative", overflow: "hidden", minHeight: "calc(100vh - 64px)", display: "flex", alignItems: "center" }}>
+        {/* Floating orbs */}
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0 }}>
+          <div style={{ position: "absolute", top: "15%", left: "10%", width: 420, height: 420, borderRadius: "50%", background: "radial-gradient(circle, rgba(99,102,241,0.22) 0%, transparent 70%)", filter: "blur(48px)", animation: "orb1 28s ease-in-out infinite" }} />
+          <div style={{ position: "absolute", bottom: "10%", right: "8%", width: 380, height: 380, borderRadius: "50%", background: "radial-gradient(circle, rgba(139,92,246,0.18) 0%, transparent 70%)", filter: "blur(48px)", animation: "orb2 34s ease-in-out infinite" }} />
+          <div style={{ position: "absolute", top: "50%", left: "55%", width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(16,185,129,0.14) 0%, transparent 70%)", filter: "blur(56px)", animation: "orb3 22s ease-in-out infinite" }} />
+        </div>
+
+        <div className="page-container" style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Inventory</h1>
           <p style={{ color: "var(--text-secondary)", fontSize: 15 }}>What would you like to browse?</p>
@@ -128,6 +155,7 @@ export default function InventoryLanding() {
               background: "#10b981", color: "white", fontSize: 13, fontWeight: 600,
             }}>Browse →</span>
           </button>
+        </div>
         </div>
       </div>
     </>

@@ -98,7 +98,7 @@ export default function DashboardPage() {
     try {
       const [techRes, laptopRes] = await Promise.all([
         fetch("/api/loans?view=active", { cache: "no-store" }),
-        fetch("/api/laptop-loans?view=my&status=approved", { cache: "no-store" }),
+        fetch("/api/laptop-loans?view=active", { cache: "no-store" }),
       ]);
       const techData = techRes.ok ? await techRes.json() : { loans: [] };
       const laptopData = laptopRes.ok ? await laptopRes.json() : { loans: [] };
@@ -262,9 +262,10 @@ export default function DashboardPage() {
     const loansForCalendar = isAdmin
       ? activeLoans.filter((l) => {
           if (l.loan_type === "permanent") return false;
+          if (calendarTypeFilter === "my") return l.user_id === user?.id;
           if (calendarTypeFilter === "tech") return l._loanKind !== "laptop";
           if (calendarTypeFilter === "laptop") return l._loanKind === "laptop";
-          return true;
+          return true; // "all"
         })
       : allActiveLoans.filter((l) => {
           if (l.loan_type === "permanent") return false;
@@ -440,10 +441,16 @@ export default function DashboardPage() {
   // ====== NORMAL USER DASHBOARD ======
   if (!isAdmin) {
     const today = new Date().toISOString().split("T")[0];
+    const in3Days = new Date();
+    in3Days.setDate(in3Days.getDate() + 3);
+    const in3DaysStr = in3Days.toISOString().split("T")[0];
     const loanedOut = myLoans.filter((l) => l.status === "approved");
     const pending = myLoans.filter((l) => l.status === "pending");
     const overdueMyLoans = myLoans.filter(
       (l) => l.status === "approved" && l.loan_type === "temporary" && l.end_date && l.end_date < today
+    );
+    const dueSoonMyLoans = myLoans.filter(
+      (l) => l.status === "approved" && l.loan_type === "temporary" && l.end_date && l.end_date >= today && l.end_date <= in3DaysStr
     );
 
     return (
@@ -545,7 +552,7 @@ export default function DashboardPage() {
                 <div className="stat-card">
                   <div className="stat-icon" style={{ color: "#10b981" }}><RiHandHeartLine /></div>
                   <div className="stat-value" style={{ color: "#10b981" }}>{loanedOut.length}</div>
-                  <div className="stat-label">Items I&apos;m Loaning</div>
+                  <div className="stat-label">My Current Loans</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-icon" style={{ color: "var(--info)" }}><RiTimeLine /></div>
@@ -557,6 +564,13 @@ export default function DashboardPage() {
                   <div className="stat-value" style={{ color: "var(--error)" }}>{overdueMyLoans.length}</div>
                   <div className="stat-label">My Overdues</div>
                 </div>
+                {dueSoonMyLoans.length > 0 && (
+                  <div className="stat-card">
+                    <div className="stat-icon" style={{ color: "var(--warning)" }}><RiTimeLine /></div>
+                    <div className="stat-value" style={{ color: "var(--warning)" }}>{dueSoonMyLoans.length}</div>
+                    <div className="stat-label">Due in 3 Days</div>
+                  </div>
+                )}
               </div>
 
               {/* Unified My Loans list */}
@@ -1010,6 +1024,18 @@ export default function DashboardPage() {
               </div>
               <div className="stat-label">Deployed Items</div>
             </div>
+            {stats.laptopActive > 0 || stats.laptopPending > 0 ? (
+              <div className="stat-card">
+                <div className="stat-icon" style={{ color: "#10b981" }}>💻</div>
+                <div className="stat-value" style={{ color: "#10b981" }}>
+                  {stats.laptopActive}
+                </div>
+                <div className="stat-label">Active Laptop Loans</div>
+                {stats.laptopPending > 0 && (
+                  <div style={{ fontSize: 11, color: "var(--warning)", marginTop: 4 }}>{stats.laptopPending} pending</div>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
 
