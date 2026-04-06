@@ -98,7 +98,10 @@ export async function POST(request) {
       .single();
     if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    await supabase.from("users").update({ role: new_role }).eq("id", user_id);
+    const { error: updateError } = await supabase.from("users").update({ role: new_role }).eq("id", user_id);
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message || "Failed to update role" }, { status: 500 });
+    }
     await supabase.from("audit_log").insert({
       user_id: user.id,
       action: "change_role",
