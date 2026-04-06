@@ -168,17 +168,15 @@ export default function LoginPage() {
                 key={p.id}
                 className="login-easter-dvd"
                 style={{
-                  "--x-end": `calc(100% - ${p.size})`,
+                  "--x-end": `calc(100vw - ${p.size})`,
                   animationDuration: p.xDuration,
                   animationDelay: p.xDelay,
                 }}
               >
                 <div
-                  className={`login-easter-number ${
-                    p.variant === "text" ? "login-easter-number-text" : ""
-                  }`}
+                  className="login-easter-number"
                   style={{
-                    "--y-end": `calc(100% - ${p.size})`,
+                    "--y-end": `calc(100vh - ${p.size})`,
                     animationDuration: p.yDuration,
                     animationDelay: p.yDelay,
                     "--hue": p.hue,
@@ -188,7 +186,7 @@ export default function LoginPage() {
                   }}
                 >
                   {p.variant === "text" ? (
-                    "67"
+                    <span className="login-easter-number-text">67</span>
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

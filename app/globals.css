@@ -377,6 +377,8 @@ a:hover {
 /* ===== INPUTS ===== */
 .input-group {
   margin-bottom: 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .input-group label {
@@ -405,6 +407,9 @@ textarea {
   font-family: inherit;
   transition: var(--transition);
   outline: none;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
 }
 
 input[type="date"] {
@@ -1242,13 +1247,10 @@ tr:last-child td {
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-direction: alternate;
-  will-change: left;
+  will-change: transform;
 }
 
 .login-easter-number {
-  position: absolute;
-  top: 0;
-  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1258,7 +1260,7 @@ tr:last-child td {
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-direction: alternate;
-  will-change: top;
+  will-change: transform;
 }
 
 .login-easter-number-text {
@@ -1328,19 +1330,19 @@ body.rickroll-lock {
 
 @keyframes login-dvd-x {
   from {
-    left: 0;
+    transform: translateX(0);
   }
   to {
-    left: var(--x-end);
+    transform: translateX(var(--x-end));
   }
 }
 
 @keyframes login-dvd-y {
   from {
-    top: 0;
+    transform: translateY(0);
   }
   to {
-    top: var(--y-end);
+    transform: translateY(var(--y-end));
   }
 }
 
@@ -2347,6 +2349,7 @@ body.rickroll-lock {
     border-top: none;
     padding: 12px 14px;
     background: var(--bg-secondary);
+    overflow: hidden;
     box-shadow:
       0 8px 24px rgba(0, 0, 0, 0.4),
       0 1px 0 rgba(99, 102, 241, 0.1);

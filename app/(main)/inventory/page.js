@@ -98,33 +98,64 @@ export default function InventoryLanding() {
       <Navbar />
       <CartPanel />
       <style>{`
-        @keyframes orb1 {
-          0%   { transform: translate(0, 0) scale(1); }
-          33%  { transform: translate(60px, -40px) scale(1.08); }
-          66%  { transform: translate(-30px, 50px) scale(0.95); }
-          100% { transform: translate(0, 0) scale(1); }
+        @keyframes circuitPulse1 {
+          0%, 100% { opacity: 0; }
+          15%, 35% { opacity: 1; }
         }
-        @keyframes orb2 {
-          0%   { transform: translate(0, 0) scale(1); }
-          33%  { transform: translate(-50px, 60px) scale(1.06); }
-          66%  { transform: translate(40px, -30px) scale(0.97); }
-          100% { transform: translate(0, 0) scale(1); }
+        @keyframes circuitPulse2 {
+          0%, 100% { opacity: 0; }
+          40%, 60% { opacity: 1; }
         }
-        @keyframes orb3 {
-          0%   { transform: translate(0, 0) scale(1); }
-          50%  { transform: translate(30px, 40px) scale(1.05); }
-          100% { transform: translate(0, 0) scale(1); }
+        @keyframes circuitPulse3 {
+          0%, 100% { opacity: 0; }
+          65%, 85% { opacity: 1; }
         }
+
         @keyframes floatIcon {
-          0%   { transform: translate(0, 0) rotate(0deg); opacity: 0.08; }
-          25%  { transform: translate(12px, -18px) rotate(8deg); opacity: 0.14; }
-          50%  { transform: translate(-8px, -28px) rotate(-5deg); opacity: 0.08; }
-          75%  { transform: translate(16px, -10px) rotate(12deg); opacity: 0.12; }
-          100% { transform: translate(0, 0) rotate(0deg); opacity: 0.08; }
+          0%   { transform: translate(0, 0) rotate(0deg); opacity: 0.07; }
+          25%  { transform: translate(12px, -18px) rotate(8deg); opacity: 0.12; }
+          50%  { transform: translate(-8px, -28px) rotate(-5deg); opacity: 0.07; }
+          75%  { transform: translate(16px, -10px) rotate(12deg); opacity: 0.1; }
+          100% { transform: translate(0, 0) rotate(0deg); opacity: 0.07; }
         }
-        @keyframes gridPulse {
-          0%, 100% { opacity: 0.03; }
-          50%      { opacity: 0.07; }
+        @keyframes nodeGlow {
+          0%, 100% { box-shadow: 0 0 4px rgba(99,102,241,0.3); }
+          50%      { box-shadow: 0 0 12px rgba(99,102,241,0.7), 0 0 24px rgba(99,102,241,0.2); }
+        }
+        .inv-bg-circuit-line {
+          position: absolute;
+          background: rgba(99,102,241,0.06);
+        }
+        .inv-bg-circuit-line.h {
+          height: 1px;
+          left: 0;
+          right: 0;
+        }
+        .inv-bg-circuit-line.v {
+          width: 1px;
+          top: 0;
+          bottom: 0;
+        }
+        .inv-bg-node {
+          position: absolute;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: rgba(99,102,241,0.25);
+          animation: nodeGlow 4s ease-in-out infinite;
+        }
+        .inv-bg-trace {
+          position: absolute;
+          border-radius: 1px;
+          opacity: 0;
+        }
+        .inv-bg-trace.h {
+          height: 2px;
+          background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), rgba(16,185,129,0.3), transparent);
+        }
+        .inv-bg-trace.v {
+          width: 2px;
+          background: linear-gradient(180deg, transparent, rgba(99,102,241,0.5), rgba(16,185,129,0.3), transparent);
         }
         .inv-card {
           display: flex;
@@ -208,6 +239,20 @@ export default function InventoryLanding() {
           .inv-heading-wrap {
             margin-bottom: 28px !important;
           }
+          .inv-desktop-only {
+            display: none !important;
+          }
+          .inv-mobile-only {
+            display: flex !important;
+          }
+          .inv-bg-desktop {
+            display: none !important;
+          }
+        }
+        @media (min-width: 769px) {
+          .inv-mobile-only {
+            display: none !important;
+          }
         }
       `}</style>
       <div
@@ -219,23 +264,112 @@ export default function InventoryLanding() {
           alignItems: "center",
         }}
       >
-        {/* Tech grid pattern */}
+        {/* Circuit board grid */}
         <div
           style={{
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
             zIndex: 0,
-            backgroundImage: `
-            linear-gradient(rgba(99,102,241,0.05) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(99,102,241,0.05) 1px, transparent 1px)
-          `,
-            backgroundSize: "60px 60px",
-            animation: "gridPulse 8s ease-in-out infinite",
           }}
-        />
+        >
+          {/* Horizontal circuit lines */}
+          {[15, 30, 45, 60, 75, 90].map((pct) => (
+            <div
+              key={`h${pct}`}
+              className="inv-bg-circuit-line h"
+              style={{ top: `${pct}%` }}
+            />
+          ))}
+          {/* Vertical circuit lines */}
+          {[10, 25, 40, 55, 70, 85].map((pct) => (
+            <div
+              key={`v${pct}`}
+              className="inv-bg-circuit-line v"
+              style={{ left: `${pct}%` }}
+            />
+          ))}
+          {/* Intersection nodes */}
+          {[
+            { top: "15%", left: "25%" },
+            { top: "15%", left: "70%" },
+            { top: "30%", left: "10%" },
+            { top: "30%", left: "55%" },
+            { top: "30%", left: "85%" },
+            { top: "45%", left: "25%" },
+            { top: "45%", left: "40%" },
+            { top: "60%", left: "55%" },
+            { top: "60%", left: "85%" },
+            { top: "75%", left: "10%" },
+            { top: "75%", left: "40%" },
+            { top: "75%", left: "70%" },
+            { top: "90%", left: "25%" },
+            { top: "90%", left: "55%" },
+          ].map(({ top, left }, i) => (
+            <div
+              key={`n${i}`}
+              className="inv-bg-node"
+              style={{ top, left, animationDelay: `${i * 0.4}s` }}
+            />
+          ))}
+          {/* Animated data traces */}
+          <div
+            className="inv-bg-trace h"
+            style={{
+              top: "30%",
+              left: "10%",
+              width: "45%",
+              animation: "circuitPulse1 6s ease-in-out infinite",
+            }}
+          />
+          <div
+            className="inv-bg-trace h"
+            style={{
+              top: "75%",
+              left: "40%",
+              width: "45%",
+              animation: "circuitPulse2 6s ease-in-out 1s infinite",
+            }}
+          />
+          <div
+            className="inv-bg-trace v"
+            style={{
+              left: "55%",
+              top: "30%",
+              height: "30%",
+              animation: "circuitPulse3 6s ease-in-out 2s infinite",
+            }}
+          />
+          <div
+            className="inv-bg-trace h"
+            style={{
+              top: "45%",
+              left: "25%",
+              width: "30%",
+              animation: "circuitPulse2 8s ease-in-out 3s infinite",
+            }}
+          />
+          <div
+            className="inv-bg-trace v"
+            style={{
+              left: "25%",
+              top: "45%",
+              height: "30%",
+              animation: "circuitPulse1 7s ease-in-out 1.5s infinite",
+            }}
+          />
+          <div
+            className="inv-bg-trace h"
+            style={{
+              top: "60%",
+              left: "55%",
+              width: "30%",
+              animation: "circuitPulse3 9s ease-in-out 0.5s infinite",
+            }}
+          />
+        </div>
 
-        {/* Floating orbs */}
+        {/* Subtle corner glows */}
         <div
           style={{
             position: "absolute",
@@ -247,43 +381,23 @@ export default function InventoryLanding() {
           <div
             style={{
               position: "absolute",
-              top: "15%",
-              left: "10%",
-              width: 420,
-              height: 420,
-              borderRadius: "50%",
+              top: 0,
+              left: 0,
+              width: "40%",
+              height: "40%",
               background:
-                "radial-gradient(circle, rgba(99,102,241,0.22) 0%, transparent 70%)",
-              filter: "blur(48px)",
-              animation: "orb1 28s ease-in-out infinite",
+                "radial-gradient(ellipse at top left, rgba(99,102,241,0.04) 0%, transparent 70%)",
             }}
           />
           <div
             style={{
               position: "absolute",
-              bottom: "10%",
-              right: "8%",
-              width: 380,
-              height: 380,
-              borderRadius: "50%",
+              bottom: 0,
+              right: 0,
+              width: "40%",
+              height: "40%",
               background:
-                "radial-gradient(circle, rgba(139,92,246,0.18) 0%, transparent 70%)",
-              filter: "blur(48px)",
-              animation: "orb2 34s ease-in-out infinite",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "55%",
-              width: 300,
-              height: 300,
-              borderRadius: "50%",
-              background:
-                "radial-gradient(circle, rgba(16,185,129,0.14) 0%, transparent 70%)",
-              filter: "blur(56px)",
-              animation: "orb3 22s ease-in-out infinite",
+                "radial-gradient(ellipse at bottom right, rgba(16,185,129,0.03) 0%, transparent 70%)",
             }}
           />
         </div>
@@ -291,6 +405,7 @@ export default function InventoryLanding() {
         {/* Floating tech icons (desktop only) */}
         {!isMobile && (
           <div
+            className="inv-bg-desktop"
             style={{
               position: "absolute",
               inset: 0,
@@ -306,7 +421,7 @@ export default function InventoryLanding() {
                   ...pos,
                   color: "var(--accent)",
                   fontSize: size,
-                  opacity: 0.08,
+                  opacity: 0.07,
                   animation: `floatIcon ${dur}s ease-in-out ${delay}s infinite`,
                 }}
               >
@@ -376,7 +491,9 @@ export default function InventoryLanding() {
                 borderRadius: 20,
               }}
             >
+              {/* Desktop layout: icon+arrow top row, text bottom */}
               <div
+                className="inv-desktop-only"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -414,7 +531,10 @@ export default function InventoryLanding() {
                   →
                 </span>
               </div>
-              <div style={{ width: "100%" }}>
+              <div
+                className="inv-desktop-only"
+                style={{ width: "100%", display: "block" }}
+              >
                 <div
                   className="inv-card-title"
                   style={{
@@ -437,6 +557,68 @@ export default function InventoryLanding() {
                   Cables, adapters, cameras &amp; more
                 </div>
               </div>
+              {/* Mobile layout: icon | text | arrow in a row */}
+              <div
+                className="inv-mobile-only"
+                style={{
+                  display: "none",
+                  alignItems: "center",
+                  gap: 16,
+                  width: "100%",
+                }}
+              >
+                <div
+                  className="inv-icon-box"
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 14,
+                    flexShrink: 0,
+                    background:
+                      "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 24,
+                    color: "var(--accent)",
+                  }}
+                >
+                  <RiArchiveLine />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    className="inv-card-title"
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 16,
+                      color: "var(--text-primary)",
+                      marginBottom: 3,
+                    }}
+                  >
+                    Tech Inventory
+                  </div>
+                  <div
+                    className="inv-card-desc"
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text-secondary)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Cables, adapters, cameras &amp; more
+                  </div>
+                </div>
+                <span
+                  className="inv-arrow"
+                  style={{
+                    color: "var(--accent)",
+                    fontSize: 18,
+                    flexShrink: 0,
+                  }}
+                >
+                  →
+                </span>
+              </div>
             </button>
 
             {/* Laptop Loans */}
@@ -450,7 +632,9 @@ export default function InventoryLanding() {
                 borderRadius: 20,
               }}
             >
+              {/* Desktop layout */}
               <div
+                className="inv-desktop-only"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -484,7 +668,10 @@ export default function InventoryLanding() {
                   →
                 </span>
               </div>
-              <div style={{ width: "100%" }}>
+              <div
+                className="inv-desktop-only"
+                style={{ width: "100%", display: "block" }}
+              >
                 <div
                   className="inv-card-title"
                   style={{
@@ -506,6 +693,64 @@ export default function InventoryLanding() {
                 >
                   Borrow MacBooks for ministry or projects
                 </div>
+              </div>
+              {/* Mobile layout */}
+              <div
+                className="inv-mobile-only"
+                style={{
+                  display: "none",
+                  alignItems: "center",
+                  gap: 16,
+                  width: "100%",
+                }}
+              >
+                <div
+                  className="inv-icon-box"
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 14,
+                    flexShrink: 0,
+                    background:
+                      "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.15))",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 24,
+                    color: "#10b981",
+                  }}
+                >
+                  <RiMacbookLine />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    className="inv-card-title"
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 16,
+                      color: "var(--text-primary)",
+                      marginBottom: 3,
+                    }}
+                  >
+                    Laptop Loans
+                  </div>
+                  <div
+                    className="inv-card-desc"
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text-secondary)",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Borrow MacBooks for ministry or projects
+                  </div>
+                </div>
+                <span
+                  className="inv-arrow"
+                  style={{ color: "#10b981", fontSize: 18, flexShrink: 0 }}
+                >
+                  →
+                </span>
               </div>
             </button>
           </div>
