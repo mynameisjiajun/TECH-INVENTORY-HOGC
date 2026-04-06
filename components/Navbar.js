@@ -163,7 +163,7 @@ export default function Navbar() {
   if (!user) return null;
 
   const navLinks = [
-    { href: "/inventory", label: "Inventory", icon: <RiArchiveLine /> },
+    { href: "/inventory", label: "Home", icon: <RiArchiveLine /> },
     { href: "/dashboard", label: "Dashboard", icon: <RiDashboardLine /> },
     { href: "/loans", label: "My Loans", icon: <RiFileListLine /> },
   ];

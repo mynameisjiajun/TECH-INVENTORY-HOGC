@@ -93,29 +93,62 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Normal user: fetch all active loans (team visibility)
+  // Normal user: fetch all active loans (team visibility) — tech + laptop
   const fetchAllActiveLoans = useCallback(async () => {
     try {
-      const res = await fetch("/api/loans?view=active", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setAllActiveLoans(data.loans || []);
-      }
+      const [techRes, laptopRes] = await Promise.all([
+        fetch("/api/loans?view=active", { cache: "no-store" }),
+        fetch("/api/laptop-loans?view=my&status=approved", { cache: "no-store" }),
+      ]);
+      const techData = techRes.ok ? await techRes.json() : { loans: [] };
+      const laptopData = laptopRes.ok ? await laptopRes.json() : { loans: [] };
+
+      const techLoans = (techData.loans || []).map((l) => ({ ...l, _loanKind: "tech" }));
+      const laptopLoans = (laptopData.loans || []).map((l) => ({
+        ...l,
+        _loanKind: "laptop",
+        items: (l.laptops || []).map((item) => ({
+          id: item.id,
+          item: item.laptops?.name || "Unknown laptop",
+          quantity: 1,
+        })),
+      }));
+
+      setAllActiveLoans([...techLoans, ...laptopLoans]);
     } catch { /* silent */ }
   }, []);
 
-  // Normal user: fetch own loans
+  // Normal user: fetch own loans (tech + laptop merged)
   const fetchMyLoans = useCallback(async () => {
     setMyFetching(true);
     setError("");
     try {
-      const res = await fetch("/api/loans", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setMyLoans(data.loans || []);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to load your loans");
+      const [techRes, laptopRes] = await Promise.all([
+        fetch("/api/loans", { cache: "no-store" }),
+        fetch("/api/laptop-loans?view=my", { cache: "no-store" }),
+      ]);
+      const techData = techRes.ok ? await techRes.json() : { loans: [] };
+      const laptopData = laptopRes.ok ? await laptopRes.json() : { loans: [] };
+
+      const techLoans = (techData.loans || []).map((l) => ({ ...l, _loanKind: "tech" }));
+      const laptopLoans = (laptopData.loans || []).map((l) => ({
+        ...l,
+        _loanKind: "laptop",
+        items: (l.laptops || []).map((item) => ({
+          id: item.id,
+          item: item.laptops?.name || "Unknown laptop",
+          quantity: 1,
+        })),
+      }));
+
+      const merged = [...techLoans, ...laptopLoans].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
+      setMyLoans(merged);
+
+      if (!techRes.ok) {
+        const d = await techRes.json().catch(() => ({}));
+        setError(d.error || "Failed to load your loans");
       }
     } catch {
       setError("Network error — could not load your loans");
@@ -513,68 +546,47 @@ export default function DashboardPage() {
                     }}
                   >
                     {loanedOut.map((loan) => (
-                      <div key={loan.id} className="loan-card">
+                      <div key={`${loan._loanKind}-${loan.id}`} className="loan-card">
                         <div className="loan-card-header">
-                          <div>
-                            <span
-                              className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
-                              style={{ fontSize: 11 }}
-                            >
-                              {loan.loan_type === "permanent"
-                                ? "📌 Permanent"
-                                : "⏱️ Temporary"}
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 3,
+                              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
+                              background: loan._loanKind === "laptop" ? "rgba(99,102,241,0.12)" : "rgba(100,116,139,0.12)",
+                              color: loan._loanKind === "laptop" ? "var(--accent)" : "var(--text-secondary)",
+                              border: `1px solid ${loan._loanKind === "laptop" ? "rgba(99,102,241,0.3)" : "rgba(100,116,139,0.2)"}`,
+                              textTransform: "uppercase", letterSpacing: 0.5,
+                            }}>
+                              {loan._loanKind === "laptop" ? "💻 Laptop" : "📦 Tech"}
                             </span>
-                            <span
-                              style={{
-                                fontSize: 12,
-                                color: "var(--text-muted)",
-                                marginLeft: 8,
-                              }}
-                            >
-                              #{loan.id}
+                            <span className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`} style={{ fontSize: 11 }}>
+                              {loan.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
                             </span>
+                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>#{loan.id}</span>
                           </div>
                           {statusBadge(loan.status)}
                         </div>
                         <div className="loan-card-items">
                           {loan.items.map((item) => (
                             <span key={item.id} className="loan-item-chip">
-                              {item.item} × {item.quantity}
+                              {item.item}{loan._loanKind !== "laptop" ? ` × ${item.quantity}` : ""}
                             </span>
                           ))}
                         </div>
                         <div className="loan-card-meta">
-                          <span>📝 {loan.purpose}</span>
+                          {loan.purpose && <span>📝 {loan.purpose}</span>}
                           <span>
                             📅 {loan.start_date}
-                            {loan.end_date
-                              ? ` → ${loan.end_date}`
-                              : " → Ongoing"}
+                            {loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}
                           </span>
                         </div>
-                        {loan.end_date &&
-                          new Date(loan.end_date) < new Date() && (
-                            <div
-                              style={{
-                                marginTop: 8,
-                                padding: 8,
-                                background: "rgba(239,68,68,0.1)",
-                                border: "1px solid rgba(239,68,68,0.3)",
-                                borderRadius: 8,
-                                textAlign: "center",
-                                fontSize: 12,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  color: "var(--error)",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                🚨 OVERDUE — Please return items!
-                              </span>
-                            </div>
-                          )}
+                        {loan.end_date && new Date(loan.end_date) < new Date() && (
+                          <div style={{ marginTop: 8, padding: 8, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, textAlign: "center", fontSize: 12 }}>
+                            <span style={{ color: "var(--error)", fontWeight: 700 }}>
+                              🚨 OVERDUE — Please return items!
+                            </span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -609,43 +621,38 @@ export default function DashboardPage() {
                     }}
                   >
                     {pending.map((loan) => (
-                      <div key={loan.id} className="loan-card">
+                      <div key={`${loan._loanKind}-${loan.id}`} className="loan-card">
                         <div className="loan-card-header">
-                          <div>
-                            <span
-                              className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
-                              style={{ fontSize: 11 }}
-                            >
-                              {loan.loan_type === "permanent"
-                                ? "📌 Permanent"
-                                : "⏱️ Temporary"}
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 3,
+                              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
+                              background: loan._loanKind === "laptop" ? "rgba(99,102,241,0.12)" : "rgba(100,116,139,0.12)",
+                              color: loan._loanKind === "laptop" ? "var(--accent)" : "var(--text-secondary)",
+                              border: `1px solid ${loan._loanKind === "laptop" ? "rgba(99,102,241,0.3)" : "rgba(100,116,139,0.2)"}`,
+                              textTransform: "uppercase", letterSpacing: 0.5,
+                            }}>
+                              {loan._loanKind === "laptop" ? "💻 Laptop" : "📦 Tech"}
                             </span>
-                            <span
-                              style={{
-                                fontSize: 12,
-                                color: "var(--text-muted)",
-                                marginLeft: 8,
-                              }}
-                            >
-                              #{loan.id}
+                            <span className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`} style={{ fontSize: 11 }}>
+                              {loan.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
                             </span>
+                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>#{loan.id}</span>
                           </div>
                           {statusBadge(loan.status)}
                         </div>
                         <div className="loan-card-items">
                           {loan.items.map((item) => (
                             <span key={item.id} className="loan-item-chip">
-                              {item.item} × {item.quantity}
+                              {item.item}{loan._loanKind !== "laptop" ? ` × ${item.quantity}` : ""}
                             </span>
                           ))}
                         </div>
                         <div className="loan-card-meta">
-                          <span>📝 {loan.purpose}</span>
+                          {loan.purpose && <span>📝 {loan.purpose}</span>}
                           <span>
                             📅 {loan.start_date}
-                            {loan.end_date
-                              ? ` → ${loan.end_date}`
-                              : " → Permanent"}
+                            {loan.end_date ? ` → ${loan.end_date}` : " → Permanent"}
                           </span>
                         </div>
                       </div>

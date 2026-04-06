@@ -13,22 +13,16 @@ import {
   RiAddLine,
   RiTimeLine,
   RiPushpinLine,
+  RiCheckLine,
 } from "react-icons/ri";
 
-const CONDITION_COLORS = {
-  Excellent: { bg: "rgba(16,185,129,0.15)", color: "#10b981", border: "rgba(16,185,129,0.3)" },
-  Good: { bg: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "rgba(59,130,246,0.3)" },
-  Fair: { bg: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "rgba(245,158,11,0.3)" },
-};
-
-function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, onNotify }) {
+function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, onNotify, isInCart }) {
   const isAvailable = laptop.availability === "available";
   const isBlocked = laptop.availability === "blocked";
   const isPermLoaned = laptop.availability === "perm_loaned";
   const isTempLoaned = laptop.availability === "temp_loaned";
-  const condColors = CONDITION_COLORS[laptop.condition] || CONDITION_COLORS.Good;
 
-  const canBorrow = isAvailable && startDate && (loanType === "temporary" ? endDate : true);
+  const canBorrow = isAvailable && startDate && (loanType === "temporary" ? endDate : true) && !isInCart;
 
   return (
     <div style={{
@@ -65,15 +59,6 @@ function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, o
             )}
           </div>
         </div>
-        {laptop.condition && (
-          <span style={{
-            fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6,
-            background: condColors.bg, color: condColors.color, border: `1px solid ${condColors.border}`,
-            whiteSpace: "nowrap",
-          }}>
-            {laptop.condition}
-          </span>
-        )}
       </div>
 
       {/* Status + perm loan info */}
@@ -108,10 +93,15 @@ function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, o
             className="btn btn-sm btn-primary"
             disabled={!canBorrow}
             onClick={() => onBorrow(laptop)}
-            title={!startDate ? "Select a borrow date first" : !endDate && loanType === "temporary" ? "Select a return date" : "Add to cart"}
-            style={{ opacity: canBorrow ? 1 : 0.4 }}
+            title={isInCart ? "Already in cart" : !startDate ? "Select a borrow date first" : !endDate && loanType === "temporary" ? "Select a return date" : "Add to cart"}
+            style={{
+              opacity: canBorrow ? 1 : 0.5,
+              background: isInCart ? "rgba(16,185,129,0.15)" : undefined,
+              borderColor: isInCart ? "rgba(16,185,129,0.4)" : undefined,
+              color: isInCart ? "#10b981" : undefined,
+            }}
           >
-            <RiAddLine /> Borrow
+            {isInCart ? <><RiCheckLine /> Added</> : <><RiAddLine /> Borrow</>}
           </button>
         )}
         {isBlocked && !isPermLoaned && (
@@ -210,6 +200,13 @@ export default function LaptopLoansPage() {
 
   const isAdmin = user?.role === "admin";
 
+  // Set of laptop IDs already in the cart (for the current date selection)
+  const cartLaptopIds = new Set(
+    cartItems
+      .filter((i) => i._cartType === "laptop" && i.start_date === startDate && i.end_date === (loanType === "temporary" ? endDate : null))
+      .map((i) => i.id)
+  );
+
   // All perm-loaned laptops across all tiers
   const permLoanedLaptops = tiers.flatMap((t) => t.laptops.filter((l) => l.is_perm_loaned));
 
@@ -257,7 +254,7 @@ export default function LaptopLoansPage() {
         {tab === "available" && (
           <>
             {/* Loan type toggle + date pickers */}
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: 20, marginBottom: 24 }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: 20, marginBottom: 24, position: "sticky", top: 70, zIndex: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
               {/* Loan type toggle */}
               <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                 <button
@@ -350,6 +347,7 @@ export default function LaptopLoansPage() {
                               onBorrow={handleBorrow}
                               isAdmin={isAdmin}
                               onNotify={handleNotify}
+                              isInCart={cartLaptopIds.has(laptop.id)}
                             />
                           ))}
                         </div>
@@ -460,16 +458,6 @@ export default function LaptopLoansPage() {
                           </div>
                         )}
                       </div>
-                      {laptop.condition && (
-                        <span style={{
-                          fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6,
-                          background: CONDITION_COLORS[laptop.condition]?.bg,
-                          color: CONDITION_COLORS[laptop.condition]?.color,
-                          border: `1px solid ${CONDITION_COLORS[laptop.condition]?.border}`,
-                        }}>
-                          {laptop.condition}
-                        </span>
-                      )}
                     </div>
                     <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                       <span style={{

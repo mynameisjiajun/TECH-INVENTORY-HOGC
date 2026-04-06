@@ -35,7 +35,7 @@ export async function POST(request, { params }) {
     if (Number(loan.user_id) !== Number(user.id) && user.role !== "admin") {
       return NextResponse.json({ error: "Unauthorized to return this loan" }, { status: 403 });
     }
-    if (loan.status !== "approved" || loan.loan_type !== "temporary") {
+    if (loan.status !== "approved") {
       return NextResponse.json({ error: "Loan is not eligible for return" }, { status: 400 });
     }
 

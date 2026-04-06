@@ -24,8 +24,8 @@ export async function POST(request, { params }) {
   if (Number(loan.user_id) !== Number(user.id) && user.role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
-  if (loan.status !== "approved" || loan.loan_type !== "temporary") {
-    return NextResponse.json({ error: "Only approved temporary loans can be returned this way" }, { status: 400 });
+  if (loan.status !== "approved") {
+    return NextResponse.json({ error: "Only approved loans can be returned" }, { status: 400 });
   }
 
   // Upload photo

@@ -13,6 +13,7 @@ import {
   RiTimeLine, RiCheckLine, RiCloseLine, RiArrowGoBackLine,
   RiSearchLine, RiFilterLine, RiCameraLine, RiAlertLine,
   RiCalendarLine, RiShoppingBag3Line, RiRefreshLine, RiEdit2Line,
+  RiMacbookLine, RiArchiveLine,
 } from 'react-icons/ri';
 
 export default function LoansPage() {
@@ -38,24 +39,13 @@ export default function LoansPage() {
   const handlePhotoChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
     try {
-      const options = {
-        maxSizeMB: 0.2, // ~200KB
-        maxWidthOrHeight: 1200,
-        useWebWorker: true,
-      };
-      
+      const options = { maxSizeMB: 0.2, maxWidthOrHeight: 1200, useWebWorker: true };
       const compressedFile = await imageCompression(file, options);
-      
-      // Convert to Base64 to match existing payload expectations
       const reader = new FileReader();
-      reader.onload = (event) => {
-        setReturnPhoto(event.target.result);
-      };
+      reader.onload = (event) => setReturnPhoto(event.target.result);
       reader.readAsDataURL(compressedFile);
-    } catch (error) {
-      console.error('Error compressing image:', error);
+    } catch {
       toast.error('Failed to process the photo.');
     }
   };
@@ -67,16 +57,21 @@ export default function LoansPage() {
     }
     setReturnLoading(true);
     try {
-      const res = await fetch(`/api/loans/${returnModalLoan.id}/return`, {
+      const isLaptop = returnModalLoan._loanKind === 'laptop';
+      const endpoint = isLaptop
+        ? `/api/laptop-loans/${returnModalLoan.id}/return`
+        : `/api/loans/${returnModalLoan.id}/return`;
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: returnPhoto, remarks: returnRemarks.trim() || null }),
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message);
+        toast.success(data.message || 'Return submitted');
         setLoans(prev => prev.map(l =>
-          l.id === returnModalLoan.id
+          l.id === returnModalLoan.id && l._loanKind === returnModalLoan._loanKind
             ? { ...l, status: 'returned', return_photo_url: data.photo_url }
             : l
         ));
@@ -130,21 +125,20 @@ export default function LoansPage() {
       const storageItems = data.items || [];
       const newCart = [];
       let missing = 0;
-      
+
       for (const loanItem of loan.items) {
         const si = loanItem.sheet_row
           ? storageItems.find((s) => s.sheet_row === loanItem.sheet_row)
           : storageItems.find((s) => s.id === loanItem.item_id);
-          
+
         if (si) {
           const isApproved = loan.status === 'approved';
           const maxAllowed = isApproved ? si.current + loanItem.quantity : si.current;
-          
-          // only add if it's still theoretically in stock or was already held
           if (maxAllowed >= loanItem.quantity) {
-            newCart.push({ 
-              id: si.id, item: si.item, type: si.type, brand: si.brand, 
-              current: si.current, quantity: loanItem.quantity, max: maxAllowed 
+            newCart.push({
+              id: si.id, item: si.item, type: si.type, brand: si.brand,
+              current: si.current, quantity: loanItem.quantity, max: maxAllowed,
+              _cartType: 'tech',
             });
           } else {
             missing++;
@@ -153,7 +147,7 @@ export default function LoansPage() {
           missing++;
         }
       }
-      
+
       setModifyingLoan(loan);
       setItems(newCart);
       setIsOpen(true);
@@ -171,13 +165,48 @@ export default function LoansPage() {
     setError('');
     try {
       const params = new URLSearchParams({ status: statusFilter, search, date_from: dateFrom, date_to: dateTo });
-      const res = await fetch(`/api/loans?${params}`, { cache: 'no-store' });
-      if (res.ok) {
-        const data = await res.json();
-        setLoans(data.loans);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || `Failed to load loans (${res.status})`);
+
+      const [techRes, laptopRes] = await Promise.all([
+        fetch(`/api/loans?${params}`, { cache: 'no-store' }),
+        fetch(`/api/laptop-loans?view=my${statusFilter ? `&status=${statusFilter}` : ''}`, { cache: 'no-store' }),
+      ]);
+
+      const techData = techRes.ok ? await techRes.json() : { loans: [] };
+      const laptopData = laptopRes.ok ? await laptopRes.json() : { loans: [] };
+
+      const techLoans = (techData.loans || []).map(l => ({ ...l, _loanKind: 'tech' }));
+
+      // Normalize laptop loans: map laptops array to common `items` shape
+      let laptopLoans = (laptopData.loans || []).map(l => ({
+        ...l,
+        _loanKind: 'laptop',
+        items: (l.laptops || []).map(item => ({
+          id: item.id,
+          item: item.laptops?.name || 'Unknown laptop',
+          item_id: item.laptop_id,
+          quantity: 1,
+        })),
+      }));
+
+      // Client-side filter laptop loans by search and date range (API doesn't support these)
+      if (search) {
+        const q = search.toLowerCase();
+        laptopLoans = laptopLoans.filter(l =>
+          l.purpose?.toLowerCase().includes(q) ||
+          l.items.some(i => i.item.toLowerCase().includes(q))
+        );
+      }
+      if (dateFrom) laptopLoans = laptopLoans.filter(l => l.start_date >= dateFrom);
+      if (dateTo) laptopLoans = laptopLoans.filter(l => l.start_date <= dateTo);
+
+      const allLoans = [...techLoans, ...laptopLoans]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      setLoans(allLoans);
+
+      if (!techRes.ok) {
+        const d = await techRes.json().catch(() => ({}));
+        setError(d.error || `Failed to load loans (${techRes.status})`);
       }
     } catch {
       setError('Network error — could not load your loans');
@@ -252,12 +281,161 @@ export default function LoansPage() {
     </span>
   );
 
-  // Stats summary
+  const kindBadge = (loanKind) => (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
+      background: loanKind === 'laptop' ? 'rgba(99,102,241,0.12)' : 'rgba(100,116,139,0.12)',
+      color: loanKind === 'laptop' ? 'var(--accent)' : 'var(--text-secondary)',
+      border: `1px solid ${loanKind === 'laptop' ? 'rgba(99,102,241,0.3)' : 'rgba(100,116,139,0.2)'}`,
+      textTransform: 'uppercase', letterSpacing: 0.5,
+    }}>
+      {loanKind === 'laptop' ? <RiMacbookLine /> : <RiArchiveLine />}
+      {loanKind === 'laptop' ? 'Laptop Loan' : 'Tech Loan'}
+    </span>
+  );
+
+  // Group consecutive loans that were submitted within 2 minutes of each other (same checkout session)
+  const buildBundles = (loanList) => {
+    const bundles = [];
+    let currentBundle = null;
+    for (const loan of loanList) {
+      const loanTime = new Date(loan.created_at).getTime();
+      if (currentBundle) {
+        const firstTime = new Date(currentBundle.loans[0].created_at).getTime();
+        if (firstTime - loanTime <= 2 * 60 * 1000) {
+          currentBundle.loans.push(loan);
+          continue;
+        }
+      }
+      currentBundle = { key: loan.id + loan._loanKind, loans: [loan] };
+      bundles.push(currentBundle);
+    }
+    return bundles;
+  };
+
+  // Stats
   const counts = loans.reduce((acc, l) => {
     acc[l.status] = (acc[l.status] || 0) + 1;
     return acc;
   }, {});
   const overdueCount = loans.filter(isOverdue).length;
+
+  const bundles = buildBundles(loans);
+
+  const renderLoanCard = (loan) => {
+    const overdue = isOverdue(loan);
+    const dueSoon = !overdue && isDueSoon(loan);
+    const isLaptop = loan._loanKind === 'laptop';
+
+    return (
+      <div
+        key={`${loan._loanKind}-${loan.id}`}
+        className="loan-card"
+        style={overdue ? { borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.03)' } : dueSoon ? { borderColor: 'rgba(245,158,11,0.4)' } : {}}
+      >
+        {overdue && (
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, padding: '6px 10px', background: 'rgba(239,68,68,0.12)', borderRadius: 8, marginBottom: 8, fontSize: 12, color: 'var(--error)', fontWeight: 600 }}>
+            <RiAlertLine style={{ flexShrink: 0 }} /> <span>OVERDUE — Please return items or contact an admin</span>
+          </div>
+        )}
+        {dueSoon && (
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, padding: '6px 10px', background: 'rgba(245,158,11,0.1)', borderRadius: 8, marginBottom: 8, fontSize: 12, color: 'var(--warning)', fontWeight: 600 }}>
+            <RiCalendarLine style={{ flexShrink: 0 }} /> <span>Due soon — return by {loan.end_date}</span>
+          </div>
+        )}
+
+        <div className="loan-card-header">
+          <div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6, alignItems: 'center' }}>
+              {kindBadge(loan._loanKind)}
+              {typeBadge(loan.loan_type)}
+              {statusBadge(loan.status)}
+            </div>
+            <p style={{ fontSize: 14, fontWeight: 500 }}>Request #{loan.id}</p>
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {new Date(loan.created_at).toLocaleDateString()}
+          </span>
+        </div>
+
+        <div className="loan-card-items">
+          {loan.items.map(item => (
+            <span key={item.id} className="loan-item-chip">
+              {isLaptop ? <RiMacbookLine style={{ verticalAlign: 'middle', marginRight: 3, fontSize: 12 }} /> : null}
+              {item.item}{!isLaptop ? ` × ${item.quantity}` : ''}
+            </span>
+          ))}
+        </div>
+
+        <div className="loan-card-meta">
+          {loan.purpose && <span>📝 {loan.purpose}</span>}
+          {!isLaptop && loan.department && <span>🏢 {loan.department}</span>}
+          <span>📅 {loan.start_date}{loan.end_date ? ` → ${loan.end_date}` : ' → Ongoing'}</span>
+        </div>
+
+        {loan.admin_notes && (
+          <div style={{ marginTop: 8, padding: 10, background: 'rgba(99,102,241,0.05)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+            <strong>Admin notes:</strong> {loan.admin_notes}
+          </div>
+        )}
+
+        {(loan.status === 'approved' || loan.status === 'pending') && (
+          <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {loan.status === 'approved' && (
+              <button
+                className="btn btn-sm"
+                onClick={() => setReturnModalLoan(loan)}
+                style={{
+                  background: overdue ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)',
+                  color: overdue ? 'var(--error)' : '#3b82f6',
+                  border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                  fontWeight: 600,
+                }}
+              >
+                <RiCameraLine style={{ marginRight: 6 }} /> Return
+              </button>
+            )}
+            {!isLaptop && (
+              <button
+                className="btn btn-sm"
+                onClick={() => handleModifyLoan(loan)}
+                disabled={borrowAgainLoading[loan.id]}
+                style={{ background: 'rgba(245,158,11,0.1)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)', fontWeight: 600 }}
+              >
+                {borrowAgainLoading[loan.id]
+                  ? <span className="btn-spinner" />
+                  : <><RiEdit2Line style={{ marginRight: 6 }} />Modify</>}
+              </button>
+            )}
+          </div>
+        )}
+
+        {loan.status === 'returned' && loan.return_photo_url && (
+          <div style={{ marginTop: 12, fontSize: 13 }}>
+            <a href={loan.return_photo_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <RiCameraLine /> View Return Photo
+            </a>
+          </div>
+        )}
+
+        {!isLaptop && (loan.status === 'returned' || loan.status === 'rejected') && (
+          <div style={{ marginTop: 12 }}>
+            <button
+              className="btn btn-sm btn-outline"
+              onClick={() => handleBorrowAgain(loan)}
+              disabled={borrowAgainLoading[loan.id]}
+              style={{ fontSize: 12, color: 'var(--accent)', borderColor: 'rgba(99,102,241,0.4)' }}
+            >
+              {borrowAgainLoading[loan.id]
+                ? <><span className="btn-spinner" /> Loading…</>
+                : <><RiRefreshLine style={{ marginRight: 4 }} />Borrow Again</>}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -355,115 +533,50 @@ export default function LoansPage() {
             </button>
           </div>
         ) : (
-          loans.map(loan => {
-            const overdue = isOverdue(loan);
-            const dueSoon = !overdue && isDueSoon(loan);
+          bundles.map(bundle => {
+            if (bundle.loans.length === 1) {
+              return renderLoanCard(bundle.loans[0]);
+            }
+            // Bundle: multiple loans submitted in the same session
+            const bundleDate = new Date(bundle.loans[0].created_at).toLocaleDateString();
+            const sharedPurpose = bundle.loans.every(l => l.purpose === bundle.loans[0].purpose)
+              ? bundle.loans[0].purpose
+              : null;
             return (
-              <div
-                key={loan.id}
-                className="loan-card"
-                style={overdue ? { borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.03)' } : dueSoon ? { borderColor: 'rgba(245,158,11,0.4)' } : {}}
-              >
-                {overdue && (
-                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, padding: '6px 10px', background: 'rgba(239,68,68,0.12)', borderRadius: 8, marginBottom: 8, fontSize: 12, color: 'var(--error)', fontWeight: 600 }}>
-                    <RiAlertLine style={{ flexShrink: 0 }} /> <span>OVERDUE — Please return items or contact an admin</span>
-                  </div>
-                )}
-                {dueSoon && (
-                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, padding: '6px 10px', background: 'rgba(245,158,11,0.1)', borderRadius: 8, marginBottom: 8, fontSize: 12, color: 'var(--warning)', fontWeight: 600 }}>
-                    <RiCalendarLine style={{ flexShrink: 0 }} /> <span>Due soon — return by {loan.end_date}</span>
-                  </div>
-                )}
-
-                <div className="loan-card-header">
-                  <div>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                      {typeBadge(loan.loan_type)}
-                      {statusBadge(loan.status)}
-                    </div>
-                    <p style={{ fontSize: 14, fontWeight: 500 }}>Request #{loan.id}</p>
-                  </div>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {new Date(loan.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-
-                <div className="loan-card-items">
-                  {loan.items.map(item => (
-                    <span key={item.id} className="loan-item-chip">
-                      {item.item} × {item.quantity}
+              <div key={bundle.key} style={{
+                border: '1px solid rgba(99,102,241,0.25)',
+                borderRadius: 14,
+                marginBottom: 16,
+                overflow: 'hidden',
+                background: 'rgba(99,102,241,0.03)',
+              }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 16px',
+                  background: 'rgba(99,102,241,0.07)',
+                  borderBottom: '1px solid rgba(99,102,241,0.15)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
+                      Loan Bundle
                     </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {bundle.loans.length} requests · {bundleDate}
+                    </span>
+                  </div>
+                  {sharedPurpose && (
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      📝 {sharedPurpose}
+                    </span>
+                  )}
+                </div>
+                <div style={{ padding: '12px 12px 4px' }}>
+                  {bundle.loans.map(loan => (
+                    <div key={`${loan._loanKind}-${loan.id}`} style={{ marginBottom: 8 }}>
+                      {renderLoanCard(loan)}
+                    </div>
                   ))}
                 </div>
-
-                <div className="loan-card-meta">
-                  <span>📝 {loan.purpose}</span>
-                  {loan.department && <span>🏢 {loan.department}</span>}
-                  <span>📅 {loan.start_date}{loan.end_date ? ` → ${loan.end_date}` : ' → Ongoing'}</span>
-                </div>
-
-                {loan.admin_notes && (
-                  <div style={{ marginTop: 8, padding: 10, background: 'rgba(99,102,241,0.05)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-                    <strong>Admin notes:</strong> {loan.admin_notes}
-                  </div>
-                )}
-
-                {(loan.status === 'approved' || loan.status === 'pending') && (
-                  <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {loan.status === 'approved' && loan.loan_type === 'temporary' && (
-                      <button
-                        className="btn btn-sm"
-                        onClick={() => setReturnModalLoan(loan)}
-                        style={{
-                          background: overdue ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)',
-                          color: overdue ? 'var(--error)' : '#3b82f6',
-                          border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)'}`,
-                          fontWeight: 600,
-                        }}
-                      >
-                        <RiCameraLine style={{ marginRight: 6 }} /> Return
-                      </button>
-                    )}
-                    <button
-                      className="btn btn-sm"
-                      onClick={() => handleModifyLoan(loan)}
-                      disabled={borrowAgainLoading[loan.id]}
-                      style={{
-                        background: 'rgba(245, 158, 11, 0.1)',
-                        color: '#d97706',
-                        border: '1px solid rgba(245, 158, 11, 0.3)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {borrowAgainLoading[loan.id] ? (
-                        <span className="btn-spinner" />
-                      ) : (
-                        <><RiEdit2Line style={{ marginRight: 6 }} /> Modify</>
-                      )}
-                    </button>
-                  </div>
-                )}
-                {loan.status === 'returned' && loan.return_photo_url && (
-                  <div style={{ marginTop: 12, fontSize: 13 }}>
-                    <a href={loan.return_photo_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <RiCameraLine /> View Return Photo
-                    </a>
-                  </div>
-                )}
-                {(loan.status === 'returned' || loan.status === 'rejected') && (
-                  <div style={{ marginTop: 12 }}>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={() => handleBorrowAgain(loan)}
-                      disabled={borrowAgainLoading[loan.id]}
-                      style={{ fontSize: 12, color: 'var(--accent)', borderColor: 'rgba(99,102,241,0.4)' }}
-                    >
-                      {borrowAgainLoading[loan.id]
-                        ? <><span className="btn-spinner" /> Loading…</>
-                        : <><RiRefreshLine style={{ marginRight: 4 }} />Borrow Again</>}
-                    </button>
-                  </div>
-                )}
               </div>
             );
           })
@@ -476,16 +589,15 @@ export default function LoansPage() {
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="modal-header">
               <div>
-                <h2 style={{ marginBottom: 2 }}>Return Loan #{returnModalLoan.id}</h2>
+                <h2 style={{ marginBottom: 2 }}>Return {returnModalLoan._loanKind === 'laptop' ? 'Laptop Loan' : 'Loan'} #{returnModalLoan.id}</h2>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>
-                  {returnModalLoan.items.map(i => `${i.item} ×${i.quantity}`).join(' · ')}
+                  {returnModalLoan.items.map(i => `${i.item}${returnModalLoan._loanKind !== 'laptop' ? ` ×${i.quantity}` : ''}`).join(' · ')}
                 </div>
               </div>
               <button className="btn-close" onClick={() => !returnLoading && (setReturnModalLoan(null), setReturnPhoto(null), setReturnRemarks(''))}>✕</button>
             </div>
 
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Photo upload */}
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Proof of Return <span style={{ color: 'var(--error)' }}>*</span>
@@ -501,11 +613,7 @@ export default function LoansPage() {
                         unoptimized
                         style={{ maxWidth: '100%', maxHeight: 200, width: 'auto', height: 'auto', borderRadius: 8, display: 'block' }}
                       />
-                      <button
-                        onClick={() => setReturnPhoto(null)}
-                        className="btn-close"
-                        style={{ position: 'absolute', top: 6, right: 6 }}
-                      >✕</button>
+                      <button onClick={() => setReturnPhoto(null)} className="btn-close" style={{ position: 'absolute', top: 6, right: 6 }}>✕</button>
                     </div>
                   ) : (
                     <>
@@ -522,7 +630,6 @@ export default function LoansPage() {
                 </div>
               </div>
 
-              {/* Remarks */}
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Condition Remarks <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none' }}>(optional)</span>
@@ -536,8 +643,7 @@ export default function LoansPage() {
                   style={{
                     width: '100%', padding: '10px 12px', background: 'var(--bg-secondary)',
                     border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)',
-                    fontSize: 13, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box',
-                    outline: 'none',
+                    fontSize: 13, resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
                   }}
                 />
               </div>
