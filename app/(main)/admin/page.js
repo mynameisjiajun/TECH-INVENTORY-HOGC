@@ -187,6 +187,8 @@ export default function AdminPage() {
   const [tierInput, setTierInput] = useState("");
   const [editingTier, setEditingTier] = useState(null);
   const [laptopActionLoading, setLaptopActionLoading] = useState(null);
+  const [currentlyOut, setCurrentlyOut] = useState([]);
+  const [currentlyOutFetching, setCurrentlyOutFetching] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -367,6 +369,19 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchCurrentlyOut = useCallback(async () => {
+    setCurrentlyOutFetching(true);
+    try {
+      const res = await fetch("/api/laptop-loans?view=all&status=approved");
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentlyOut(data.loans || []);
+      }
+    } catch { /* silent */ } finally {
+      setCurrentlyOutFetching(false);
+    }
+  }, []);
+
   const handleLaptopLoanAction = async (loanId, action) => {
     setActionLoading(loanId);
     setError("");
@@ -402,9 +417,9 @@ export default function AdminPage() {
         fetchTemplates();
         fetchAllItems();
       }
-      if (activeTab === "laptops") fetchLaptopsData();
+      if (activeTab === "laptops") { fetchLaptopsData(); fetchCurrentlyOut(); }
     }
-  }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers, fetchLaptopsData]);
+  }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers, fetchLaptopsData, fetchCurrentlyOut]);
 
   useEffect(() => {
     if (activeTab !== "loans") return;
@@ -841,48 +856,53 @@ export default function AdminPage() {
         {/* ====== LOANS TAB ====== */}
         {activeTab === "loans" && (
           <>
-            {/* Source filter */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-              {[
-                { key: "all", label: "All Sources" },
-                { key: "tech", label: "📦 Tech" },
-                { key: "laptop", label: "💻 Laptop" },
-              ].map(({ key, label }) => (
-                <button
-                  key={key}
-                  className={`tab ${loanSource === key ? "active" : ""}`}
-                  style={{ fontSize: 12 }}
-                  onClick={() => {
-                    setLoanSource(key);
-                    setSelectedLoans(new Set());
-                    setSelectedPendingLoans(new Set());
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="tabs" style={{ maxWidth: 700, flexWrap: "wrap" }}>
-              {[
-                { value: "", label: "All" },
-                { value: "pending", label: "Pending" },
-                { value: "approved", label: "Approved" },
-                { value: "overdue", label: "⚠️ Overdue" },
-                { value: "rejected", label: "Rejected" },
-                { value: "returned", label: "Returned" },
-              ].map(({ value, label }) => (
-                <button
-                  key={value}
-                  className={`tab ${statusFilter === value ? "active" : ""}`}
-                  style={value === "overdue" && statusFilter === "overdue" ? { background: "rgba(239,68,68,0.15)", color: "var(--error)", borderColor: "rgba(239,68,68,0.3)" } : {}}
-                  onClick={() => {
-                    setStatusFilter(value);
-                    setSelectedLoans(new Set());
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
+            {/* Unified filter bar */}
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1 }}>Loan Source</span>
+                <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 2, gap: 2 }}>
+                  {[{ key: "all", label: "All" }, { key: "tech", label: "📦 Tech" }, { key: "laptop", label: "💻 Laptop" }].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => { setLoanSource(key); setSelectedLoans(new Set()); setSelectedPendingLoans(new Set()); }}
+                      style={{ padding: "4px 14px", fontSize: 12, fontWeight: 600, border: "none", borderRadius: 6, cursor: "pointer", background: loanSource === key ? "var(--accent)" : "transparent", color: loanSource === key ? "white" : "var(--text-secondary)", transition: "all 0.15s" }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[
+                  { value: "", label: "All" },
+                  { value: "pending", label: "Pending" },
+                  { value: "approved", label: "Approved" },
+                  { value: "overdue", label: "⚠️ Overdue" },
+                  { value: "rejected", label: "Rejected" },
+                  { value: "returned", label: "Returned" },
+                ].map(({ value, label }) => {
+                  const isActive = statusFilter === value;
+                  const isOverdueTab = value === "overdue";
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => { setStatusFilter(value); setSelectedLoans(new Set()); }}
+                      style={{
+                        padding: "6px 14px", fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: "pointer", transition: "all 0.15s",
+                        border: isActive ? "none" : "1px solid var(--border)",
+                        background: isActive
+                          ? isOverdueTab ? "rgba(239,68,68,0.2)" : "var(--accent)"
+                          : "rgba(255,255,255,0.03)",
+                        color: isActive
+                          ? isOverdueTab ? "#ef4444" : "white"
+                          : isOverdueTab ? "rgba(239,68,68,0.7)" : "var(--text-secondary)",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {statusFilter === "pending" && loans.some((l) => l._source !== "laptop") && loans.length > 0 && (
@@ -985,231 +1005,139 @@ export default function AdminPage() {
                 </p>
               </div>
             ) : (
-              loans.map((loan) => (
-                <div key={loan.id} className="loan-card">
-                  <div className="loan-card-header">
-                    <div>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          alignItems: "center",
-                          marginBottom: 6,
-                        }}
-                      >
-                        <span
-                          className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
-                        >
-                          {loan.loan_type === "permanent"
-                            ? "📌 Permanent"
-                            : "⏱️ Temporary"}
-                        </span>
-                        {statusBadge(loan.status)}
-                        {loan._source === "laptop" && (
-                          <span className="badge" style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}>💻 Laptop</span>
-                        )}
-                        {loan.status === "approved" &&
-                          loan.end_date &&
-                          new Date(loan.end_date) < new Date() && (
-                            <span className="badge badge-error">
-                              🚨 OVERDUE
-                            </span>
-                          )}
-                      </div>
-                      <p style={{ fontWeight: 600, fontSize: 15 }}>
-                        {loan.requester_name}
-                        <span
-                          style={{
-                            fontWeight: 400,
-                            color: "var(--text-muted)",
-                            marginLeft: 8,
-                            fontSize: 12,
-                          }}
-                        >
-                          @{loan.requester_username}
-                        </span>
-                      </p>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-end",
-                        gap: 8,
-                      }}
-                    >
-                      <span
-                        style={{ fontSize: 12, color: "var(--text-muted)" }}
-                      >
-                        #{loan.id} ·{" "}
-                        {new Date(loan.created_at).toLocaleDateString()}
-                      </span>
-                      {statusFilter === "pending" && loan._source !== "laptop" && (
-                        <div
-                          style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}
-                          onClick={() => toggleSelectPending(loan.id)}
-                        >
-                          <div
-                            style={{
-                              width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                              border: selectedPendingLoans.has(loan.id) ? 'none' : '1.5px solid var(--border)',
-                              background: selectedPendingLoans.has(loan.id) ? '#10b981' : 'transparent',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              transition: 'all 0.15s ease'
-                            }}
-                          >
-                            {selectedPendingLoans.has(loan.id) && <RiCheckLine color="white" size={14} fontWeight="bold" />}
-                          </div>
-                          Select
+              loans.map((loan) => {
+                const todayStr = new Date().toISOString().split("T")[0];
+                const isOverdue = loan.status === "approved" && loan.loan_type === "temporary" && loan.end_date && loan.end_date < todayStr;
+                const accentColor = isOverdue ? "#ef4444" : loan.status === "pending" ? "#f59e0b" : loan.status === "approved" ? "#10b981" : loan.status === "rejected" ? "#6b7280" : "#6366f1";
+                const hasFooter = (loan.admin_notes && loan.status !== "pending") || (loan.status === "returned" && loan.return_photo_url) || loan._source !== "laptop";
+
+                return (
+                  <div key={loan.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: `4px solid ${accentColor}`, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
+
+                    {/* Header */}
+                    <div style={{ padding: "14px 18px 10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 7, flexWrap: "wrap" }}>
+                          <span className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}>
+                            {loan.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
+                          </span>
+                          {statusBadge(loan.status)}
+                          {loan._source === "laptop" && <span className="badge" style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}>💻 Laptop</span>}
+                          {isOverdue && <span className="badge badge-error">🚨 Overdue</span>}
                         </div>
-                      )}
-                      {statusFilter === "approved" &&
-                        loan.loan_type === "temporary" && loan._source !== "laptop" && (
-                          <div
-                            style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)", fontWeight: 500 }}
-                            onClick={() => toggleSelect(loan.id)}
-                          >
-                            <div
-                              style={{
-                                width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-                                border: selectedLoans.has(loan.id) ? 'none' : '1.5px solid var(--border)',
-                                background: selectedLoans.has(loan.id) ? 'var(--accent)' : 'transparent',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                transition: 'all 0.15s ease',
-                                boxShadow: selectedLoans.has(loan.id) ? '0 2px 6px rgba(99,102,241,0.25)' : 'none'
-                              }}
-                            >
-                              {selectedLoans.has(loan.id) && <RiCheckLine color="white" size={14} fontWeight="bold" />}
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>
+                          {loan.requester_name}
+                          <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 8, fontSize: 12 }}>@{loan.requester_username}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>#{loan.id} · {timeAgo(loan.created_at)}</span>
+                        {statusFilter === "pending" && loan._source !== "laptop" && (
+                          <div style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }} onClick={() => toggleSelectPending(loan.id)}>
+                            <div style={{ width: 18, height: 18, borderRadius: 5, border: selectedPendingLoans.has(loan.id) ? "none" : "1.5px solid var(--border)", background: selectedPendingLoans.has(loan.id) ? "#10b981" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+                              {selectedPendingLoans.has(loan.id) && <RiCheckLine color="white" size={13} />}
                             </div>
                             Select
                           </div>
                         )}
-                    </div>
-                  </div>
-                  <div className="loan-card-items">
-                    {loan._source === "laptop"
-                      ? (loan.laptops || []).map((item) => (
-                          <span key={item.id} className="loan-item-chip">
-                            💻 {item.laptops?.name || `Laptop #${item.laptop_id}`}
-                          </span>
-                        ))
-                      : (loan.items || []).map((item) => (
-                          <span key={item.id} className="loan-item-chip">
-                            {item.item} × {item.quantity}
-                          </span>
-                        ))
-                    }
-                  </div>
-                  <div className="loan-card-meta">
-                    <span>📝 {loan.purpose}</span>
-                    {loan.department && <span>🏢 {loan.department}</span>}
-                    <span>
-                      📅 {loan.start_date}
-                      {loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}
-                    </span>
-                    {loan.status === "approved" && loan.loan_type === "temporary" && loan.end_date && (
-                      <span>{formatDueTimer(loan.end_date)}</span>
-                    )}
-                  </div>
-                  {loan.status === "pending" && (
-                    <div style={{ marginTop: 12 }}>
-                      <input
-                        type="text"
-                        className="admin-notes-input"
-                        placeholder="Admin notes (optional)"
-                        value={adminNotes[loan.id] || ""}
-                        onChange={(e) =>
-                          setAdminNotes((p) => ({
-                            ...p,
-                            [loan.id]: e.target.value,
-                          }))
-                        }
-                      />
-                      <div className="admin-actions">
-                        <button
-                          className="btn btn-success btn-sm"
-                          onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "approve") : handleAction(loan.id, "approve")}
-                          disabled={actionLoading === loan.id}
-                        >
-                          {actionLoading === loan.id ? <span className="btn-spinner" /> : <><RiCheckLine /> Approve</>}
-                        </button>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "reject") : handleAction(loan.id, "reject")}
-                          disabled={actionLoading === loan.id}
-                        >
-                          {actionLoading === loan.id ? <span className="btn-spinner" /> : <><RiCloseLine /> Reject</>}
-                        </button>
+                        {statusFilter === "approved" && loan.loan_type === "temporary" && loan._source !== "laptop" && (
+                          <div style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }} onClick={() => toggleSelect(loan.id)}>
+                            <div style={{ width: 18, height: 18, borderRadius: 5, border: selectedLoans.has(loan.id) ? "none" : "1.5px solid var(--border)", background: selectedLoans.has(loan.id) ? "var(--accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", boxShadow: selectedLoans.has(loan.id) ? "0 2px 6px rgba(99,102,241,0.25)" : "none" }}>
+                              {selectedLoans.has(loan.id) && <RiCheckLine color="white" size={13} />}
+                            </div>
+                            Select
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-                  {loan.status === "approved" &&
-                    (loan.loan_type === "temporary" || loan._source === "laptop") && (
-                      <div style={{ marginTop: 12 }}>
+
+                    {/* Items */}
+                    <div style={{ padding: "0 18px 12px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {loan._source === "laptop"
+                        ? (loan.laptops || []).map((item) => <span key={item.id} className="loan-item-chip">💻 {item.laptops?.name || `Laptop #${item.laptop_id}`}</span>)
+                        : (loan.items || []).map((item) => <span key={item.id} className="loan-item-chip">{item.item} × {item.quantity}</span>)
+                      }
+                    </div>
+
+                    {/* Meta row */}
+                    <div style={{ padding: "10px 18px", borderTop: "1px solid var(--border)", background: "rgba(255,255,255,0.015)", display: "flex", gap: 14, fontSize: 12, color: "var(--text-muted)", flexWrap: "wrap", alignItems: "center" }}>
+                      {loan.purpose && <span>📝 {loan.purpose}</span>}
+                      {loan.department && <span>🏢 {loan.department}</span>}
+                      <span>📅 {loan.start_date}{loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}</span>
+                      {loan.status === "approved" && loan.loan_type === "temporary" && loan.end_date && (
+                        <span style={{ fontWeight: 600, color: isOverdue ? "#ef4444" : "var(--text-secondary)" }}>{formatDueTimer(loan.end_date)}</span>
+                      )}
+                    </div>
+
+                    {/* Pending: notes + approve/reject */}
+                    {loan.status === "pending" && (
+                      <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border)" }}>
+                        <input
+                          type="text"
+                          className="admin-notes-input"
+                          placeholder="Admin notes (optional — sent to requester)"
+                          value={adminNotes[loan.id] || ""}
+                          onChange={(e) => setAdminNotes((p) => ({ ...p, [loan.id]: e.target.value }))}
+                        />
+                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                          <button
+                            disabled={actionLoading === loan.id}
+                            onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "approve") : handleAction(loan.id, "approve")}
+                            style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 13, cursor: actionLoading === loan.id ? "not-allowed" : "pointer", background: "linear-gradient(135deg, #10b981, #059669)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: actionLoading === loan.id ? 0.7 : 1, boxShadow: "0 2px 8px rgba(16,185,129,0.25)" }}
+                          >
+                            {actionLoading === loan.id ? <span className="btn-spinner" /> : <RiCheckLine />} Approve
+                          </button>
+                          <button
+                            disabled={actionLoading === loan.id}
+                            onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "reject") : handleAction(loan.id, "reject")}
+                            style={{ flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: actionLoading === loan.id ? "not-allowed" : "pointer", background: "rgba(239,68,68,0.08)", color: "#ef4444", border: "1.5px solid rgba(239,68,68,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: actionLoading === loan.id ? 0.7 : 1 }}
+                          >
+                            {actionLoading === loan.id ? <span className="btn-spinner" /> : <RiCloseLine />} Reject
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Approved: return button */}
+                    {loan.status === "approved" && (loan.loan_type === "temporary" || loan._source === "laptop") && (
+                      <div style={{ padding: "12px 18px", borderTop: "1px solid var(--border)" }}>
                         <button
-                          className="btn btn-outline btn-sm"
+                          disabled={actionLoading === loan.id}
                           onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "return") : handleAction(loan.id, "return")}
-                          disabled={actionLoading === loan.id}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: actionLoading === loan.id ? "not-allowed" : "pointer", border: "none", background: isOverdue ? "linear-gradient(135deg, #ef4444, #dc2626)" : "linear-gradient(135deg, #10b981, #059669)", color: "white", opacity: actionLoading === loan.id ? 0.7 : 1, boxShadow: isOverdue ? "0 2px 8px rgba(239,68,68,0.35)" : "0 2px 8px rgba(16,185,129,0.3)" }}
                         >
-                          {actionLoading === loan.id ? <><span className="btn-spinner" /> Returning…</> : <><RiArrowGoBackLine /> Mark as Returned</>}
+                          {actionLoading === loan.id ? <><span className="btn-spinner" /> Returning…</> : <><RiArrowGoBackLine /> {isOverdue ? "⚠ Mark as Returned" : "Mark as Returned"}</>}
                         </button>
                       </div>
                     )}
-                  {loan.admin_notes && loan.status !== "pending" && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        padding: 10,
-                        background: "rgba(99,102,241,0.05)",
-                        borderRadius: 8,
-                        fontSize: 12,
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      <strong>Admin notes:</strong> {loan.admin_notes}
-                    </div>
-                  )}
-                  {loan.status === 'returned' && loan.return_photo_url && (
-                    <div style={{ marginTop: 12, fontSize: 13 }}>
-                      <a href={loan.return_photo_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <RiCameraLine /> View Proof of Return
-                      </a>
-                    </div>
-                  )}
-                  {loan._source !== "laptop" && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        display: "flex",
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      <button
-                        className="btn btn-sm"
-                        disabled={actionLoading === loan.id}
-                        style={{
-                          color: "var(--error)",
-                          background: "none",
-                          border: "1px solid rgba(239,68,68,0.3)",
-                          fontSize: 11,
-                          padding: "4px 10px",
-                        }}
-                        onClick={() => {
-                          if (
-                            confirm(
-                              `Delete loan #${loan.id}?${loan.status === "approved" ? " Stock will be restored." : ""}`,
-                            )
-                          ) {
-                            handleAction(loan.id, "delete");
-                          }
-                        }}
-                      >
-                        <RiDeleteBinLine /> Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
+
+                    {/* Footer: notes, photo, delete */}
+                    {hasFooter && (
+                      <div style={{ padding: "10px 18px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", background: "rgba(255,255,255,0.01)" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+                          {loan.admin_notes && loan.status !== "pending" && (
+                            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}><strong>Notes:</strong> {loan.admin_notes}</div>
+                          )}
+                          {loan.status === "returned" && loan.return_photo_url && (
+                            <a href={loan.return_photo_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+                              <RiCameraLine /> View Proof of Return
+                            </a>
+                          )}
+                        </div>
+                        {loan._source !== "laptop" && (
+                          <button
+                            disabled={actionLoading === loan.id}
+                            style={{ color: "var(--error)", background: "none", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, fontSize: 11, padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+                            onClick={() => { if (confirm(`Delete loan #${loan.id}?${loan.status === "approved" ? " Stock will be restored." : ""}`)) handleAction(loan.id, "delete"); }}
+                          >
+                            <RiDeleteBinLine /> Delete
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </>
         )}
@@ -2085,6 +2013,59 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+
+            {/* Currently Out */}
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: 20, marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>💻 Currently Out</h3>
+                <button className="btn btn-sm btn-outline" onClick={fetchCurrentlyOut}>Refresh</button>
+              </div>
+              {currentlyOutFetching ? (
+                <div className="loading-spinner"><div className="spinner" /></div>
+              ) : currentlyOut.length === 0 ? (
+                <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>All laptops are currently in.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 0, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
+                  {/* Header */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "8px 14px", background: "rgba(255,255,255,0.04)", borderBottom: "1px solid var(--border)" }}>
+                    {["Laptop(s)", "Borrower", "Due Date", "Status"].map((h) => (
+                      <div key={h} style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "var(--text-muted)" }}>{h}</div>
+                    ))}
+                  </div>
+                  {(() => {
+                    const today = new Date().toISOString().split("T")[0];
+                    return currentlyOut.map((loan, i) => {
+                      const laptopNames = (loan.laptops || []).map((item) => item.laptops?.name || `Laptop #${item.laptop_id}`).join(", ");
+                      const isOverdue = loan.loan_type === "temporary" && loan.end_date && loan.end_date < today;
+                      const isPerm = loan.loan_type === "permanent";
+                      return (
+                        <div key={loan.id} style={{
+                          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                          padding: "10px 14px", alignItems: "center",
+                          borderBottom: i < currentlyOut.length - 1 ? "1px solid var(--border)" : "none",
+                          background: isOverdue ? "rgba(239,68,68,0.05)" : "transparent",
+                        }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{laptopNames || "—"}</div>
+                          <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{loan.requester_name || "—"}</div>
+                          <div style={{ fontSize: 13, color: isOverdue ? "#ef4444" : "var(--text-secondary)", fontWeight: isOverdue ? 700 : 400 }}>
+                            {isPerm ? "Permanent" : loan.end_date || "—"}
+                          </div>
+                          <div>
+                            {isOverdue ? (
+                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>⚠ Overdue</span>
+                            ) : isPerm ? (
+                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(139,92,246,0.12)", color: "#8b5cf6", border: "1px solid rgba(139,92,246,0.25)" }}>Permanent</span>
+                            ) : (
+                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(16,185,129,0.12)", color: "#10b981", border: "1px solid rgba(16,185,129,0.25)" }}>Out</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              )}
+            </div>
 
             {/* Tier Management */}
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 20 }}>

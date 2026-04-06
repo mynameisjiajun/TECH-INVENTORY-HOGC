@@ -56,7 +56,7 @@ export async function POST(request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { loan_groups, purpose } = await request.json();
+  const { loan_groups, purpose, department } = await request.json();
   // loan_groups = [{ loan_type, start_date, end_date, laptop_ids: [] }]
 
   if (!loan_groups?.length) return NextResponse.json({ error: "No laptops selected" }, { status: 400 });
@@ -115,6 +115,7 @@ export async function POST(request) {
         start_date,
         end_date: loan_type === "temporary" ? end_date : null,
         purpose: purpose.trim(),
+        department: department?.trim() || null,
         status: "pending",
       })
       .select()

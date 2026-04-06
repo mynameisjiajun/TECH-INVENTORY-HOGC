@@ -133,7 +133,7 @@ export default function CartPanel() {
         const res = await fetch("/api/laptop-loans", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ loan_groups, purpose: formData.purpose }),
+          body: JSON.stringify({ loan_groups, purpose: formData.purpose, department: formData.department }),
         });
         const data = await res.json();
         if (!res.ok) errors.push(data.error || "Laptop loan failed");
@@ -385,7 +385,7 @@ export default function CartPanel() {
                 )}
               </div>
 
-              {/* Shared purpose */}
+              {/* Shared fields — apply to all loan types */}
               <div className="input-group">
                 <label>Purpose *</label>
                 <textarea
@@ -393,6 +393,16 @@ export default function CartPanel() {
                   onChange={(e) => setFormData((p) => ({ ...p, purpose: e.target.value }))}
                   placeholder="Why do you need these items?"
                   required
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Department / Ministry</label>
+                <input
+                  type="text"
+                  value={formData.department}
+                  onChange={(e) => setFormData((p) => ({ ...p, department: e.target.value }))}
+                  placeholder="e.g., Projection, VP, Sound, Youth"
                 />
               </div>
 
@@ -431,16 +441,6 @@ export default function CartPanel() {
                         </button>
                       </div>
                     )}
-
-                    <div className="input-group">
-                      <label>Department / Ministry</label>
-                      <input
-                        type="text"
-                        value={formData.department}
-                        onChange={(e) => setFormData((p) => ({ ...p, department: e.target.value }))}
-                        placeholder="e.g., Projection, VP, Sound"
-                      />
-                    </div>
 
                     <div className="input-group">
                       <label>Start Date *</label>

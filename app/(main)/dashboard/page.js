@@ -65,8 +65,7 @@ export default function DashboardPage() {
   const [myFetching, setMyFetching] = useState(true);
   const [recentActivity, setRecentActivity] = useState([]);
   const [allActiveLoans, setAllActiveLoans] = useState([]);
-  const [showAllLoans, setShowAllLoans] = useState(false);
-  const [calendarTypeFilter, setCalendarTypeFilter] = useState("all"); // 'all' | 'tech' | 'laptop'
+  const [calendarTypeFilter, setCalendarTypeFilter] = useState("my"); // 'my' | 'all' | 'tech' | 'laptop'
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -269,11 +268,11 @@ export default function DashboardPage() {
         })
       : allActiveLoans.filter((l) => {
           if (l.loan_type === "permanent") return false;
-          if (calendarTypeFilter === "tech" && l._loanKind === "laptop") return false;
-          if (calendarTypeFilter === "laptop" && l._loanKind !== "laptop") return false;
           const isOwn = l.user_id === user?.id;
-          if (!showAllLoans) return isOwn; // default: own loans only
-          // "All" mode: own loans (all statuses) + others' approved non-overdue only
+          if (calendarTypeFilter === "my") return isOwn;
+          if (calendarTypeFilter === "tech") return l._loanKind !== "laptop";
+          if (calendarTypeFilter === "laptop") return l._loanKind === "laptop";
+          // "all": own loans (all statuses) + others' approved non-overdue only
           if (isOwn) return true;
           const isOverdue = l.status === "approved" && l.end_date && new Date(l.end_date) < new Date();
           return l.status === "approved" && !isOverdue;
@@ -350,7 +349,7 @@ export default function DashboardPage() {
     });
 
     return { weeks, loanBars, totalWeeks };
-  }, [calendarMonth, activeLoans, myLoans, allActiveLoans, isAdmin, user, showAllLoans]);
+  }, [calendarMonth, activeLoans, allActiveLoans, isAdmin, user, calendarTypeFilter]);
 
   if (loading || !user)
     return (
@@ -411,7 +410,7 @@ export default function DashboardPage() {
     if (bar.isOwn)
       return { bg: "rgba(16,185,129,0.3)", color: "#6ee7b7", border: "#10b981" };
     if (!isAdmin)
-      return { bg: "rgba(99,102,241,0.3)", color: "#c7d2fe", border: "#6366f1" };
+      return { bg: "rgba(59,130,246,0.3)", color: "#93c5fd", border: "#3b82f6" };
     return { bg: "rgba(59,130,246,0.3)", color: "#bfdbfe", border: "#3b82f6" };
   };
 
@@ -440,8 +439,12 @@ export default function DashboardPage() {
 
   // ====== NORMAL USER DASHBOARD ======
   if (!isAdmin) {
+    const today = new Date().toISOString().split("T")[0];
     const loanedOut = myLoans.filter((l) => l.status === "approved");
     const pending = myLoans.filter((l) => l.status === "pending");
+    const overdueMyLoans = myLoans.filter(
+      (l) => l.status === "approved" && l.loan_type === "temporary" && l.end_date && l.end_date < today
+    );
 
     return (
       <>
@@ -485,259 +488,126 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {overdueMyLoans.length > 0 && (
+            <div style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+              {overdueMyLoans.map((loan) => {
+                const laptopNames = loan._loanKind === "laptop"
+                  ? (loan.items || []).map((i) => i.item).join(", ")
+                  : (loan.items || []).map((i) => `${i.item} ×${i.quantity}`).join(", ");
+                return (
+                  <div key={`overdue-${loan._loanKind}-${loan.id}`} style={{
+                    padding: "12px 16px",
+                    background: "rgba(239,68,68,0.1)",
+                    border: "1.5px solid rgba(239,68,68,0.4)",
+                    borderRadius: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <RiAlertLine style={{ color: "#ef4444", fontSize: 20, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "#ef4444" }}>
+                          Overdue — {loan._loanKind === "laptop" ? "Laptop Loan" : "Tech Loan"} #{loan.id}
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                          Was due <strong>{loan.end_date}</strong>
+                          {laptopNames && <span> · {laptopNames}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => router.push("/loans")}
+                      style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444", flexShrink: 0 }}
+                    >
+                      Return Now
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {myFetching ? (
             <>
               <div className="stats-grid" style={{ marginBottom: 24 }}>
-                {[1,2].map((i) => (
-                  <div key={i} className="skeleton skeleton-stat" />
-                ))}
+                {[1,2,3].map((i) => <div key={i} className="skeleton skeleton-stat" />)}
               </div>
-              {[1,2,3].map((i) => (
-                <div key={i} className="skeleton skeleton-row" />
-              ))}
+              {[1,2,3].map((i) => <div key={i} className="skeleton skeleton-row" />)}
             </>
           ) : (
             <>
-              {/* Summary cards */}
+              {/* Stats row */}
               <div className="stats-grid" style={{ marginBottom: 24 }}>
                 <div className="stat-card">
-                  <div
-                    className="stat-icon"
-                    style={{ color: "var(--warning)" }}
-                  >
-                    <RiHandHeartLine />
-                  </div>
-                  <div
-                    className="stat-value"
-                    style={{ color: "var(--warning)" }}
-                  >
-                    {loanedOut.length}
-                  </div>
-                  <div className="stat-label">Items Loaned Out</div>
+                  <div className="stat-icon" style={{ color: "#10b981" }}><RiHandHeartLine /></div>
+                  <div className="stat-value" style={{ color: "#10b981" }}>{loanedOut.length}</div>
+                  <div className="stat-label">Items I&apos;m Loaning</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-icon" style={{ color: "var(--info)" }}>
-                    <RiTimeLine />
-                  </div>
-                  <div className="stat-value" style={{ color: "var(--info)" }}>
-                    {pending.length}
-                  </div>
-                  <div className="stat-label">Pending Requests</div>
+                  <div className="stat-icon" style={{ color: "var(--info)" }}><RiTimeLine /></div>
+                  <div className="stat-value" style={{ color: "var(--info)" }}>{pending.length}</div>
+                  <div className="stat-label">My Pending Requests</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-icon" style={{ color: "var(--error)" }}><RiAlertLine /></div>
+                  <div className="stat-value" style={{ color: "var(--error)" }}>{overdueMyLoans.length}</div>
+                  <div className="stat-label">My Overdues</div>
                 </div>
               </div>
 
-              {/* Loaned Out Section */}
+              {/* Unified My Loans list */}
               <div style={{ marginBottom: 32 }}>
-                <h2
-                  style={{
-                    fontSize: 16,
-                    marginBottom: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <RiHandHeartLine style={{ color: "var(--warning)" }} /> Items
-                  Currently Loaned Out
+                <h2 style={{ fontSize: 16, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  <RiHandHeartLine style={{ color: "#10b981" }} /> My Loans
                 </h2>
-                {loanedOut.length === 0 ? (
+                {[...loanedOut, ...pending].length === 0 ? (
                   <div className="empty-state" style={{ padding: 32 }}>
                     <h3>No active loans</h3>
-                    <p>You don&apos;t have any items loaned out right now</p>
+                    <p>You don&apos;t have any loans right now</p>
                   </div>
                 ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 12,
-                    }}
-                  >
-                    {loanedOut.map((loan) => (
-                      <div key={`${loan._loanKind}-${loan.id}`} className="loan-card">
-                        <div className="loan-card-header">
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 3,
-                              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
-                              background: loan._loanKind === "laptop" ? "rgba(99,102,241,0.12)" : "rgba(100,116,139,0.12)",
-                              color: loan._loanKind === "laptop" ? "var(--accent)" : "var(--text-secondary)",
-                              border: `1px solid ${loan._loanKind === "laptop" ? "rgba(99,102,241,0.3)" : "rgba(100,116,139,0.2)"}`,
-                              textTransform: "uppercase", letterSpacing: 0.5,
-                            }}>
-                              {loan._loanKind === "laptop" ? "💻 Laptop" : "📦 Tech"}
-                            </span>
-                            <span className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`} style={{ fontSize: 11 }}>
-                              {loan.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
-                            </span>
-                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>#{loan.id}</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[...loanedOut, ...pending]
+                      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                      .map((loan) => {
+                        const isOverdue = loan.status === "approved" && loan.loan_type === "temporary" && loan.end_date && loan.end_date < today;
+                        const accentColor = isOverdue ? "#ef4444" : loan.status === "pending" ? "#f59e0b" : "#10b981";
+                        return (
+                          <div key={`${loan._loanKind}-${loan.id}`} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: `4px solid ${accentColor}`, borderRadius: 14, overflow: "hidden" }}>
+                            <div style={{ padding: "12px 16px 10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5, background: loan._loanKind === "laptop" ? "rgba(99,102,241,0.12)" : "rgba(100,116,139,0.12)", color: loan._loanKind === "laptop" ? "var(--accent)" : "var(--text-secondary)", border: `1px solid ${loan._loanKind === "laptop" ? "rgba(99,102,241,0.3)" : "rgba(100,116,139,0.2)"}`, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                  {loan._loanKind === "laptop" ? "💻 Laptop" : "📦 Tech"}
+                                </span>
+                                <span className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`} style={{ fontSize: 11 }}>
+                                  {loan.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
+                                </span>
+                                {isOverdue && <span className="badge badge-error" style={{ fontSize: 10 }}>🚨 Overdue</span>}
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                {statusBadge(loan.status)}
+                                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>#{loan.id}</span>
+                              </div>
+                            </div>
+                            <div style={{ padding: "0 16px 10px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {loan.items.map((item) => (
+                                <span key={item.id} className="loan-item-chip">
+                                  {item.item}{loan._loanKind !== "laptop" ? ` × ${item.quantity}` : ""}
+                                </span>
+                              ))}
+                            </div>
+                            <div style={{ padding: "8px 16px", borderTop: "1px solid var(--border)", background: "rgba(255,255,255,0.015)", display: "flex", gap: 14, fontSize: 12, color: "var(--text-muted)", flexWrap: "wrap" }}>
+                              {loan.purpose && <span>📝 {loan.purpose}</span>}
+                              {loan.department && <span>🏢 {loan.department}</span>}
+                              <span>📅 {loan.start_date}{loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}</span>
+                            </div>
                           </div>
-                          {statusBadge(loan.status)}
-                        </div>
-                        <div className="loan-card-items">
-                          {loan.items.map((item) => (
-                            <span key={item.id} className="loan-item-chip">
-                              {item.item}{loan._loanKind !== "laptop" ? ` × ${item.quantity}` : ""}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="loan-card-meta">
-                          {loan.purpose && <span>📝 {loan.purpose}</span>}
-                          <span>
-                            📅 {loan.start_date}
-                            {loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}
-                          </span>
-                        </div>
-                        {loan.end_date && new Date(loan.end_date) < new Date() && (
-                          <div style={{ marginTop: 8, padding: 8, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, textAlign: "center", fontSize: 12 }}>
-                            <span style={{ color: "var(--error)", fontWeight: 700 }}>
-                              🚨 OVERDUE — Please return items!
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Pending Requests Section */}
-              <div style={{ marginBottom: 32 }}>
-                <h2
-                  style={{
-                    fontSize: 16,
-                    marginBottom: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <RiTimeLine style={{ color: "var(--info)" }} /> Pending
-                  Requests
-                </h2>
-                {pending.length === 0 ? (
-                  <div className="empty-state" style={{ padding: 32 }}>
-                    <h3>No pending requests</h3>
-                    <p>All your loan requests have been processed</p>
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 12,
-                    }}
-                  >
-                    {pending.map((loan) => (
-                      <div key={`${loan._loanKind}-${loan.id}`} className="loan-card">
-                        <div className="loan-card-header">
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 3,
-                              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
-                              background: loan._loanKind === "laptop" ? "rgba(99,102,241,0.12)" : "rgba(100,116,139,0.12)",
-                              color: loan._loanKind === "laptop" ? "var(--accent)" : "var(--text-secondary)",
-                              border: `1px solid ${loan._loanKind === "laptop" ? "rgba(99,102,241,0.3)" : "rgba(100,116,139,0.2)"}`,
-                              textTransform: "uppercase", letterSpacing: 0.5,
-                            }}>
-                              {loan._loanKind === "laptop" ? "💻 Laptop" : "📦 Tech"}
-                            </span>
-                            <span className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`} style={{ fontSize: 11 }}>
-                              {loan.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
-                            </span>
-                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>#{loan.id}</span>
-                          </div>
-                          {statusBadge(loan.status)}
-                        </div>
-                        <div className="loan-card-items">
-                          {loan.items.map((item) => (
-                            <span key={item.id} className="loan-item-chip">
-                              {item.item}{loan._loanKind !== "laptop" ? ` × ${item.quantity}` : ""}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="loan-card-meta">
-                          {loan.purpose && <span>📝 {loan.purpose}</span>}
-                          <span>
-                            📅 {loan.start_date}
-                            {loan.end_date ? ` → ${loan.end_date}` : " → Permanent"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* All Active Team Loans */}
-              <div style={{ marginBottom: 32 }}>
-                <h2
-                  style={{
-                    fontSize: 16,
-                    marginBottom: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <RiArchiveLine style={{ color: "var(--accent)" }} /> All
-                  Active Loans
-                </h2>
-                {allActiveLoans.length === 0 ? (
-                  <div className="empty-state" style={{ padding: 32 }}>
-                    <h3>No active loans</h3>
-                    <p>No items are currently borrowed by anyone</p>
-                  </div>
-                ) : (
-                  <div className="table-container">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Borrower</th>
-                          <th>Items</th>
-                          <th>Purpose</th>
-                          <th>Due Date</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allActiveLoans.map((loan) => {
-                          const isOverdue =
-                            loan.status === "approved" &&
-                            loan.end_date &&
-                            new Date(loan.end_date) < new Date();
-                          return (
-                            <tr key={loan.id}>
-                              <td style={{ fontWeight: 500 }}>
-                                {loan.requester_name || loan.requester_username || "—"}
-                              </td>
-                              <td>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                                  {loan.items.map((item) => (
-                                    <span key={item.id} className="loan-item-chip">
-                                      {item.item} × {item.quantity}
-                                    </span>
-                                  ))}
-                                </div>
-                              </td>
-                              <td style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                                {loan.purpose}
-                              </td>
-                              <td style={{ fontSize: 13 }}>
-                                {loan.end_date ? (
-                                  <span style={{ color: isOverdue ? "var(--error)" : "inherit", fontWeight: isOverdue ? 700 : 400 }}>
-                                    {isOverdue ? "🚨 " : ""}{loan.end_date}
-                                  </span>
-                                ) : (
-                                  <span style={{ color: "var(--text-muted)" }}>Ongoing</span>
-                                )}
-                              </td>
-                              <td>{statusBadge(loan.status)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -752,41 +622,12 @@ export default function DashboardPage() {
                   </h3>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 2, gap: 2 }}>
-                      <button
-                        onClick={() => setShowAllLoans(false)}
-                        style={{
-                          padding: "4px 12px",
-                          fontSize: 11,
-                          fontWeight: 600,
-                          border: "none",
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          background: !showAllLoans ? "var(--accent)" : "transparent",
-                          color: !showAllLoans ? "white" : "var(--text-secondary)",
-                          transition: "all 0.15s",
-                        }}
-                      >
-                        My Loans
-                      </button>
-                      <button
-                        onClick={() => setShowAllLoans(true)}
-                        style={{
-                          padding: "4px 12px",
-                          fontSize: 11,
-                          fontWeight: 600,
-                          border: "none",
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          background: showAllLoans ? "var(--accent)" : "transparent",
-                          color: showAllLoans ? "white" : "var(--text-secondary)",
-                          transition: "all 0.15s",
-                        }}
-                      >
-                        All Loans
-                      </button>
-                    </div>
-                    <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 2, gap: 2 }}>
-                      {[{ value: "all", label: "All" }, { value: "tech", label: "📦 Tech" }, { value: "laptop", label: "💻 Laptop" }].map(({ value, label }) => (
+                      {[
+                        { value: "my", label: "My Loans" },
+                        { value: "all", label: "All" },
+                        { value: "tech", label: "📦 Tech" },
+                        { value: "laptop", label: "💻 Laptop" },
+                      ].map(({ value, label }) => (
                         <button
                           key={value}
                           onClick={() => setCalendarTypeFilter(value)}
@@ -954,39 +795,74 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 16,
-                    padding: "12px 0",
-                    flexWrap: "wrap",
-                    fontSize: 11,
-                    color: "var(--text-secondary)",
-                  }}
-                >
+                <div style={{ display: "flex", gap: 16, padding: "12px 0", flexWrap: "wrap", fontSize: 11, color: "var(--text-secondary)" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(16,185,129,0.3)", borderLeft: "3px solid #10b981" }} />{" "}
-                    My Loan
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(16,185,129,0.3)", borderLeft: "3px solid #10b981" }} /> My Loans
                   </span>
-                  {showAllLoans && (
+                  {calendarTypeFilter !== "my" && (
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(99,102,241,0.3)", borderLeft: "3px solid #6366f1" }} />{" "}
-                      Others
+                      <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(59,130,246,0.3)", borderLeft: "3px solid #3b82f6" }} /> Others
                     </span>
                   )}
                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(245,158,11,0.3)", borderLeft: "3px solid #f59e0b" }} />{" "}
-                    Pending
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(245,158,11,0.3)", borderLeft: "3px solid #f59e0b" }} /> Pending
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(239,68,68,0.35)", borderLeft: "3px solid #ef4444" }} />{" "}
-                    Overdue
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: "rgba(239,68,68,0.35)", borderLeft: "3px solid #ef4444" }} /> Overdue
                   </span>
                 </div>
               </div>
             </>
           )}
         </div>
+
+        {/* Loan detail modal — shown when a calendar bar is clicked */}
+        {selectedLoan && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }} onClick={() => setSelectedLoan(null)}>
+            <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border)", maxWidth: 480, width: "100%", padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <h3 style={{ margin: 0, fontSize: 18 }}>📋 Loan Details</h3>
+                <button onClick={() => setSelectedLoan(null)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20 }}><RiCloseLine /></button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: 16, background: "rgba(99,102,241,0.05)", borderRadius: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, var(--accent), #818cf8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "white" }}>
+                  {(selectedLoan.requester_name || selectedLoan.requester_username || "?")[0].toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 16 }}>{selectedLoan.requester_name}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>@{selectedLoan.requester_username}</div>
+                </div>
+                <div style={{ marginLeft: "auto" }}>
+                  <span className={`badge ${selectedLoan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`} style={{ fontSize: 11 }}>
+                    {selectedLoan.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
+                  </span>
+                </div>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>Items Borrowed</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(selectedLoan.items || []).map((item) => (
+                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                      <span style={{ fontWeight: 500 }}>{item.item}</span>
+                      <span style={{ color: "var(--accent)", fontWeight: 600 }}>× {item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 13 }}>
+                <div><span style={{ color: "var(--text-muted)", fontSize: 11 }}>Purpose</span><div style={{ fontWeight: 500, marginTop: 2 }}>{selectedLoan.purpose || "—"}</div></div>
+                {selectedLoan.department && <div><span style={{ color: "var(--text-muted)", fontSize: 11 }}>Department</span><div style={{ fontWeight: 500, marginTop: 2 }}>{selectedLoan.department}</div></div>}
+                <div><span style={{ color: "var(--text-muted)", fontSize: 11 }}>Start Date</span><div style={{ fontWeight: 500, marginTop: 2 }}>{selectedLoan.start_date}</div></div>
+                <div><span style={{ color: "var(--text-muted)", fontSize: 11 }}>End Date</span><div style={{ fontWeight: 500, marginTop: 2 }}>{selectedLoan.end_date || "Ongoing"}</div></div>
+              </div>
+              {selectedLoan.status === "approved" && selectedLoan.end_date && new Date(selectedLoan.end_date) < new Date() && (
+                <div style={{ marginTop: 16, padding: 12, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, textAlign: "center" }}>
+                  <span style={{ color: "var(--error)", fontWeight: 700 }}>🚨 This loan is OVERDUE!</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </>
     );
   }

@@ -370,7 +370,7 @@ export default function LoansPage() {
 
         <div className="loan-card-meta">
           {loan.purpose && <span>📝 {loan.purpose}</span>}
-          {!isLaptop && loan.department && <span>🏢 {loan.department}</span>}
+          {loan.department && <span>🏢 {loan.department}</span>}
           <span>📅 {loan.start_date}{loan.end_date ? ` → ${loan.end_date}` : ' → Ongoing'}</span>
         </div>
 
@@ -480,8 +480,8 @@ export default function LoansPage() {
         )}
 
         {/* Filters */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24, alignItems: 'center' }}>
-          <div className="search-input-wrap" style={{ flex: '1 1 200px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24, alignItems: 'center' }}>
+          <div className="search-input-wrap" style={{ flex: '1 1 180px', minWidth: 0 }}>
             <RiSearchLine className="search-icon" />
             <input
               type="text"
@@ -490,21 +490,21 @@ export default function LoansPage() {
               placeholder="Search by item or purpose..."
             />
           </div>
-          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ flexShrink: 0 }}>
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
             <option value="returned">Returned</option>
           </select>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <RiFilterLine style={{ color: 'var(--text-muted)', fontSize: 14 }} />
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              title="Start date from"
+              title="From date"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', fontSize: 13 }} />
-            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>to</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>–</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              title="Start date to"
+              title="To date"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', fontSize: 13 }} />
           </div>
           {(search || dateFrom || dateTo || statusFilter) && (
