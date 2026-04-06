@@ -52,29 +52,28 @@ export default function InventoryLanding() {
         </div>
 
         <div className="page-container" style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%" }}>
-        <div style={{ textAlign: "center", marginBottom: 48 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Inventory</h1>
-          <p style={{ color: "var(--text-secondary)", fontSize: 15 }}>What would you like to browse?</p>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Inventory</h1>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>What would you like to browse?</p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, width: "100%", maxWidth: 680 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, width: "100%", maxWidth: 560 }}>
           {/* Tech Inventory */}
           <button
             onClick={() => router.push("/inventory/tech-inventory")}
             style={{
               display: "flex",
-              flexDirection: "column",
+              flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
               gap: 16,
-              padding: "40px 32px",
+              padding: "18px 20px",
               background: "var(--bg-card)",
               border: "1px solid var(--border)",
-              borderRadius: 20,
+              borderRadius: 16,
               cursor: "pointer",
               transition: "all 0.2s",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-              textAlign: "center",
+              textAlign: "left",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "var(--accent)";
@@ -88,23 +87,20 @@ export default function InventoryLanding() {
             }}
           >
             <div style={{
-              width: 72, height: 72, borderRadius: 18,
+              width: 52, height: 52, borderRadius: 14, flexShrink: 0,
               background: "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 32, color: "var(--accent)",
+              fontSize: 24, color: "var(--accent)",
             }}>
               <RiArchiveLine />
             </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 18, color: "var(--text-primary)", marginBottom: 6 }}>Tech Inventory</div>
-              <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                Browse cables, adapters, cameras, and other tech equipment
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "var(--text-primary)", marginBottom: 3 }}>Tech Inventory</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                Cables, adapters, cameras &amp; more
               </div>
             </div>
-            <span style={{
-              marginTop: 4, padding: "6px 18px", borderRadius: 8,
-              background: "var(--accent)", color: "white", fontSize: 13, fontWeight: 600,
-            }}>Browse →</span>
+            <span style={{ color: "var(--accent)", fontSize: 18, flexShrink: 0 }}>→</span>
           </button>
 
           {/* Laptop Loans */}
@@ -112,18 +108,17 @@ export default function InventoryLanding() {
             onClick={() => router.push("/inventory/laptop-loans")}
             style={{
               display: "flex",
-              flexDirection: "column",
+              flexDirection: "row",
               alignItems: "center",
-              justifyContent: "center",
               gap: 16,
-              padding: "40px 32px",
+              padding: "18px 20px",
               background: "var(--bg-card)",
               border: "1px solid var(--border)",
-              borderRadius: 20,
+              borderRadius: 16,
               cursor: "pointer",
               transition: "all 0.2s",
               boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-              textAlign: "center",
+              textAlign: "left",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "#10b981";
@@ -137,23 +132,20 @@ export default function InventoryLanding() {
             }}
           >
             <div style={{
-              width: 72, height: 72, borderRadius: 18,
+              width: 52, height: 52, borderRadius: 14, flexShrink: 0,
               background: "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.15))",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 32, color: "#10b981",
+              fontSize: 24, color: "#10b981",
             }}>
               <RiMacbookLine />
             </div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 18, color: "var(--text-primary)", marginBottom: 6 }}>Laptop Loans</div>
-              <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                Borrow MacBooks and Apple laptops for your ministry or project
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "var(--text-primary)", marginBottom: 3 }}>Laptop Loans</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                Borrow MacBooks for ministry or projects
               </div>
             </div>
-            <span style={{
-              marginTop: 4, padding: "6px 18px", borderRadius: 8,
-              background: "#10b981", color: "white", fontSize: 13, fontWeight: 600,
-            }}>Browse →</span>
+            <span style={{ color: "#10b981", fontSize: 18, flexShrink: 0 }}>→</span>
           </button>
         </div>
         </div>

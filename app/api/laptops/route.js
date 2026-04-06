@@ -16,7 +16,7 @@ export async function GET(request) {
     supabase.from("laptop_tiers").select("*").order("display_order"),
     supabase.from("laptops").select("*").order("name"),
     supabase.from("laptop_loan_requests")
-      .select("id, start_date, end_date, loan_type, laptop_loan_items(laptop_id)")
+      .select("id, start_date, end_date, loan_type, users(display_name, username), laptop_loan_items(laptop_id)")
       .in("status", ["approved", "pending"]),
     supabase.from("laptop_notifications").select("laptop_id").eq("user_id", user.id),
   ]);
@@ -24,6 +24,7 @@ export async function GET(request) {
   // Build maps: which laptops are unavailable for the requested dates, and their return dates
   const unavailableIds = new Set();
   const returnDateMap = new Map(); // laptop_id -> earliest return date
+  const borrowerMap = new Map(); // laptop_id -> borrower display name
 
   for (const loan of activeLoans || []) {
     // For overdue approved loans, treat effective end as "today" so they remain
@@ -46,6 +47,8 @@ export async function GET(request) {
         const displayDate = loan.end_date >= today ? loan.end_date : today;
         if (!returnDateMap.has(lid) || displayDate < returnDateMap.get(lid)) {
           returnDateMap.set(lid, loan.end_date);
+          const borrower = loan.users?.display_name || loan.users?.username || null;
+          if (borrower) borrowerMap.set(lid, borrower);
         }
       }
     }
@@ -72,6 +75,7 @@ export async function GET(request) {
       storage: ["admin", "tech"].includes(user.role) ? laptop.storage : undefined,
       availability,
       return_date: returnDateMap.get(laptop.id) || null,
+      borrower_name: borrowerMap.get(laptop.id) || null,
       notify_me: notifiedIds.has(laptop.id),
     };
   });

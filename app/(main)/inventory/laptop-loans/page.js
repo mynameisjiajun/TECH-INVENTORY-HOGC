@@ -108,6 +108,13 @@ const LaptopCard = memo(function LaptopCard({ laptop, loanType, startDate, endDa
             {laptop.perm_loan_reason && <div style={{ color: "var(--text-muted)", marginTop: 2 }}>{laptop.perm_loan_reason}</div>}
           </div>
         )}
+
+        {/* Temp loan borrower */}
+        {isTempLoaned && laptop.borrower_name && (
+          <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: -8 }}>
+            Borrowed by <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{laptop.borrower_name}</span>
+          </div>
+        )}
       </div>
 
       {/* Footer action */}
@@ -316,47 +323,49 @@ export default function LaptopLoansPage() {
               </div>
 
               {/* Date pickers */}
-              <div className={`laptop-date-grid${loanType !== "temporary" ? " single-col" : ""}`}>
-                <div className="input-group" style={{ margin: 0 }}>
-                  <label style={{ fontSize: 12, marginBottom: 6, display: "block" }}>
-                    {loanType === "temporary" ? "Borrow Date *" : "Start Date *"}
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    min={today}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setStartDate(val);
-                      // Clear end date if it's now before the new start date
-                      if (endDate && val && endDate < val) setEndDate("");
-                    }}
-                    style={{ width: "100%" }}
-                  />
-                </div>
-                {loanType === "temporary" && (
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px", marginTop: 4 }}>
+                <div className={`laptop-date-grid${loanType !== "temporary" ? " single-col" : ""}`}>
                   <div className="input-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: 12, marginBottom: 6, display: "block" }}>Return Date *</label>
+                    <label style={{ fontSize: 12, marginBottom: 6, display: "block" }}>
+                      {loanType === "temporary" ? "Borrow Date *" : "Start Date *"}
+                    </label>
                     <input
                       type="date"
-                      value={endDate}
-                      min={startDate || today}
+                      value={startDate}
+                      min={today}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (startDate && val < startDate) return; // silently reject invalid range
-                        setEndDate(val);
+                        setStartDate(val);
+                        // Clear end date if it's now before the new start date
+                        if (endDate && val && endDate < val) setEndDate("");
                       }}
-                      style={{ width: "100%", borderColor: endDate && startDate && endDate < startDate ? "var(--error)" : undefined }}
+                      style={{ width: "100%" }}
                     />
                   </div>
+                  {loanType === "temporary" && (
+                    <div className="input-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: 12, marginBottom: 6, display: "block" }}>Return Date *</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        min={startDate || today}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (startDate && val < startDate) return; // silently reject invalid range
+                          setEndDate(val);
+                        }}
+                        style={{ width: "100%", borderColor: endDate && startDate && endDate < startDate ? "var(--error)" : undefined }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {!startDate && (
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10, marginBottom: 0 }}>
+                    📅 Select a date to see availability and enable borrowing
+                  </p>
                 )}
               </div>
-
-              {!startDate && (
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10, marginBottom: 0 }}>
-                  📅 Select a date to see availability and enable borrowing
-                </p>
-              )}
             </div>
 
             {/* Main content: tiers + optional returning soon sidebar */}

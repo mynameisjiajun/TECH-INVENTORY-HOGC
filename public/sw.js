@@ -1,10 +1,12 @@
-const CACHE_NAME = "tech-inventory-v20";
+const CACHE_NAME = "tech-inventory-v21";
 const API_CACHE = "tech-inventory-api-v3";
 
 // App shell — pages & assets to pre-cache on install
 const APP_SHELL = [
   "/",
   "/inventory",
+  "/loans",
+  "/dashboard",
   "/manifest.json",
   "/offline",
   "/icons/icon-192.png",
