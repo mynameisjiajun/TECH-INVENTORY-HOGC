@@ -1229,7 +1229,33 @@ export default function DashboardPage() {
               Calendar — {monthNames[calendarMonth.getMonth()]}{" "}
               {calendarMonth.getFullYear()}
             </h3>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 2, gap: 2 }}>
+                {[
+                  { value: "my", label: "My Loans" },
+                  { value: "all", label: "All" },
+                  { value: "tech", label: "📦 Tech" },
+                  { value: "laptop", label: "💻 Laptop" },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setCalendarTypeFilter(value)}
+                    style={{
+                      padding: "4px 12px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: "none",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      background: calendarTypeFilter === value ? "var(--accent)" : "transparent",
+                      color: calendarTypeFilter === value ? "white" : "var(--text-secondary)",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <button className="btn btn-sm btn-outline" onClick={prevMonth}>
                 <RiArrowLeftLine />
               </button>

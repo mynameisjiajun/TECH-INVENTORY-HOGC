@@ -2,6 +2,7 @@
 import { useCart } from "@/lib/context/CartContext";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   RiCloseLine,
   RiAddLine,
@@ -16,6 +17,7 @@ import {
 
 export default function CartPanel() {
   const { user } = useAuth();
+  const router = useRouter();
   const canPermanent = ["admin", "tech"].includes(user?.role);
   const {
     items,
@@ -117,6 +119,7 @@ export default function CartPanel() {
           }),
         });
         const data = await res.json();
+        if (res.status === 401) { setError("Session expired — please refresh the page and try again."); setLoading(false); return; }
         if (!res.ok) errors.push(data.error || "Laptop loan modification failed");
         else results.push("laptop");
       } else {
@@ -140,6 +143,7 @@ export default function CartPanel() {
             }),
           });
           const data = await res.json();
+          if (res.status === 401) { setError("Session expired — please refresh the page and try again."); setLoading(false); return; }
           if (!res.ok) errors.push(data.error || "Tech loan failed");
           else results.push("tech");
         }
@@ -159,6 +163,7 @@ export default function CartPanel() {
             body: JSON.stringify({ loan_groups, purpose: formData.purpose, department: formData.department }),
           });
           const data = await res.json();
+          if (res.status === 401) { setError("Session expired — please refresh the page and try again."); setLoading(false); return; }
           if (!res.ok) errors.push(data.error || "Laptop loan failed");
           else results.push("laptop");
         }
@@ -213,7 +218,7 @@ export default function CartPanel() {
               <button
                 className="btn btn-primary"
                 style={{ width: "100%" }}
-                onClick={() => { setSubmitted(false); setIsOpen(false); window.location.href = "/loans"; }}
+                onClick={() => { setSubmitted(false); setIsOpen(false); router.push("/loans"); }}
               >
                 View My Loans →
               </button>
@@ -243,14 +248,14 @@ export default function CartPanel() {
                     <button
                       className="btn btn-outline"
                       style={{ width: "100%", justifyContent: "center", gap: 8 }}
-                      onClick={() => { setIsOpen(false); window.location.href = "/inventory/tech-inventory"; }}
+                      onClick={() => { setIsOpen(false); router.push("/inventory/tech-inventory"); }}
                     >
                       📦 Browse Tech Inventory →
                     </button>
                     <button
                       className="btn btn-outline"
                       style={{ width: "100%", justifyContent: "center", gap: 8 }}
-                      onClick={() => { setIsOpen(false); window.location.href = "/inventory/laptop-loans"; }}
+                      onClick={() => { setIsOpen(false); router.push("/inventory/laptop-loans"); }}
                     >
                       💻 Browse Laptop Loans →
                     </button>

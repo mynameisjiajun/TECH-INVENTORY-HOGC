@@ -16,7 +16,7 @@ import {
   RiCheckLine,
 } from "react-icons/ri";
 
-const LaptopCard = memo(function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, isAdmin, onNotify, isInCart }) {
+const LaptopCard = memo(function LaptopCard({ laptop, loanType, startDate, endDate, onBorrow, canSeeSpecs, onNotify, isInCart }) {
   const isAvailable = laptop.availability === "available";
   const isBlocked = laptop.availability === "blocked";
   const isPermLoaned = laptop.availability === "perm_loaned";
@@ -81,7 +81,7 @@ const LaptopCard = memo(function LaptopCard({ laptop, loanType, startDate, endDa
                 {laptop.screen_size}{laptop.screen_size && laptop.cpu ? " · " : ""}{laptop.cpu}
               </div>
             )}
-            {(isAdmin || user?.role === "tech") && (laptop.ram || laptop.storage) && (
+            {canSeeSpecs && (laptop.ram || laptop.storage) && (
               <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
                 {laptop.ram}{laptop.ram && laptop.storage ? " · " : ""}{laptop.storage}
               </div>
@@ -173,30 +173,30 @@ export default function LaptopLoansPage() {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const fetchLaptops = useCallback((signal) => {
+  const fetchLaptops = useCallback(async (signal) => {
     if (!user) return;
     setFetching(true);
     setError("");
-    const params = new URLSearchParams();
-    if (startDate) params.set("start_date", startDate);
-    if (endDate && loanType === "temporary") params.set("end_date", endDate);
-    else if (startDate && loanType === "permanent") params.set("end_date", "9999-12-31");
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.set("start_date", startDate);
+      if (endDate && loanType === "temporary") params.set("end_date", endDate);
+      else if (startDate && loanType === "permanent") params.set("end_date", "9999-12-31");
 
-    fetch(`/api/laptops?${params}`, { cache: "no-store", signal })
-      .then((res) => {
-        if (!res.ok) return res.json().catch(() => ({})).then((d) => { throw new Error(d.error || "Failed to load laptops"); });
-        return res.json();
-      })
-      .then((data) => {
-        setTiers(data.tiers || []);
-        setReturningSoon(data.returningSoon || []);
-        setFetching(false);
-      })
-      .catch((err) => {
-        if (err.name === "AbortError") return; // stale request cancelled — ignore
-        setError(err.message || "Network error — could not load laptops");
-        setFetching(false);
-      });
+      const res = await fetch(`/api/laptops?${params}`, { cache: "no-store", signal });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to load laptops");
+      }
+      const data = await res.json();
+      setTiers(data.tiers || []);
+      setReturningSoon(data.returningSoon || []);
+      setFetching(false);
+    } catch (err) {
+      if (err.name === "AbortError") return; // stale request cancelled — keep spinner up
+      setError(err.message || "Network error — could not load laptops");
+      setFetching(false);
+    }
   }, [user, startDate, endDate, loanType]);
 
   useEffect(() => {
@@ -269,7 +269,7 @@ export default function LaptopLoansPage() {
         {/* Tabs */}
         <div className="tabs" style={{ marginBottom: 20 }}>
           <button className={`tab ${tab === "available" ? "active" : ""}`} onClick={() => setTab("available")}>
-            Available & Temp
+            Available
           </button>
           <button className={`tab ${tab === "perm" ? "active" : ""}`} onClick={() => setTab("perm")}>
             Perm Loans
@@ -388,7 +388,7 @@ export default function LaptopLoansPage() {
                               startDate={startDate}
                               endDate={endDate}
                               onBorrow={handleBorrow}
-                              isAdmin={isAdmin}
+                              canSeeSpecs={canPermanent}
                               onNotify={handleNotify}
                               isInCart={cartLaptopIds.has(laptop.id)}
                             />
@@ -451,12 +451,6 @@ export default function LaptopLoansPage() {
               )}
             </div>
 
-            {/* On mobile: Returning Soon below grid */}
-            {showReturningSidebar && (
-              <div style={{ marginTop: 24, display: "none" }} className="returning-soon-mobile">
-                {/* Duplicated below for mobile — handled via CSS */}
-              </div>
-            )}
           </>
         )}
 

@@ -114,12 +114,12 @@ export default function Navbar() {
     const fetchPending = async () => {
       try {
         const [r1, r2] = await Promise.all([
-          fetch("/api/loans?view=all&status=pending"),
-          fetch("/api/laptop-loans?view=all&status=pending"),
+          fetch("/api/loans?count_only=true&status=pending"),
+          fetch("/api/laptop-loans?count_only=true&status=pending"),
         ]);
-        const d1 = r1.ok ? await r1.json() : { loans: [] };
-        const d2 = r2.ok ? await r2.json() : { loans: [] };
-        setAdminPendingCount((d1.loans?.length || 0) + (d2.loans?.length || 0));
+        const d1 = r1.ok ? await r1.json() : { count: 0 };
+        const d2 = r2.ok ? await r2.json() : { count: 0 };
+        setAdminPendingCount((d1.count || 0) + (d2.count || 0));
       } catch { /* silent */ }
     };
     fetchPending();
@@ -151,6 +151,17 @@ export default function Navbar() {
     router.push("/login");
   };
 
+  const markOneRead = async (id) => {
+    // Optimistically update locally
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    setUnreadCount((c) => Math.max(0, c - 1));
+    fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read", notification_id: id }),
+    }).catch(() => {});
+  };
+
   const markAllRead = async () => {
     try {
       const res = await fetch("/api/notifications", {
@@ -159,7 +170,7 @@ export default function Navbar() {
         body: JSON.stringify({ action: "read_all" }),
       });
       if (res.ok) {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: 1 })));
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
         setUnreadCount(0);
       }
     } catch (err) {
@@ -230,11 +241,7 @@ export default function Navbar() {
               <button
                 aria-label="Notifications"
                 className="notification-btn"
-                onClick={() => {
-                  const opening = !showNotifs;
-                  setShowNotifs(opening);
-                  if (opening && unreadCount > 0) markAllRead();
-                }}
+                onClick={() => setShowNotifs((v) => !v)}
               >
                 <RiNotification3Line />
                 {unreadCount > 0 && (
@@ -283,6 +290,7 @@ export default function Navbar() {
                         key={n.id}
                         className={`notification-item ${n.read ? "" : "unread"}`}
                         onClick={() => {
+                          if (!n.read) markOneRead(n.id);
                           if (n.link) router.push(n.link);
                           setShowNotifs(false);
                         }}

@@ -19,6 +19,15 @@ export async function GET(request) {
   const search = searchParams.get("search") || "";
   const dateFrom = searchParams.get("date_from") || "";
   const dateTo = searchParams.get("date_to") || "";
+  const countOnly = searchParams.get("count_only") === "true";
+
+  // Lightweight count path — admin only, no payload
+  if (countOnly && user.role === "admin") {
+    let cq = supabase.from("loan_requests").select("id", { count: "exact", head: true });
+    if (status) cq = cq.eq("status", status);
+    const { count } = await cq;
+    return NextResponse.json({ count: count || 0 });
+  }
 
   // Build query for loan_requests
   let query = supabase

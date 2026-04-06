@@ -63,11 +63,24 @@ export default function LoansPage() {
         ? `/api/laptop-loans/${returnModalLoan.id}/return`
         : `/api/loans/${returnModalLoan.id}/return`;
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: returnPhoto, remarks: returnRemarks.trim() || null }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      let res;
+      try {
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: returnPhoto, remarks: returnRemarks.trim() || null }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (res.status === 401) {
+        toast.error('Session expired — please refresh the page');
+        setReturnLoading(false);
+        return;
+      }
       const data = await res.json();
       if (res.ok) {
         toast.success(data.message || 'Return submitted');
@@ -80,10 +93,14 @@ export default function LoansPage() {
         setReturnPhoto(null);
         setReturnRemarks('');
       } else {
-        toast.error(data.error);
+        toast.error(data.error || 'Failed to submit return');
       }
-    } catch {
-      toast.error('Network error — failed to submit return');
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        toast.error('Request timed out — please check your connection and try again');
+      } else {
+        toast.error('Network error — failed to submit return');
+      }
     } finally {
       setReturnLoading(false);
     }

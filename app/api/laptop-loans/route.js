@@ -10,6 +10,14 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const view = searchParams.get("view") || "my";
   const status = searchParams.get("status") || "";
+  const countOnly = searchParams.get("count_only") === "true";
+
+  if (countOnly && user.role === "admin") {
+    let cq = supabase.from("laptop_loan_requests").select("id", { count: "exact", head: true });
+    if (status) cq = cq.eq("status", status);
+    const { count } = await cq;
+    return NextResponse.json({ count: count || 0 });
+  }
 
   let query = supabase
     .from("laptop_loan_requests")
