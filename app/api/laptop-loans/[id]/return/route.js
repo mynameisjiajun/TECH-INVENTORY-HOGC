@@ -1,17 +1,22 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { sendLaptopAvailableEmail } from "@/lib/services/email";
 import { NextResponse } from "next/server";
 
 export async function POST(request, { params }) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
   const { imageBase64, remarks } = await request.json();
 
   if (!imageBase64) {
-    return NextResponse.json({ error: "Photo is required to return items" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Photo is required to return items" },
+      { status: 400 },
+    );
   }
 
   const { data: loan } = await supabase
@@ -20,12 +25,16 @@ export async function POST(request, { params }) {
     .eq("id", id)
     .single();
 
-  if (!loan) return NextResponse.json({ error: "Loan not found" }, { status: 404 });
+  if (!loan)
+    return NextResponse.json({ error: "Loan not found" }, { status: 404 });
   if (Number(loan.user_id) !== Number(user.id) && user.role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
   if (loan.status !== "approved") {
-    return NextResponse.json({ error: "Only approved loans can be returned" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Only approved loans can be returned" },
+      { status: 400 },
+    );
   }
 
   // Upload photo
@@ -37,9 +46,12 @@ export async function POST(request, { params }) {
     .from("return-photos")
     .upload(fileName, buffer, { contentType: "image/jpeg", upsert: false });
 
-  if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
+  if (uploadError)
+    throw new Error(`Photo upload failed: ${uploadError.message}`);
 
-  const { data: urlData } = supabase.storage.from("return-photos").getPublicUrl(fileName);
+  const { data: urlData } = supabase.storage
+    .from("return-photos")
+    .getPublicUrl(fileName);
   const photoUrl = urlData.publicUrl;
 
   await supabase
@@ -58,16 +70,56 @@ export async function POST(request, { params }) {
     await supabase.from("notifications").insert(
       notifSubscribers.map((n) => ({
         user_id: n.user_id,
-        message: `Laptop "${n.laptops?.name}" is now available to borrow!`,
+        message: `💻 Laptop "${n.laptops?.name}" is now available to borrow!`,
         link: "/inventory/laptop-loans",
-      }))
+      })),
     );
-    await supabase.from("laptop_notifications").delete().in("laptop_id", laptopIds);
+
+    // Fetch subscriber user details for email/telegram
+    const subscriberIds = [...new Set(notifSubscribers.map((n) => n.user_id))];
+    const { data: subUsers } = await supabase
+      .from("users")
+      .select("id, email, display_name, mute_emails, mute_telegram")
+      .in("id", subscriberIds);
+    const subUserMap = new Map((subUsers || []).map((u) => [u.id, u]));
+
+    // Send Telegram + email per subscriber
+    for (const n of notifSubscribers) {
+      const subUser = subUserMap.get(n.user_id);
+      if (!subUser) continue;
+      const laptopName = n.laptops?.name || "Laptop";
+
+      if (!subUser.mute_telegram) {
+        sendTelegramMessage(
+          n.user_id,
+          `💻 <b>Laptop Available!</b>\n<b>${laptopName}</b> is now available to borrow.\n\nHead to the app to reserve it!`,
+        ).catch(() => {});
+      }
+      if (subUser.email && !subUser.mute_emails) {
+        sendLaptopAvailableEmail({
+          to: subUser.email,
+          displayName: subUser.display_name,
+          laptopName,
+        }).catch(() => {});
+      }
+    }
+
+    // Clean up subscriptions for returned laptops
+    await supabase
+      .from("laptop_notifications")
+      .delete()
+      .in("laptop_id", laptopIds);
   }
 
   // Notify admins
-  const { data: admins } = await supabase.from("users").select("id, mute_telegram").eq("role", "admin");
-  const laptopNames = loan.laptop_loan_items.map((i) => i.laptops?.name).filter(Boolean).join(", ");
+  const { data: admins } = await supabase
+    .from("users")
+    .select("id, mute_telegram")
+    .eq("role", "admin");
+  const laptopNames = loan.laptop_loan_items
+    .map((i) => i.laptops?.name)
+    .filter(Boolean)
+    .join(", ");
   const remarksLine = remarks ? `\nRemarks: ${remarks}` : "";
 
   if (admins?.length) {
@@ -76,17 +128,20 @@ export async function POST(request, { params }) {
         user_id: a.id,
         message: `Laptop loan #${id} [${laptopNames}] has been returned.${remarksLine}`,
         link: photoUrl,
-      }))
+      })),
     );
     for (const admin of admins) {
       if (!admin.mute_telegram) {
         sendTelegramMessage(
           admin.id,
-          `📥 <b>Laptop Returned</b>\nLoan #${id} [${laptopNames}] returned.${remarks ? `\n⚠️ ${remarks}` : ""}\n<a href="${photoUrl}">View Photo</a>`
+          `📥 <b>Laptop Returned</b>\nLoan #${id} [${laptopNames}] returned.${remarks ? `\n⚠️ ${remarks}` : ""}\n<a href="${photoUrl}">View Photo</a>`,
         ).catch(() => {});
       }
     }
   }
 
-  return NextResponse.json({ message: "Laptop returned successfully!", photo_url: photoUrl });
+  return NextResponse.json({
+    message: "Laptop returned successfully!",
+    photo_url: photoUrl,
+  });
 }

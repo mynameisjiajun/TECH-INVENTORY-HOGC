@@ -1,5 +1,9 @@
 import { supabase } from "@/lib/db/supabase";
-import { sendOverdueEmail, sendDueSoonEmail } from "@/lib/services/email";
+import {
+  sendOverdueEmail,
+  sendDueSoonEmail,
+  sendLaptopAvailableEmail,
+} from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
@@ -21,14 +25,21 @@ export async function GET(request) {
   // Overdue alerts are always sent regardless of time.
   const sgt = new Date(now.getTime() + 8 * 60 * 60 * 1000); // UTC+8
   const sgtDay = sgt.getUTCDay(); // 0=Sun, 1-5=Mon-Fri, 6=Sat
-  const dayKey = sgtDay === 0 ? "reminder_sunday" : sgtDay === 6 ? "reminder_saturday" : "reminder_weekday";
+  const dayKey =
+    sgtDay === 0
+      ? "reminder_sunday"
+      : sgtDay === 6
+        ? "reminder_saturday"
+        : "reminder_weekday";
 
   const { data: reminderSettings } = await supabase
     .from("app_settings")
     .select("key, value")
     .in("key", ["reminder_weekday", "reminder_saturday", "reminder_sunday"]);
 
-  const settingsMap = Object.fromEntries((reminderSettings || []).map((s) => [s.key, s.value]));
+  const settingsMap = Object.fromEntries(
+    (reminderSettings || []).map((s) => [s.key, s.value]),
+  );
   const configuredTime = settingsMap[dayKey] || null;
 
   let sendDueSoon = true;
@@ -42,10 +53,16 @@ export async function GET(request) {
     }
   }
 
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    .toLocaleDateString("en-CA");
-  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-    .toLocaleDateString("en-CA");
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).toLocaleDateString("en-CA");
+  const tomorrow = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+  ).toLocaleDateString("en-CA");
 
   // Always fetch overdue; only fetch due-soon if within the time window
   const [
@@ -54,17 +71,35 @@ export async function GET(request) {
     { data: overdueLaptopLoans },
     { data: dueSoonLaptopLoans },
   ] = await Promise.all([
-    supabase.from("loan_requests").select("id, end_date, user_id, loan_type")
-      .eq("status", "approved").eq("loan_type", "temporary").not("end_date", "is", null).lt("end_date", today),
+    supabase
+      .from("loan_requests")
+      .select("id, end_date, user_id, loan_type")
+      .eq("status", "approved")
+      .eq("loan_type", "temporary")
+      .not("end_date", "is", null)
+      .lt("end_date", today),
     sendDueSoon
-      ? supabase.from("loan_requests").select("id, end_date, user_id, loan_type")
-          .eq("status", "approved").eq("loan_type", "temporary").eq("end_date", tomorrow)
+      ? supabase
+          .from("loan_requests")
+          .select("id, end_date, user_id, loan_type")
+          .eq("status", "approved")
+          .eq("loan_type", "temporary")
+          .eq("end_date", tomorrow)
       : Promise.resolve({ data: [] }),
-    supabase.from("laptop_loan_requests").select("id, end_date, user_id, loan_type")
-      .eq("status", "approved").eq("loan_type", "temporary").not("end_date", "is", null).lt("end_date", today),
+    supabase
+      .from("laptop_loan_requests")
+      .select("id, end_date, user_id, loan_type")
+      .eq("status", "approved")
+      .eq("loan_type", "temporary")
+      .not("end_date", "is", null)
+      .lt("end_date", today),
     sendDueSoon
-      ? supabase.from("laptop_loan_requests").select("id, end_date, user_id, loan_type")
-          .eq("status", "approved").eq("loan_type", "temporary").eq("end_date", tomorrow)
+      ? supabase
+          .from("laptop_loan_requests")
+          .select("id, end_date, user_id, loan_type")
+          .eq("status", "approved")
+          .eq("loan_type", "temporary")
+          .eq("end_date", tomorrow)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -78,37 +113,65 @@ export async function GET(request) {
   ];
 
   if (allTechLoanIds.length === 0 && allLaptopLoanIds.length === 0) {
-    return NextResponse.json({ overdueNotified: 0, dueSoonNotified: 0, dueSoonSkipped: !sendDueSoon });
+    return NextResponse.json({
+      overdueNotified: 0,
+      dueSoonNotified: 0,
+      dueSoonSkipped: !sendDueSoon,
+    });
   }
 
   // Batch fetch items and users
-  const allUserIds = [...new Set([
-    ...(overdueLoans || []).map((l) => l.user_id),
-    ...(dueSoonLoans || []).map((l) => l.user_id),
-    ...(overdueLaptopLoans || []).map((l) => l.user_id),
-    ...(dueSoonLaptopLoans || []).map((l) => l.user_id),
-  ])];
+  const allUserIds = [
+    ...new Set([
+      ...(overdueLoans || []).map((l) => l.user_id),
+      ...(dueSoonLoans || []).map((l) => l.user_id),
+      ...(overdueLaptopLoans || []).map((l) => l.user_id),
+      ...(dueSoonLaptopLoans || []).map((l) => l.user_id),
+    ]),
+  ];
 
-  const [{ data: allItems }, { data: laptopItems }, { data: allUsers }, { data: todayNotifs }] = await Promise.all([
+  const [
+    { data: allItems },
+    { data: laptopItems },
+    { data: allUsers },
+    { data: todayNotifs },
+  ] = await Promise.all([
     allTechLoanIds.length > 0
-      ? supabase.from("loan_items").select("loan_request_id, item_name, quantity").in("loan_request_id", allTechLoanIds)
+      ? supabase
+          .from("loan_items")
+          .select("loan_request_id, item_name, quantity")
+          .in("loan_request_id", allTechLoanIds)
       : Promise.resolve({ data: [] }),
     allLaptopLoanIds.length > 0
-      ? supabase.from("laptop_loan_items").select("loan_request_id, laptops(name)").in("loan_request_id", allLaptopLoanIds)
+      ? supabase
+          .from("laptop_loan_items")
+          .select("loan_request_id, laptops(name)")
+          .in("loan_request_id", allLaptopLoanIds)
       : Promise.resolve({ data: [] }),
-    supabase.from("users").select("id, email, display_name, mute_emails, mute_telegram").in("id", allUserIds),
-    supabase.from("notifications").select("user_id, message").in("user_id", allUserIds).gte("created_at", today),
+    supabase
+      .from("users")
+      .select("id, email, display_name, mute_emails, mute_telegram")
+      .in("id", allUserIds),
+    supabase
+      .from("notifications")
+      .select("user_id, message")
+      .in("user_id", allUserIds)
+      .gte("created_at", today),
   ]);
 
   const itemsByLoan = new Map();
   for (const item of allItems || []) {
-    if (!itemsByLoan.has(item.loan_request_id)) itemsByLoan.set(item.loan_request_id, []);
+    if (!itemsByLoan.has(item.loan_request_id))
+      itemsByLoan.set(item.loan_request_id, []);
     itemsByLoan.get(item.loan_request_id).push(item);
   }
   const laptopsByLoan = new Map();
   for (const item of laptopItems || []) {
-    if (!laptopsByLoan.has(item.loan_request_id)) laptopsByLoan.set(item.loan_request_id, []);
-    laptopsByLoan.get(item.loan_request_id).push(item.laptops?.name || "Laptop");
+    if (!laptopsByLoan.has(item.loan_request_id))
+      laptopsByLoan.set(item.loan_request_id, []);
+    laptopsByLoan
+      .get(item.loan_request_id)
+      .push(item.laptops?.name || "Laptop");
   }
 
   const userMap = new Map((allUsers || []).map((u) => [u.id, u]));
@@ -135,7 +198,9 @@ export async function GET(request) {
     if (alreadyNotifiedOverdue.has(loan.id)) continue;
     const loanUser = userMap.get(loan.user_id);
     const loanItems = itemsByLoan.get(loan.id) || [];
-    const itemList = loanItems.map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
+    const itemList = loanItems
+      .map((i) => `${i.item_name} × ${i.quantity}`)
+      .join(", ");
 
     notifInserts.push({
       user_id: loan.user_id,
@@ -144,10 +209,26 @@ export async function GET(request) {
     });
 
     if (loanUser?.email && !loanUser?.mute_emails) {
-      emailTasks.push(sendOverdueEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan.id, items: loanItems.map((i) => ({ item: i.item_name, quantity: i.quantity })), endDate: loan.end_date }).catch(() => {}));
+      emailTasks.push(
+        sendOverdueEmail({
+          to: loanUser.email,
+          displayName: loanUser.display_name,
+          loanId: loan.id,
+          items: loanItems.map((i) => ({
+            item: i.item_name,
+            quantity: i.quantity,
+          })),
+          endDate: loan.end_date,
+        }).catch(() => {}),
+      );
     }
     if (!loanUser?.mute_telegram) {
-      telegramTasks.push(sendTelegramMessage(loan.user_id, `🚨 <b>Loan Overdue</b>\nYour loan #${loan.id} is OVERDUE!\n\nItems: ${itemList}\n\nPlease return items or contact an admin.`).catch(() => {}));
+      telegramTasks.push(
+        sendTelegramMessage(
+          loan.user_id,
+          `🚨 <b>Loan Overdue</b>\nYour loan #${loan.id} is OVERDUE!\n\nItems: ${itemList}\n\nPlease return items or contact an admin.`,
+        ).catch(() => {}),
+      );
     }
     overdueNotified++;
   }
@@ -156,7 +237,8 @@ export async function GET(request) {
   for (const loan of overdueLaptopLoans || []) {
     if (alreadyNotifiedOverdue.has(loan.id)) continue;
     const loanUser = userMap.get(loan.user_id);
-    const laptopList = (laptopsByLoan.get(loan.id) || []).join(", ") || "Laptops";
+    const laptopList =
+      (laptopsByLoan.get(loan.id) || []).join(", ") || "Laptops";
 
     notifInserts.push({
       user_id: loan.user_id,
@@ -165,10 +247,26 @@ export async function GET(request) {
     });
 
     if (loanUser?.email && !loanUser?.mute_emails) {
-      emailTasks.push(sendOverdueEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan.id, items: (laptopsByLoan.get(loan.id) || []).map((n) => ({ item: n, quantity: 1 })), endDate: loan.end_date }).catch(() => {}));
+      emailTasks.push(
+        sendOverdueEmail({
+          to: loanUser.email,
+          displayName: loanUser.display_name,
+          loanId: loan.id,
+          items: (laptopsByLoan.get(loan.id) || []).map((n) => ({
+            item: n,
+            quantity: 1,
+          })),
+          endDate: loan.end_date,
+        }).catch(() => {}),
+      );
     }
     if (!loanUser?.mute_telegram) {
-      telegramTasks.push(sendTelegramMessage(loan.user_id, `🚨 <b>Laptop Loan Overdue</b>\nYour laptop loan #${loan.id} is OVERDUE!\n\nLaptops: ${laptopList}\n\nPlease return them or contact an admin.`).catch(() => {}));
+      telegramTasks.push(
+        sendTelegramMessage(
+          loan.user_id,
+          `🚨 <b>Laptop Loan Overdue</b>\nYour laptop loan #${loan.id} is OVERDUE!\n\nLaptops: ${laptopList}\n\nPlease return them or contact an admin.`,
+        ).catch(() => {}),
+      );
     }
     overdueNotified++;
   }
@@ -178,7 +276,9 @@ export async function GET(request) {
     if (alreadyNotifiedDueSoon.has(loan.id)) continue;
     const loanUser = userMap.get(loan.user_id);
     const loanItems = itemsByLoan.get(loan.id) || [];
-    const itemList = loanItems.map((i) => `${i.item_name} × ${i.quantity}`).join(", ");
+    const itemList = loanItems
+      .map((i) => `${i.item_name} × ${i.quantity}`)
+      .join(", ");
 
     notifInserts.push({
       user_id: loan.user_id,
@@ -187,10 +287,26 @@ export async function GET(request) {
     });
 
     if (loanUser?.email && !loanUser?.mute_emails) {
-      emailTasks.push(sendDueSoonEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan.id, items: loanItems.map((i) => ({ item: i.item_name, quantity: i.quantity })), endDate: loan.end_date }).catch(() => {}));
+      emailTasks.push(
+        sendDueSoonEmail({
+          to: loanUser.email,
+          displayName: loanUser.display_name,
+          loanId: loan.id,
+          items: loanItems.map((i) => ({
+            item: i.item_name,
+            quantity: i.quantity,
+          })),
+          endDate: loan.end_date,
+        }).catch(() => {}),
+      );
     }
     if (!loanUser?.mute_telegram) {
-      telegramTasks.push(sendTelegramMessage(loan.user_id, `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow!\n\nItems: ${itemList}\n\nPlease prepare to return items.`).catch(() => {}));
+      telegramTasks.push(
+        sendTelegramMessage(
+          loan.user_id,
+          `⏰ <b>Due Tomorrow</b>\nYour loan #${loan.id} is due tomorrow!\n\nItems: ${itemList}\n\nPlease prepare to return items.`,
+        ).catch(() => {}),
+      );
     }
     dueSoonNotified++;
   }
@@ -199,7 +315,8 @@ export async function GET(request) {
   for (const loan of dueSoonLaptopLoans || []) {
     if (alreadyNotifiedDueSoon.has(loan.id)) continue;
     const loanUser = userMap.get(loan.user_id);
-    const laptopList = (laptopsByLoan.get(loan.id) || []).join(", ") || "Laptops";
+    const laptopList =
+      (laptopsByLoan.get(loan.id) || []).join(", ") || "Laptops";
 
     notifInserts.push({
       user_id: loan.user_id,
@@ -208,20 +325,129 @@ export async function GET(request) {
     });
 
     if (loanUser?.email && !loanUser?.mute_emails) {
-      emailTasks.push(sendDueSoonEmail({ to: loanUser.email, displayName: loanUser.display_name, loanId: loan.id, items: (laptopsByLoan.get(loan.id) || []).map((n) => ({ item: n, quantity: 1 })), endDate: loan.end_date }).catch(() => {}));
+      emailTasks.push(
+        sendDueSoonEmail({
+          to: loanUser.email,
+          displayName: loanUser.display_name,
+          loanId: loan.id,
+          items: (laptopsByLoan.get(loan.id) || []).map((n) => ({
+            item: n,
+            quantity: 1,
+          })),
+          endDate: loan.end_date,
+        }).catch(() => {}),
+      );
     }
     if (!loanUser?.mute_telegram) {
-      telegramTasks.push(sendTelegramMessage(loan.user_id, `⏰ <b>Laptop Due Tomorrow</b>\nYour laptop loan #${loan.id} is due tomorrow!\n\nLaptops: ${laptopList}\n\nPlease prepare to return them.`).catch(() => {}));
+      telegramTasks.push(
+        sendTelegramMessage(
+          loan.user_id,
+          `⏰ <b>Laptop Due Tomorrow</b>\nYour laptop loan #${loan.id} is due tomorrow!\n\nLaptops: ${laptopList}\n\nPlease prepare to return them.`,
+        ).catch(() => {}),
+      );
     }
     dueSoonNotified++;
   }
 
   // Batch insert all notifications and fire emails + telegrams in parallel
   await Promise.all([
-    notifInserts.length > 0 ? supabase.from("notifications").insert(notifInserts) : Promise.resolve(),
+    notifInserts.length > 0
+      ? supabase.from("notifications").insert(notifInserts)
+      : Promise.resolve(),
     ...emailTasks,
     ...telegramTasks,
   ]);
 
-  return NextResponse.json({ overdueNotified, dueSoonNotified, dueSoonSkipped: !sendDueSoon });
+  // ── Laptop availability notifications (safety net) ────────────────────
+  // Check for laptop_notifications subscriptions where the laptop is now
+  // available (no active/pending loan blocking it). This catches cases where
+  // the return handler's notification didn't fire.
+  let laptopAvailNotified = 0;
+
+  const { data: pendingSubs } = await supabase
+    .from("laptop_notifications")
+    .select("id, user_id, laptop_id, laptops(name, is_perm_loaned)");
+
+  if (pendingSubs?.length) {
+    const { data: activeLaptopLoans } = await supabase
+      .from("laptop_loan_requests")
+      .select("laptop_loan_items(laptop_id)")
+      .in("status", ["approved", "pending"]);
+
+    const busyLaptopIds = new Set();
+    for (const loan of activeLaptopLoans || []) {
+      for (const item of loan.laptop_loan_items || []) {
+        busyLaptopIds.add(item.laptop_id);
+      }
+    }
+
+    const availableSubs = pendingSubs.filter(
+      (s) => !busyLaptopIds.has(s.laptop_id) && !s.laptops?.is_perm_loaned,
+    );
+
+    if (availableSubs.length) {
+      const subUserIds = [...new Set(availableSubs.map((s) => s.user_id))];
+      const { data: subUsers } = await supabase
+        .from("users")
+        .select("id, email, display_name, mute_emails, mute_telegram")
+        .in("id", subUserIds);
+      const subUserMap = new Map((subUsers || []).map((u) => [u.id, u]));
+
+      const availNotifInserts = [];
+      const availEmailTasks = [];
+      const availTelegramTasks = [];
+
+      for (const sub of availableSubs) {
+        const subUser = subUserMap.get(sub.user_id);
+        if (!subUser) continue;
+        const laptopName = sub.laptops?.name || "Laptop";
+
+        availNotifInserts.push({
+          user_id: sub.user_id,
+          message: `💻 Laptop "${laptopName}" is now available to borrow!`,
+          link: "/inventory/laptop-loans",
+        });
+
+        if (!subUser.mute_telegram) {
+          availTelegramTasks.push(
+            sendTelegramMessage(
+              sub.user_id,
+              `💻 <b>Laptop Available!</b>\n<b>${laptopName}</b> is now available to borrow.\n\nHead to the app to reserve it!`,
+            ).catch(() => {}),
+          );
+        }
+        if (subUser.email && !subUser.mute_emails) {
+          availEmailTasks.push(
+            sendLaptopAvailableEmail({
+              to: subUser.email,
+              displayName: subUser.display_name,
+              laptopName,
+            }).catch(() => {}),
+          );
+        }
+        laptopAvailNotified++;
+      }
+
+      await Promise.all([
+        availNotifInserts.length > 0
+          ? supabase.from("notifications").insert(availNotifInserts)
+          : Promise.resolve(),
+        ...availEmailTasks,
+        ...availTelegramTasks,
+      ]);
+
+      const fulfilledIds = availableSubs.map((s) => s.id);
+      await supabase
+        .from("laptop_notifications")
+        .delete()
+        .in("id", fulfilledIds);
+    }
+  }
+
+  return NextResponse.json({
+    overdueNotified,
+    dueSoonNotified,
+    dueSoonSkipped: !sendDueSoon,
+    laptopAvailNotified,
+  });
 }

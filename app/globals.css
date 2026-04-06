@@ -2347,7 +2347,7 @@ body.rickroll-lock {
     border-left: none;
     border-right: none;
     border-top: none;
-    padding: 12px 14px;
+    padding: 8px 10px;
     background: var(--bg-secondary);
     overflow: hidden;
     box-shadow:
@@ -2369,7 +2369,7 @@ body.rickroll-lock {
 
   .laptop-date-grid {
     grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
+    gap: 4px;
   }
 
   .laptop-date-grid input[type="date"] {
@@ -2377,13 +2377,17 @@ body.rickroll-lock {
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    font-size: 13px;
-    padding: 8px 10px;
+    font-size: 12px;
+    padding: 6px 8px;
   }
 
   .laptop-loan-type-toggle button {
-    font-size: 12px !important;
-    padding: 8px 4px !important;
+    font-size: 11px !important;
+    padding: 7px 4px !important;
+  }
+
+  .laptop-loan-type-toggle {
+    margin-bottom: 8px;
   }
 
   .laptop-content-grid.with-sidebar {

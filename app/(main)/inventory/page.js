@@ -100,31 +100,31 @@ export default function InventoryLanding() {
       <style>{`
         @keyframes circuitPulse1 {
           0%, 100% { opacity: 0; }
-          15%, 35% { opacity: 1; }
+          15%, 35% { opacity: 0.5; }
         }
         @keyframes circuitPulse2 {
           0%, 100% { opacity: 0; }
-          40%, 60% { opacity: 1; }
+          40%, 60% { opacity: 0.5; }
         }
         @keyframes circuitPulse3 {
           0%, 100% { opacity: 0; }
-          65%, 85% { opacity: 1; }
+          65%, 85% { opacity: 0.5; }
         }
 
         @keyframes floatIcon {
-          0%   { transform: translate(0, 0) rotate(0deg); opacity: 0.07; }
-          25%  { transform: translate(12px, -18px) rotate(8deg); opacity: 0.12; }
-          50%  { transform: translate(-8px, -28px) rotate(-5deg); opacity: 0.07; }
-          75%  { transform: translate(16px, -10px) rotate(12deg); opacity: 0.1; }
-          100% { transform: translate(0, 0) rotate(0deg); opacity: 0.07; }
+          0%   { transform: translate(0, 0) rotate(0deg); opacity: 0.04; }
+          25%  { transform: translate(12px, -18px) rotate(8deg); opacity: 0.07; }
+          50%  { transform: translate(-8px, -28px) rotate(-5deg); opacity: 0.04; }
+          75%  { transform: translate(16px, -10px) rotate(12deg); opacity: 0.06; }
+          100% { transform: translate(0, 0) rotate(0deg); opacity: 0.04; }
         }
         @keyframes nodeGlow {
-          0%, 100% { box-shadow: 0 0 4px rgba(99,102,241,0.3); }
-          50%      { box-shadow: 0 0 12px rgba(99,102,241,0.7), 0 0 24px rgba(99,102,241,0.2); }
+          0%, 100% { box-shadow: 0 0 3px rgba(99,102,241,0.15); }
+          50%      { box-shadow: 0 0 6px rgba(99,102,241,0.35); }
         }
         .inv-bg-circuit-line {
           position: absolute;
-          background: rgba(99,102,241,0.06);
+          background: rgba(99,102,241,0.03);
         }
         .inv-bg-circuit-line.h {
           height: 1px;
@@ -138,11 +138,11 @@ export default function InventoryLanding() {
         }
         .inv-bg-node {
           position: absolute;
-          width: 6px;
-          height: 6px;
+          width: 4px;
+          height: 4px;
           border-radius: 50%;
-          background: rgba(99,102,241,0.25);
-          animation: nodeGlow 4s ease-in-out infinite;
+          background: rgba(99,102,241,0.12);
+          animation: nodeGlow 6s ease-in-out infinite;
         }
         .inv-bg-trace {
           position: absolute;
@@ -150,12 +150,12 @@ export default function InventoryLanding() {
           opacity: 0;
         }
         .inv-bg-trace.h {
-          height: 2px;
-          background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), rgba(16,185,129,0.3), transparent);
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(99,102,241,0.25), rgba(16,185,129,0.15), transparent);
         }
         .inv-bg-trace.v {
-          width: 2px;
-          background: linear-gradient(180deg, transparent, rgba(99,102,241,0.5), rgba(16,185,129,0.3), transparent);
+          width: 1px;
+          background: linear-gradient(180deg, transparent, rgba(99,102,241,0.25), rgba(16,185,129,0.15), transparent);
         }
         .inv-card {
           display: flex;
