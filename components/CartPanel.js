@@ -52,10 +52,16 @@ export default function CartPanel() {
   const laptopGroups = Object.values(
     laptopItems.reduce((acc, item) => {
       const key = `${item.start_date}__${item.end_date || ""}__${item.loan_type}`;
-      if (!acc[key]) acc[key] = { start_date: item.start_date, end_date: item.end_date, loan_type: item.loan_type, laptops: [] };
+      if (!acc[key])
+        acc[key] = {
+          start_date: item.start_date,
+          end_date: item.end_date,
+          loan_type: item.loan_type,
+          laptops: [],
+        };
       acc[key].laptops.push(item);
       return acc;
-    }, {})
+    }, {}),
   );
 
   useEffect(() => {
@@ -89,11 +95,11 @@ export default function CartPanel() {
       // Validate laptop dates before submitting
       if (laptopItems.length > 0) {
         const missingDates = laptopItems.filter(
-          (i) => !i.start_date || (i.loan_type === "temporary" && !i.end_date)
+          (i) => !i.start_date || (i.loan_type === "temporary" && !i.end_date),
         );
         if (missingDates.length > 0) {
           setError(
-            `Please set ${missingDates.length === 1 ? "dates for" : "dates for all"} ${missingDates.map((l) => l.name).join(", ")} before submitting.`
+            `Please set ${missingDates.length === 1 ? "dates for" : "dates for all"} ${missingDates.map((l) => l.name).join(", ")} before submitting.`,
           );
           setLoading(false);
           return;
@@ -119,14 +125,21 @@ export default function CartPanel() {
           }),
         });
         const data = await res.json();
-        if (res.status === 401) { setError("Session expired — please refresh the page and try again."); setLoading(false); return; }
-        if (!res.ok) errors.push(data.error || "Laptop loan modification failed");
+        if (res.status === 401) {
+          setError("Session expired — please refresh the page and try again.");
+          setLoading(false);
+          return;
+        }
+        if (!res.ok)
+          errors.push(data.error || "Laptop loan modification failed");
         else results.push("laptop");
       } else {
         // Submit tech loan
         if (techItems.length > 0) {
           const isModifying = !!modifyingLoan;
-          const endpoint = isModifying ? `/api/loans/${modifyingLoan.id}` : "/api/loans";
+          const endpoint = isModifying
+            ? `/api/loans/${modifyingLoan.id}`
+            : "/api/loans";
           const method = isModifying ? "PUT" : "POST";
 
           const res = await fetch(endpoint, {
@@ -139,11 +152,20 @@ export default function CartPanel() {
               start_date: formData.start_date,
               end_date: techLoanType === "temporary" ? formData.end_date : null,
               location: techLoanType === "permanent" ? formData.location : "",
-              items: techItems.map((i) => ({ item_id: i.id, quantity: i.quantity })),
+              items: techItems.map((i) => ({
+                item_id: i.id,
+                quantity: i.quantity,
+              })),
             }),
           });
           const data = await res.json();
-          if (res.status === 401) { setError("Session expired — please refresh the page and try again."); setLoading(false); return; }
+          if (res.status === 401) {
+            setError(
+              "Session expired — please refresh the page and try again.",
+            );
+            setLoading(false);
+            return;
+          }
           if (!res.ok) errors.push(data.error || "Tech loan failed");
           else results.push("tech");
         }
@@ -160,10 +182,20 @@ export default function CartPanel() {
           const res = await fetch("/api/laptop-loans", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ loan_groups, purpose: formData.purpose, department: formData.department }),
+            body: JSON.stringify({
+              loan_groups,
+              purpose: formData.purpose,
+              department: formData.department,
+            }),
           });
           const data = await res.json();
-          if (res.status === 401) { setError("Session expired — please refresh the page and try again."); setLoading(false); return; }
+          if (res.status === 401) {
+            setError(
+              "Session expired — please refresh the page and try again.",
+            );
+            setLoading(false);
+            return;
+          }
           if (!res.ok) errors.push(data.error || "Laptop loan failed");
           else results.push("laptop");
         }
@@ -191,41 +223,92 @@ export default function CartPanel() {
     return `Cart (${totalItems})`;
   };
 
-  const cartIcon = cartType === "laptop"
-    ? <RiMacbookLine style={{ verticalAlign: "middle", marginRight: 8 }} />
-    : <RiShoppingCart2Line style={{ verticalAlign: "middle", marginRight: 8 }} />;
+  const cartIcon =
+    cartType === "laptop" ? (
+      <RiMacbookLine style={{ verticalAlign: "middle", marginRight: 8 }} />
+    ) : (
+      <RiShoppingCart2Line
+        style={{ verticalAlign: "middle", marginRight: 8 }}
+      />
+    );
 
   return (
     <>
-      <div className={`cart-overlay ${isOpen ? "open" : ""}`} onClick={() => setIsOpen(false)} />
+      <div
+        className={`cart-overlay ${isOpen ? "open" : ""}`}
+        onClick={() => setIsOpen(false)}
+      />
       <div className={`cart-panel ${isOpen ? "open" : ""}`}>
         <div className="cart-header">
-          <h2>{cartIcon}{cartTitle()}</h2>
-          <button aria-label="Close cart" className="btn btn-icon btn-outline" onClick={() => setIsOpen(false)}>
+          <h2>
+            {cartIcon}
+            {cartTitle()}
+          </h2>
+          <button
+            aria-label="Close cart"
+            className="btn btn-icon btn-outline"
+            onClick={() => setIsOpen(false)}
+          >
             <RiCloseLine size={20} />
           </button>
         </div>
 
         {/* ====== SUCCESS SCREEN ====== */}
         {submitted && (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, textAlign: "center", gap: 16 }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 32,
+              textAlign: "center",
+              gap: 16,
+            }}
+          >
             <div style={{ fontSize: 56 }}>🎉</div>
-            <h3 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Request Submitted!</h3>
-            <p style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
-              Your loan request has been sent for approval. We&apos;ll notify you when it&apos;s reviewed.
+            <h3 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>
+              Request Submitted!
+            </h3>
+            <p
+              style={{
+                color: "var(--text-secondary)",
+                fontSize: 14,
+                lineHeight: 1.6,
+                margin: 0,
+              }}
+            >
+              Your loan request has been sent for approval. We&apos;ll notify
+              you when it&apos;s reviewed.
             </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", marginTop: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                width: "100%",
+                marginTop: 8,
+              }}
+            >
               <button
                 className="btn btn-primary"
                 style={{ width: "100%" }}
-                onClick={() => { setSubmitted(false); setIsOpen(false); router.push("/loans"); }}
+                onClick={() => {
+                  setSubmitted(false);
+                  setIsOpen(false);
+                  router.push("/loans");
+                }}
               >
                 View My Loans →
               </button>
               <button
                 className="btn btn-outline"
                 style={{ width: "100%" }}
-                onClick={() => { setSubmitted(false); setIsOpen(false); }}
+                onClick={() => {
+                  setSubmitted(false);
+                  setIsOpen(false);
+                }}
               >
                 Continue Browsing
               </button>
@@ -238,24 +321,56 @@ export default function CartPanel() {
           <>
             <div className="cart-items">
               {items.length === 0 ? (
-                <div className="empty-state" style={{ padding: 32, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+                <div
+                  className="empty-state"
+                  style={{
+                    padding: 32,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 20,
+                  }}
+                >
                   <div className="empty-icon">🛒</div>
                   <div style={{ textAlign: "center" }}>
                     <h3 style={{ marginBottom: 6 }}>Cart is empty</h3>
-                    <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>Browse items to get started</p>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                      Browse items to get started
+                    </p>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      width: "100%",
+                    }}
+                  >
                     <button
                       className="btn btn-outline"
-                      style={{ width: "100%", justifyContent: "center", gap: 8 }}
-                      onClick={() => { setIsOpen(false); router.push("/inventory/tech-inventory"); }}
+                      style={{
+                        width: "100%",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                      onClick={() => {
+                        setIsOpen(false);
+                        router.push("/inventory/tech-inventory");
+                      }}
                     >
                       📦 Browse Tech Inventory →
                     </button>
                     <button
                       className="btn btn-outline"
-                      style={{ width: "100%", justifyContent: "center", gap: 8 }}
-                      onClick={() => { setIsOpen(false); router.push("/inventory/laptop-loans"); }}
+                      style={{
+                        width: "100%",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                      onClick={() => {
+                        setIsOpen(false);
+                        router.push("/inventory/laptop-loans");
+                      }}
                     >
                       💻 Browse Laptop Loans →
                     </button>
@@ -267,74 +382,208 @@ export default function CartPanel() {
                   {laptopItems.length > 0 && (
                     <>
                       {cartType === "mixed" && (
-                        <div style={{
-                          padding: "8px 16px", fontSize: 11, fontWeight: 700, letterSpacing: 1,
-                          color: "var(--text-muted)", background: "rgba(255,255,255,0.02)",
-                          borderBottom: "1px solid var(--border)", textTransform: "uppercase",
-                          display: "flex", alignItems: "center", gap: 6,
-                        }}>
+                        <div
+                          style={{
+                            padding: "8px 16px",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            letterSpacing: 1,
+                            color: "var(--text-muted)",
+                            background: "rgba(255,255,255,0.02)",
+                            borderBottom: "1px solid var(--border)",
+                            textTransform: "uppercase",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
                           <RiMacbookLine /> Laptops
                         </div>
                       )}
                       {laptopItems.map((item) => (
-                        <div key={`laptop-${item.id}-${item.start_date}`} className="cart-item" style={{ flexDirection: "column", alignItems: "stretch", gap: 8, padding: "12px 16px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div
+                          key={`laptop-${item.id}-${item.start_date}`}
+                          className="cart-item"
+                          style={{
+                            flexDirection: "column",
+                            alignItems: "stretch",
+                            gap: 8,
+                            padding: "12px 16px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "flex-start",
+                            }}
+                          >
                             <div className="cart-item-info" style={{ flex: 1 }}>
-                              <h4 style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <RiMacbookLine style={{ color: "var(--accent)", flexShrink: 0 }} />
+                              <h4
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <RiMacbookLine
+                                  style={{
+                                    color: "var(--accent)",
+                                    flexShrink: 0,
+                                  }}
+                                />
                                 {item.name}
                               </h4>
                               <p style={{ fontSize: 12 }}>
-                                {item.screen_size}{item.screen_size && item.cpu ? " · " : ""}{item.cpu}
+                                {item.screen_size}
+                                {item.screen_size && item.cpu ? " · " : ""}
+                                {item.cpu}
                               </p>
-                              <span style={{
-                                display: "inline-flex", alignItems: "center", gap: 3,
-                                fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 5, marginTop: 3,
-                                background: item.loan_type === "permanent" ? "rgba(139,92,246,0.15)" : "rgba(59,130,246,0.12)",
-                                color: item.loan_type === "permanent" ? "#8b5cf6" : "#3b82f6",
-                                border: `1px solid ${item.loan_type === "permanent" ? "rgba(139,92,246,0.3)" : "rgba(59,130,246,0.3)"}`,
-                              }}>
-                                {item.loan_type === "permanent" ? <><RiPushpinLine />Permanent</> : <><RiTimeLine />Temporary</>}
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 3,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  padding: "2px 7px",
+                                  borderRadius: 5,
+                                  marginTop: 3,
+                                  background:
+                                    item.loan_type === "permanent"
+                                      ? "rgba(139,92,246,0.15)"
+                                      : "rgba(59,130,246,0.12)",
+                                  color:
+                                    item.loan_type === "permanent"
+                                      ? "#8b5cf6"
+                                      : "#3b82f6",
+                                  border: `1px solid ${item.loan_type === "permanent" ? "rgba(139,92,246,0.3)" : "rgba(59,130,246,0.3)"}`,
+                                }}
+                              >
+                                {item.loan_type === "permanent" ? (
+                                  <>
+                                    <RiPushpinLine />
+                                    Permanent
+                                  </>
+                                ) : (
+                                  <>
+                                    <RiTimeLine />
+                                    Temporary
+                                  </>
+                                )}
                               </span>
                             </div>
                             <button
                               aria-label="Remove laptop"
                               className="cart-delete-btn"
-                              onClick={() => removeItem(item.id, item.start_date)}
+                              onClick={() =>
+                                removeItem(item.id, item.start_date)
+                              }
                               title="Remove"
                             >
                               <RiDeleteBinLine size={16} />
                             </button>
                           </div>
                           {/* Per-laptop date pickers */}
-                          {(!item.start_date || (item.loan_type === "temporary" && !item.end_date)) && (
-                            <div style={{ fontSize: 11, color: "var(--warning)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-                              ⚠️ {!item.start_date ? "Borrow date required" : "Return date required"}
+                          {(!item.start_date ||
+                            (item.loan_type === "temporary" &&
+                              !item.end_date)) && (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "var(--warning)",
+                                fontWeight: 600,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              ⚠️{" "}
+                              {!item.start_date
+                                ? "Borrow date required"
+                                : "Return date required"}
                             </div>
                           )}
-                          <div style={{ display: "grid", gridTemplateColumns: item.loan_type === "temporary" ? "1fr 1fr" : "1fr", gap: 8 }}>
-                            <div>
-                              <label style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                                <RiCalendarLine />Borrow Date
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns:
+                                item.loan_type === "temporary"
+                                  ? "repeat(2, minmax(0, 1fr))"
+                                  : "minmax(0, 1fr)",
+                              gap: 8,
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <label
+                                style={{
+                                  fontSize: 10,
+                                  color: "var(--text-muted)",
+                                  fontWeight: 600,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  marginBottom: 4,
+                                }}
+                              >
+                                <RiCalendarLine />
+                                Borrow Date
                               </label>
                               <input
                                 type="date"
                                 value={item.start_date}
-                                onChange={(e) => updateLaptopDates(item.id, e.target.value, item.start_date, item.end_date)}
-                                style={{ width: "100%", fontSize: 12, padding: "5px 8px" }}
+                                onChange={(e) =>
+                                  updateLaptopDates(
+                                    item.id,
+                                    e.target.value,
+                                    item.start_date,
+                                    item.end_date,
+                                  )
+                                }
+                                style={{
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  minWidth: 0,
+                                  fontSize: 12,
+                                  padding: "5px 8px",
+                                }}
                               />
                             </div>
                             {item.loan_type === "temporary" && (
-                              <div>
-                                <label style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                                  <RiCalendarLine />Return Date
+                              <div style={{ minWidth: 0 }}>
+                                <label
+                                  style={{
+                                    fontSize: 10,
+                                    color: "var(--text-muted)",
+                                    fontWeight: 600,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    marginBottom: 4,
+                                  }}
+                                >
+                                  <RiCalendarLine />
+                                  Return Date
                                 </label>
                                 <input
                                   type="date"
                                   value={item.end_date || ""}
                                   min={item.start_date}
-                                  onChange={(e) => updateLaptopDates(item.id, item.start_date, item.start_date, e.target.value)}
-                                  style={{ width: "100%", fontSize: 12, padding: "5px 8px" }}
+                                  onChange={(e) =>
+                                    updateLaptopDates(
+                                      item.id,
+                                      item.start_date,
+                                      item.start_date,
+                                      e.target.value,
+                                    )
+                                  }
+                                  style={{
+                                    width: "100%",
+                                    boxSizing: "border-box",
+                                    minWidth: 0,
+                                    fontSize: 12,
+                                    padding: "5px 8px",
+                                  }}
                                 />
                               </div>
                             )}
@@ -348,12 +597,21 @@ export default function CartPanel() {
                   {techItems.length > 0 && (
                     <>
                       {cartType === "mixed" && (
-                        <div style={{
-                          padding: "8px 16px", fontSize: 11, fontWeight: 700, letterSpacing: 1,
-                          color: "var(--text-muted)", background: "rgba(255,255,255,0.02)",
-                          borderBottom: "1px solid var(--border)", textTransform: "uppercase",
-                          display: "flex", alignItems: "center", gap: 6,
-                        }}>
+                        <div
+                          style={{
+                            padding: "8px 16px",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            letterSpacing: 1,
+                            color: "var(--text-muted)",
+                            background: "rgba(255,255,255,0.02)",
+                            borderBottom: "1px solid var(--border)",
+                            textTransform: "uppercase",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
                           <RiShoppingCart2Line /> Tech Items
                         </div>
                       )}
@@ -361,19 +619,43 @@ export default function CartPanel() {
                         <div key={`tech-${item.id}`} className="cart-item">
                           <div className="cart-item-info">
                             <h4>{item.item}</h4>
-                            <p>{item.type} · {item.brand}</p>
-                            <p style={{ color: "var(--text-muted)", fontSize: 10 }}>Available: {item.max}</p>
+                            <p>
+                              {item.type} · {item.brand}
+                            </p>
+                            <p
+                              style={{
+                                color: "var(--text-muted)",
+                                fontSize: 10,
+                              }}
+                            >
+                              Available: {item.max}
+                            </p>
                           </div>
                           <div className="qty-control">
-                            <button aria-label="Decrease quantity" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                            <button
+                              aria-label="Decrease quantity"
+                              onClick={() =>
+                                updateQuantity(item.id, item.quantity - 1)
+                              }
+                            >
                               <RiSubtractLine />
                             </button>
                             <span>{item.quantity}</span>
-                            <button aria-label="Increase quantity" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                            <button
+                              aria-label="Increase quantity"
+                              onClick={() =>
+                                updateQuantity(item.id, item.quantity + 1)
+                              }
+                            >
                               <RiAddLine />
                             </button>
                           </div>
-                          <button aria-label="Remove item" className="cart-delete-btn" onClick={() => removeItem(item.id)} title="Remove item">
+                          <button
+                            aria-label="Remove item"
+                            className="cart-delete-btn"
+                            onClick={() => removeItem(item.id)}
+                            title="Remove item"
+                          >
                             <RiDeleteBinLine size={16} />
                           </button>
                         </div>
@@ -389,21 +671,37 @@ export default function CartPanel() {
                 {!modifyingLoan ? (
                   <button
                     className="btn btn-primary cart-checkout-btn"
-                    style={{ width: "100%", background: "linear-gradient(135deg, var(--accent), #818cf8)" }}
+                    style={{
+                      width: "100%",
+                      background:
+                        "linear-gradient(135deg, var(--accent), #818cf8)",
+                    }}
                     onClick={openCheckoutForm}
                   >
-                    {cartType === "laptop" ? "💻" : cartType === "mixed" ? "📋" : "🛒"} Checkout
+                    {cartType === "laptop"
+                      ? "💻"
+                      : cartType === "mixed"
+                        ? "📋"
+                        : "🛒"}{" "}
+                    Checkout
                   </button>
                 ) : (
                   <button
                     className="btn btn-primary cart-checkout-btn"
-                    style={{ width: "100%", background: "linear-gradient(135deg, #f59e0b, #fbbf24)" }}
+                    style={{
+                      width: "100%",
+                      background: "linear-gradient(135deg, #f59e0b, #fbbf24)",
+                    }}
                     onClick={() => setShowForm(true)}
                   >
                     Continue Modifying Form →
                   </button>
                 )}
-                <button className="btn btn-outline" style={{ width: "100%", marginTop: 8 }} onClick={clearCart}>
+                <button
+                  className="btn btn-outline"
+                  style={{ width: "100%", marginTop: 8 }}
+                  onClick={clearCart}
+                >
                   Clear Cart
                 </button>
               </div>
@@ -413,10 +711,24 @@ export default function CartPanel() {
 
         {/* ====== CHECKOUT FORM ====== */}
         {showForm && (
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
             <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-                <button type="button" className="btn btn-sm btn-outline" onClick={() => setShowForm(false)}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 20,
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  onClick={() => setShowForm(false)}
+                >
                   ← Back
                 </button>
                 <h3 style={{ fontSize: 16 }}>
@@ -424,20 +736,58 @@ export default function CartPanel() {
                 </h3>
               </div>
 
-              {error && <div className="error-msg" style={{ marginBottom: 16 }}>{error}</div>}
+              {error && (
+                <div className="error-msg" style={{ marginBottom: 16 }}>
+                  {error}
+                </div>
+              )}
 
               {/* Summary */}
-              <div style={{ marginBottom: 16, padding: 12, background: "rgba(99,102,241,0.05)", borderRadius: 8, border: "1px solid var(--border)" }}>
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: 12,
+                  background: "rgba(99,102,241,0.05)",
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                }}
+              >
                 {laptopItems.length > 0 && (
                   <>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Laptops</p>
+                    <p
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                        marginBottom: 6,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      Laptops
+                    </p>
                     {laptopGroups.map((g, gi) => (
-                      <div key={gi} style={{ marginBottom: gi < laptopGroups.length - 1 ? 8 : 0 }}>
+                      <div
+                        key={gi}
+                        style={{
+                          marginBottom: gi < laptopGroups.length - 1 ? 8 : 0,
+                        }}
+                      >
                         {g.laptops.map((l) => (
-                          <p key={l.id} style={{ fontSize: 13, marginBottom: 2 }}>
+                          <p
+                            key={l.id}
+                            style={{ fontSize: 13, marginBottom: 2 }}
+                          >
                             • {l.name}
-                            <span style={{ color: "var(--text-muted)", fontSize: 11, marginLeft: 6 }}>
-                              {g.start_date}{g.end_date ? ` → ${g.end_date}` : " (permanent)"}
+                            <span
+                              style={{
+                                color: "var(--text-muted)",
+                                fontSize: 11,
+                                marginLeft: 6,
+                              }}
+                            >
+                              {g.start_date}
+                              {g.end_date ? ` → ${g.end_date}` : " (permanent)"}
                             </span>
                           </p>
                         ))}
@@ -447,10 +797,31 @@ export default function CartPanel() {
                 )}
                 {techItems.length > 0 && (
                   <>
-                    {laptopItems.length > 0 && <div style={{ borderTop: "1px solid var(--border)", margin: "8px 0" }} />}
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Tech Items</p>
+                    {laptopItems.length > 0 && (
+                      <div
+                        style={{
+                          borderTop: "1px solid var(--border)",
+                          margin: "8px 0",
+                        }}
+                      />
+                    )}
+                    <p
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                        marginBottom: 6,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      Tech Items
+                    </p>
                     {techItems.map((item) => (
-                      <p key={item.id} style={{ fontSize: 13, marginBottom: 2 }}>
+                      <p
+                        key={item.id}
+                        style={{ fontSize: 13, marginBottom: 2 }}
+                      >
                         • {item.item} × {item.quantity}
                       </p>
                     ))}
@@ -463,7 +834,9 @@ export default function CartPanel() {
                 <label>Purpose *</label>
                 <textarea
                   value={formData.purpose}
-                  onChange={(e) => setFormData((p) => ({ ...p, purpose: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, purpose: e.target.value }))
+                  }
                   placeholder="Why do you need these items?"
                   required
                 />
@@ -474,7 +847,9 @@ export default function CartPanel() {
                 <input
                   type="text"
                   value={formData.department}
-                  onChange={(e) => setFormData((p) => ({ ...p, department: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, department: e.target.value }))
+                  }
                   placeholder="e.g., Projection, VP, Sound, Youth"
                 />
               </div>
@@ -482,21 +857,50 @@ export default function CartPanel() {
               {/* Tech loan fields — only shown when tech items present */}
               {techItems.length > 0 && (
                 <>
-                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginBottom: 16 }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  <div
+                    style={{
+                      borderTop: "1px solid var(--border)",
+                      paddingTop: 16,
+                      marginBottom: 16,
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "var(--text-muted)",
+                        marginBottom: 12,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                      }}
+                    >
                       Tech Loan Details
                     </p>
 
                     {/* Loan type toggle */}
                     {!modifyingLoan && (
-                      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                      <div
+                        style={{ display: "flex", gap: 8, marginBottom: 16 }}
+                      >
                         <button
                           type="button"
                           onClick={() => setTechLoanType("temporary")}
                           style={{
-                            flex: 1, padding: "9px 0", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer", border: "none",
-                            background: techLoanType === "temporary" ? "linear-gradient(135deg, var(--accent), #818cf8)" : "rgba(255,255,255,0.05)",
-                            color: techLoanType === "temporary" ? "white" : "var(--text-secondary)",
+                            flex: 1,
+                            padding: "9px 0",
+                            borderRadius: 10,
+                            fontWeight: 600,
+                            fontSize: 13,
+                            cursor: "pointer",
+                            border: "none",
+                            background:
+                              techLoanType === "temporary"
+                                ? "linear-gradient(135deg, var(--accent), #818cf8)"
+                                : "rgba(255,255,255,0.05)",
+                            color:
+                              techLoanType === "temporary"
+                                ? "white"
+                                : "var(--text-secondary)",
                           }}
                         >
                           ⏱️ Temporary
@@ -506,9 +910,21 @@ export default function CartPanel() {
                             type="button"
                             onClick={() => setTechLoanType("permanent")}
                             style={{
-                              flex: 1, padding: "9px 0", borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: "pointer", border: "none",
-                              background: techLoanType === "permanent" ? "linear-gradient(135deg, #8b5cf6, #a78bfa)" : "rgba(255,255,255,0.05)",
-                              color: techLoanType === "permanent" ? "white" : "var(--text-secondary)",
+                              flex: 1,
+                              padding: "9px 0",
+                              borderRadius: 10,
+                              fontWeight: 600,
+                              fontSize: 13,
+                              cursor: "pointer",
+                              border: "none",
+                              background:
+                                techLoanType === "permanent"
+                                  ? "linear-gradient(135deg, #8b5cf6, #a78bfa)"
+                                  : "rgba(255,255,255,0.05)",
+                              color:
+                                techLoanType === "permanent"
+                                  ? "white"
+                                  : "var(--text-secondary)",
                             }}
                           >
                             📌 Permanent
@@ -522,7 +938,12 @@ export default function CartPanel() {
                       <input
                         type="date"
                         value={formData.start_date}
-                        onChange={(e) => setFormData((p) => ({ ...p, start_date: e.target.value }))}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            start_date: e.target.value,
+                          }))
+                        }
                         required
                       />
                     </div>
@@ -534,7 +955,12 @@ export default function CartPanel() {
                           type="date"
                           value={formData.end_date}
                           min={formData.start_date}
-                          onChange={(e) => setFormData((p) => ({ ...p, end_date: e.target.value }))}
+                          onChange={(e) =>
+                            setFormData((p) => ({
+                              ...p,
+                              end_date: e.target.value,
+                            }))
+                          }
                           required
                         />
                       </div>
@@ -547,13 +973,28 @@ export default function CartPanel() {
                           <input
                             type="text"
                             value={formData.location}
-                            onChange={(e) => setFormData((p) => ({ ...p, location: e.target.value }))}
+                            onChange={(e) =>
+                              setFormData((p) => ({
+                                ...p,
+                                location: e.target.value,
+                              }))
+                            }
                             placeholder="e.g., Loft, TLR, MCR"
                             required
                           />
                         </div>
-                        <div style={{ padding: 12, background: "var(--warning-bg)", borderRadius: 8, border: "1px solid rgba(245,158,11,0.2)", fontSize: 12, color: "var(--warning)" }}>
-                          ⚠️ Permanent loans require admin approval and items will be marked as deployed.
+                        <div
+                          style={{
+                            padding: 12,
+                            background: "var(--warning-bg)",
+                            borderRadius: 8,
+                            border: "1px solid rgba(245,158,11,0.2)",
+                            fontSize: 12,
+                            color: "var(--warning)",
+                          }}
+                        >
+                          ⚠️ Permanent loans require admin approval and items
+                          will be marked as deployed.
                         </div>
                       </>
                     )}
@@ -563,8 +1004,17 @@ export default function CartPanel() {
             </div>
 
             <div className="cart-footer">
-              <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={loading}>
-                {loading ? "Submitting..." : modifyingLoan ? "Update Loan Request" : "Submit Loan Request"}
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ width: "100%" }}
+                disabled={loading}
+              >
+                {loading
+                  ? "Submitting..."
+                  : modifyingLoan
+                    ? "Update Loan Request"
+                    : "Submit Loan Request"}
               </button>
             </div>
           </form>

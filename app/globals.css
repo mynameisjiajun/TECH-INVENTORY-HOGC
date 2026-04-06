@@ -1242,11 +1242,14 @@ tr:last-child td {
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-direction: alternate;
-  will-change: transform;
+  will-change: left;
 }
 
 .login-easter-number {
-  display: inline-flex;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.24))
@@ -1255,7 +1258,7 @@ tr:last-child td {
   animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-direction: alternate;
-  will-change: transform;
+  will-change: top;
 }
 
 .login-easter-number-text {
@@ -1325,19 +1328,19 @@ body.rickroll-lock {
 
 @keyframes login-dvd-x {
   from {
-    transform: translateX(0);
+    left: 0;
   }
   to {
-    transform: translateX(var(--x-range));
+    left: var(--x-end);
   }
 }
 
 @keyframes login-dvd-y {
   from {
-    transform: translateY(0);
+    top: 0;
   }
   to {
-    transform: translateY(var(--y-range));
+    top: var(--y-end);
   }
 }
 
@@ -2304,8 +2307,13 @@ body.rickroll-lock {
 
 .laptop-date-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  width: 100%;
+}
+
+.laptop-date-grid > div {
+  min-width: 0;
 }
 
 .laptop-date-grid.single-col {
@@ -2357,13 +2365,15 @@ body.rickroll-lock {
   }
 
   .laptop-date-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
 
   .laptop-date-grid input[type="date"] {
+    width: 100%;
     max-width: 100%;
     min-width: 0;
+    box-sizing: border-box;
     font-size: 13px;
     padding: 8px 10px;
   }
