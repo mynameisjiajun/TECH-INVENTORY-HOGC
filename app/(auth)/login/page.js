@@ -168,11 +168,9 @@ export default function LoginPage() {
                 key={p.id}
                 className="login-easter-dvd"
                 style={{
-                  "--x-range": `calc(100dvw - ${p.size})`,
+                  "--x-range": `calc(100vw - ${p.size})`,
                   animationDuration: p.xDuration,
                   animationDelay: p.xDelay,
-                  width: p.size,
-                  height: p.size,
                 }}
               >
                 <span
@@ -180,11 +178,13 @@ export default function LoginPage() {
                     p.variant === "text" ? "login-easter-number-text" : ""
                   }`}
                   style={{
-                    "--y-range": `calc(100dvh - ${p.size})`,
+                    "--y-range": `calc(100vh - ${p.size})`,
                     animationDuration: p.yDuration,
                     animationDelay: p.yDelay,
                     "--hue": p.hue,
                     fontSize: p.size,
+                    width: p.size,
+                    height: p.size,
                   }}
                 >
                   {p.variant === "text" ? (

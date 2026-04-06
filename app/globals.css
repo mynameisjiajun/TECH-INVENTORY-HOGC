@@ -433,6 +433,11 @@ select {
   padding-right: 36px;
 }
 
+select option {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
 /* ===== TABS ===== */
 .tabs {
   display: flex;
@@ -1085,7 +1090,9 @@ tr:last-child td {
   font-size: 16px;
   line-height: 1;
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 .btn-close:hover {
   background: rgba(239, 68, 68, 0.1);
@@ -1192,13 +1199,8 @@ tr:last-child td {
 .auth-container.login-easter-egg .auth-card,
 .auth-container.login-easter-egg .auth-card * {
   font-family:
-    "Comic Sans MS",
-    "Comic Sans",
-    "Comic Neue",
-    "Chalkboard SE",
-    "Marker Felt",
-    "Bradley Hand",
-    cursive !important;
+    "Comic Sans MS", "Comic Sans", "Comic Neue", "Chalkboard SE", "Marker Felt",
+    "Bradley Hand", cursive !important;
 }
 
 .auth-container.login-easter-egg .auth-card h1,
@@ -1247,8 +1249,6 @@ tr:last-child td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.24))
     hue-rotate(var(--hue, 0deg));
   animation-name: login-dvd-y;
@@ -1278,13 +1278,8 @@ tr:last-child td {
   font-weight: 700;
   line-height: 1;
   font-family:
-    "Comic Sans MS",
-    "Comic Sans",
-    "Comic Neue",
-    "Chalkboard SE",
-    "Marker Felt",
-    "Bradley Hand",
-    cursive !important;
+    "Comic Sans MS", "Comic Sans", "Comic Neue", "Chalkboard SE", "Marker Felt",
+    "Bradley Hand", cursive !important;
   text-shadow:
     0 0 10px rgba(255, 0, 102, 0.45),
     0 0 16px rgba(59, 130, 246, 0.45),
@@ -2112,25 +2107,33 @@ body.rickroll-lock {
   background: rgba(16, 185, 129, 0.9);
   border: 1px solid rgba(16, 185, 129, 0.5);
 }
-.toast-success .toast-icon { background: rgba(255,255,255,0.2); }
+.toast-success .toast-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
 
 .toast-error {
   background: rgba(239, 68, 68, 0.9);
   border: 1px solid rgba(239, 68, 68, 0.5);
 }
-.toast-error .toast-icon { background: rgba(255,255,255,0.2); }
+.toast-error .toast-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
 
 .toast-warning {
   background: rgba(245, 158, 11, 0.9);
   border: 1px solid rgba(245, 158, 11, 0.5);
 }
-.toast-warning .toast-icon { background: rgba(255,255,255,0.2); }
+.toast-warning .toast-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
 
 .toast-info {
   background: rgba(99, 102, 241, 0.9);
   border: 1px solid rgba(99, 102, 241, 0.5);
 }
-.toast-info .toast-icon { background: rgba(255,255,255,0.2); }
+.toast-info .toast-icon {
+  background: rgba(255, 255, 255, 0.2);
+}
 
 .toast-enter {
   animation: toastSlideIn 0.3s ease-out forwards;
@@ -2140,12 +2143,24 @@ body.rickroll-lock {
 }
 
 @keyframes toastSlideIn {
-  from { opacity: 0; transform: translateX(80px) scale(0.95); }
-  to { opacity: 1; transform: translateX(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateX(80px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
 }
 @keyframes toastSlideOut {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to { opacity: 0; transform: translateX(80px) scale(0.95); }
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(80px) scale(0.95);
+  }
 }
 
 /* ===== SKELETON LOADING ===== */
@@ -2193,8 +2208,12 @@ body.rickroll-lock {
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ===== ACTIVITY FEED ===== */
@@ -2227,11 +2246,21 @@ body.rickroll-lock {
   flex-shrink: 0;
 }
 
-.activity-dot.approve { background: var(--success); }
-.activity-dot.reject { background: var(--error); }
-.activity-dot.return { background: var(--info); }
-.activity-dot.request { background: var(--warning); }
-.activity-dot.delete { background: var(--error); }
+.activity-dot.approve {
+  background: var(--success);
+}
+.activity-dot.reject {
+  background: var(--error);
+}
+.activity-dot.return {
+  background: var(--info);
+}
+.activity-dot.request {
+  background: var(--warning);
+}
+.activity-dot.delete {
+  background: var(--error);
+}
 
 .activity-time {
   font-size: 11px;
@@ -2263,7 +2292,8 @@ body.rickroll-lock {
   position: sticky;
   top: 70px;
   z-index: 10;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: visible;
 }
 
 .laptop-loan-type-toggle {
@@ -2307,12 +2337,35 @@ body.rickroll-lock {
     border-left: none;
     border-right: none;
     border-top: none;
-    padding: 12px 16px;
+    padding: 12px 14px;
+    background: var(--bg-secondary);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 1px 0 rgba(99, 102, 241, 0.1);
+  }
+
+  .laptop-sticky-bar::after {
+    content: "";
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background: linear-gradient(to bottom, var(--bg-secondary), transparent);
+    pointer-events: none;
+    border-radius: 0 0 14px 14px;
   }
 
   .laptop-date-grid {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .laptop-date-grid input[type="date"] {
+    max-width: 100%;
+    min-width: 0;
+    font-size: 13px;
+    padding: 8px 10px;
   }
 
   .laptop-loan-type-toggle button {
