@@ -6,8 +6,17 @@ import {
   getTokenCookieOptions,
 } from "@/lib/utils/auth";
 import { sendWelcomeEmail } from "@/lib/services/email";
-import { resetRateLimit } from "@/lib/utils/rateLimit";
+import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
 import { NextResponse } from "next/server";
+
+function rateLimitError(retryAfterSeconds) {
+  return NextResponse.json(
+    {
+      error: `Too many attempts. Please try again in ${Math.ceil(retryAfterSeconds / 60)} minutes.`,
+    },
+    { status: 429 },
+  );
+}
 
 export async function POST(request) {
   try {
@@ -32,6 +41,10 @@ export async function POST(request) {
       }
 
       const normalizedUsername = username.trim().toLowerCase();
+      const registerLimit = checkRateLimit(`auth:register:${ip}`);
+      if (registerLimit.limited) {
+        return rateLimitError(registerLimit.retryAfterSeconds);
+      }
 
       // Get invite code from Supabase app_settings
       const { data: setting } = await supabase
@@ -101,6 +114,7 @@ export async function POST(request) {
       const response = NextResponse.json({ user: newUser });
       const cookieOpts = getTokenCookieOptions();
       response.cookies.set(cookieOpts.name, token, cookieOpts);
+      resetRateLimit(`auth:register:${ip}`);
       return response;
     }
 
@@ -112,10 +126,20 @@ export async function POST(request) {
         );
       }
       const normalizedUsername = username.trim().toLowerCase();
+      const ipLimit = checkRateLimit(`auth:login:ip:${ip}`);
+      if (ipLimit.limited) {
+        return rateLimitError(ipLimit.retryAfterSeconds);
+      }
+      const usernameLimit = checkRateLimit(
+        `auth:login:user:${normalizedUsername}`,
+      );
+      if (usernameLimit.limited) {
+        return rateLimitError(usernameLimit.retryAfterSeconds);
+      }
 
       const { data: user } = await supabase
         .from("users")
-        .select("*")
+        .select("id, username, role, display_name, password_hash")
         .eq("username", normalizedUsername)
         .single();
 
@@ -126,7 +150,8 @@ export async function POST(request) {
         );
       }
 
-      resetRateLimit(ip);
+      resetRateLimit(`auth:login:ip:${ip}`);
+      resetRateLimit(`auth:login:user:${normalizedUsername}`);
       const token = createToken(user);
       const response = NextResponse.json({
         user: {

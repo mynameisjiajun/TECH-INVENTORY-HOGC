@@ -1,7 +1,7 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabaseClient } from "@/lib/db/supabaseClient";
 import { useToast } from "@/lib/context/ToastContext";
 import Navbar from "@/components/Navbar";
@@ -190,6 +190,27 @@ export default function AdminPage() {
   const [loanSource, setLoanSource] = useState("all"); // 'all' | 'tech' | 'laptop'
   const [pendingCount, setPendingCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredLoans = useMemo(() => {
+    if (!searchQuery.trim()) return loans;
+    const q = searchQuery.toLowerCase();
+    return loans.filter((loan) => {
+      const nameMatch = (loan.requester_name || loan.requester_username || "")
+        .toLowerCase()
+        .includes(q);
+      const deptMatch = (loan.department || "").toLowerCase().includes(q);
+      const itemMatch =
+        loan._source === "laptop"
+          ? (loan.laptops || []).some((i) =>
+              (i.laptops?.name || "").toLowerCase().includes(q),
+            )
+          : (loan.items || []).some((i) =>
+              (i.item || "").toLowerCase().includes(q),
+            );
+      return nameMatch || deptMatch || itemMatch;
+    });
+  }, [loans, searchQuery]);
+
   // Laptops tab state
   const [laptopsData, setLaptopsData] = useState([]); // tiers with laptops
   const [laptopsFetching, setLaptopsFetching] = useState(false);
@@ -1282,53 +1303,14 @@ export default function AdminPage() {
                     : "No loan requests found."}
                 </p>
               </div>
-            ) : loans.filter((loan) => {
-                if (!searchQuery.trim()) return true;
-                const q = searchQuery.toLowerCase();
-                return (
-                  (loan.requester_name || loan.requester_username || "")
-                    .toLowerCase()
-                    .includes(q) ||
-                  (loan.department || "").toLowerCase().includes(q) ||
-                  (loan._source === "laptop"
-                    ? (loan.laptops || []).some((i) =>
-                        (i.laptops?.name || "").toLowerCase().includes(q),
-                      )
-                    : (loan.items || []).some((i) =>
-                        (i.item || "").toLowerCase().includes(q),
-                      ))
-                );
-              }).length === 0 ? (
+            ) : filteredLoans.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">🔍</div>
                 <h3>No results for &quot;{searchQuery}&quot;</h3>
                 <p>Try a different name or item.</p>
               </div>
             ) : (
-              loans
-                .filter((loan) => {
-                  if (!searchQuery.trim()) return true;
-                  const q = searchQuery.toLowerCase();
-                  const nameMatch = (
-                    loan.requester_name ||
-                    loan.requester_username ||
-                    ""
-                  )
-                    .toLowerCase()
-                    .includes(q);
-                  const deptMatch = (loan.department || "")
-                    .toLowerCase()
-                    .includes(q);
-                  const itemMatch =
-                    loan._source === "laptop"
-                      ? (loan.laptops || []).some((i) =>
-                          (i.laptops?.name || "").toLowerCase().includes(q),
-                        )
-                      : (loan.items || []).some((i) =>
-                          (i.item || "").toLowerCase().includes(q),
-                        );
-                  return nameMatch || deptMatch || itemMatch;
-                })
+              filteredLoans
                 .map((loan) => {
                   const todayStr = new Date().toISOString().split("T")[0];
                   const isOverdue =
@@ -2069,9 +2051,12 @@ export default function AdminPage() {
                             >
                               {u.display_name[0].toUpperCase()}
                             </div>
-                            <span style={{ fontSize: 12 }}>
-                              {u.display_name}
-                            </span>
+                            <div>
+                              <div style={{ fontSize: 12 }}>{u.display_name}</div>
+                              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 1 }}>
+                                @{u.username}
+                              </div>
+                            </div>
                           </div>
                         </td>
                         <td

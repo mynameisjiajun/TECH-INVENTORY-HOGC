@@ -65,7 +65,16 @@ export async function POST(request) {
     if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const hash = await hashPassword(new_password);
-    await supabase.from("users").update({ password_hash: hash }).eq("id", user_id);
+    const { error: passwordResetError } = await supabase
+      .from("users")
+      .update({ password_hash: hash })
+      .eq("id", user_id);
+    if (passwordResetError) {
+      return NextResponse.json(
+        { error: passwordResetError.message || "Failed to reset password" },
+        { status: 500 },
+      );
+    }
     await supabase.from("audit_log").insert({
       user_id: user.id,
       action: "reset_password",
@@ -136,7 +145,13 @@ export async function POST(request) {
     });
 
     // ON DELETE CASCADE handles: notifications, loan_items (via loan_requests), loan_requests
-    await supabase.from("users").delete().eq("id", user_id);
+    const { error: deleteError } = await supabase.from("users").delete().eq("id", user_id);
+    if (deleteError) {
+      return NextResponse.json(
+        { error: deleteError.message || "Failed to delete user" },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({ message: `User @${target.username} deleted` });
   }
@@ -152,7 +167,23 @@ export async function POST(request) {
     if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     if (display_name) {
-      await supabase.from("users").update({ display_name }).eq("id", user_id);
+      const trimmedDisplayName = display_name.trim();
+      if (trimmedDisplayName.length < 2) {
+        return NextResponse.json(
+          { error: "Display name must be at least 2 characters" },
+          { status: 400 },
+        );
+      }
+      const { error: updateUserError } = await supabase
+        .from("users")
+        .update({ display_name: trimmedDisplayName })
+        .eq("id", user_id);
+      if (updateUserError) {
+        return NextResponse.json(
+          { error: updateUserError.message || "Failed to update user" },
+          { status: 500 },
+        );
+      }
     }
 
     return NextResponse.json({ message: `User @${target.username} updated` });
@@ -166,9 +197,15 @@ export async function POST(request) {
       );
     }
 
-    await supabase
+    const { error: inviteCodeError } = await supabase
       .from("app_settings")
       .upsert({ key: "invite_code", value: invite_code.trim() });
+    if (inviteCodeError) {
+      return NextResponse.json(
+        { error: inviteCodeError.message || "Failed to update invite code" },
+        { status: 500 },
+      );
+    }
 
     await supabase.from("audit_log").insert({
       user_id: user.id,
@@ -191,11 +228,17 @@ export async function POST(request) {
       return NextResponse.json({ error: "Times must be in HH:MM format" }, { status: 400 });
     }
 
-    await supabase.from("app_settings").upsert([
+    const { error: reminderError } = await supabase.from("app_settings").upsert([
       { key: "reminder_weekday", value: weekday },
       { key: "reminder_saturday", value: saturday },
       { key: "reminder_sunday", value: sunday },
     ]);
+    if (reminderError) {
+      return NextResponse.json(
+        { error: reminderError.message || "Failed to update reminder times" },
+        { status: 500 },
+      );
+    }
 
     await supabase.from("audit_log").insert({
       user_id: user.id,

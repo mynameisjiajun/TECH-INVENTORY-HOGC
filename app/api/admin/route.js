@@ -13,6 +13,7 @@ const SHEETS_ENABLED = !!(
   process.env.GOOGLE_PRIVATE_KEY
 );
 const CURRENT_COL = "G";
+const ACTIVE_LOANS_DASHBOARD_LIMIT = 200;
 
 /**
  * Apply stock quantity deltas to the Google Sheets "Storage Spare" tab.
@@ -614,12 +615,14 @@ export async function GET() {
       .from("loan_requests")
       .select(`*, users (display_name, username)`)
       .in("status", ["approved", "pending"])
-      .order("start_date", { ascending: true }),
+      .order("start_date", { ascending: true })
+      .limit(ACTIVE_LOANS_DASHBOARD_LIMIT),
     supabase
       .from("laptop_loan_requests")
       .select(`*, users (display_name, username), laptop_loan_items(*, laptops(id, name))`)
       .in("status", ["approved", "pending"])
-      .order("start_date", { ascending: true }),
+      .order("start_date", { ascending: true })
+      .limit(ACTIVE_LOANS_DASHBOARD_LIMIT),
   ]);
 
   const formattedLoans = (activeLoans || []).map((lr) => ({
@@ -676,14 +679,19 @@ export async function GET() {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toLocaleDateString("en-CA");
   const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toLocaleDateString("en-CA");
 
-  const [{ data: overdueLoans }, { data: dueSoonLoans }, { data: overdueLaptopLoans }, { data: dueSoonLaptopLoans }] = await Promise.all([
-    supabase.from("loan_requests").select("id")
+  const [
+    { count: overdueLoans },
+    { count: dueSoonLoans },
+    { count: overdueLaptopLoans },
+    { count: dueSoonLaptopLoans },
+  ] = await Promise.all([
+    supabase.from("loan_requests").select("id", { count: "exact", head: true })
       .eq("status", "approved").eq("loan_type", "temporary").not("end_date", "is", null).lt("end_date", today),
-    supabase.from("loan_requests").select("id")
+    supabase.from("loan_requests").select("id", { count: "exact", head: true })
       .eq("status", "approved").eq("loan_type", "temporary").eq("end_date", tomorrow),
-    supabase.from("laptop_loan_requests").select("id")
+    supabase.from("laptop_loan_requests").select("id", { count: "exact", head: true })
       .eq("status", "approved").eq("loan_type", "temporary").not("end_date", "is", null).lt("end_date", today),
-    supabase.from("laptop_loan_requests").select("id")
+    supabase.from("laptop_loan_requests").select("id", { count: "exact", head: true })
       .eq("status", "approved").eq("loan_type", "temporary").eq("end_date", tomorrow),
   ]);
 
@@ -738,8 +746,8 @@ export async function GET() {
   return NextResponse.json({
     stats,
     activeLoans: mergedActiveLoans,
-    overdueCount: (overdueLoans || []).length + (overdueLaptopLoans || []).length,
-    dueSoonCount: (dueSoonLoans || []).length + (dueSoonLaptopLoans || []).length,
+    overdueCount: (overdueLoans || 0) + (overdueLaptopLoans || 0),
+    dueSoonCount: (dueSoonLoans || 0) + (dueSoonLaptopLoans || 0),
     charts: { loansTrend, topItems, inventoryDistribution },
     recentActivity,
   }, {

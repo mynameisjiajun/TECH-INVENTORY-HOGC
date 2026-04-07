@@ -38,18 +38,25 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
     }
 
-    await supabase
+    const trimmedDisplayName = display_name.trim();
+    const { error: updateError } = await supabase
       .from("users")
       .update({
-        display_name: display_name.trim(),
+        display_name: trimmedDisplayName,
         email: cleanEmail,
         mute_emails: mute_emails === true,
         mute_telegram: mute_telegram === true,
       })
       .eq("id", user.id);
+    if (updateError) {
+      return NextResponse.json(
+        { error: updateError.message || "Failed to update profile" },
+        { status: 500 },
+      );
+    }
 
     // Re-issue JWT so navbar reflects new display_name immediately
-    const updatedToken = createToken({ ...user, display_name: display_name.trim() });
+    const updatedToken = createToken({ ...user, display_name: trimmedDisplayName });
     const response = NextResponse.json({ message: "Profile updated!" });
     const cookieOpts = getTokenCookieOptions();
     response.cookies.set(cookieOpts.name, updatedToken, cookieOpts);
@@ -87,9 +94,32 @@ export async function POST(request) {
     }
 
     const newHash = await hashPassword(new_password);
-    await supabase.from("users").update({ password_hash: newHash }).eq("id", user.id);
+    const { error: passwordUpdateError } = await supabase
+      .from("users")
+      .update({ password_hash: newHash })
+      .eq("id", user.id);
+    if (passwordUpdateError) {
+      return NextResponse.json(
+        { error: passwordUpdateError.message || "Failed to change password" },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({ message: "Password changed successfully!" });
+  }
+
+  if (action === "unlink_telegram") {
+    const { error: unlinkError } = await supabase
+      .from("users")
+      .update({ telegram_chat_id: null })
+      .eq("id", user.id);
+    if (unlinkError) {
+      return NextResponse.json(
+        { error: unlinkError.message || "Failed to unlink Telegram" },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ message: "Telegram unlinked" });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

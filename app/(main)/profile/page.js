@@ -30,6 +30,7 @@ export default function ProfilePage() {
   const [muteTelegram, setMuteTelegram] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -127,6 +128,28 @@ export default function ProfilePage() {
       toast.error(msg);
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleUnlinkTelegram = async () => {
+    setUnlinkLoading(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unlink_telegram" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProfile((p) => ({ ...p, telegram_chat_id: null }));
+        toast.success(data.message || "Telegram unlinked");
+      } else {
+        toast.error(data.error || "Failed to unlink Telegram");
+      }
+    } catch {
+      toast.error("Network error — could not unlink Telegram");
+    } finally {
+      setUnlinkLoading(false);
     }
   };
 
@@ -348,20 +371,30 @@ export default function ProfilePage() {
               profileErr.includes(
                 "Telegram",
               ) ? null : profile?.telegram_chat_id ? (
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    background: "rgba(34, 197, 94, 0.1)",
-                    color: "#22c55e",
-                    padding: "8px 14px",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    fontWeight: 500,
-                  }}
-                >
-                  <RiCheckLine size={16} /> Linked & Active
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      background: "rgba(34, 197, 94, 0.1)",
+                      color: "#22c55e",
+                      padding: "8px 14px",
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 500,
+                    }}
+                  >
+                    <RiCheckLine size={16} /> Linked & Active
+                  </div>
+                  <button
+                    className="btn btn-outline"
+                    style={{ fontSize: 12, padding: "6px 12px" }}
+                    onClick={handleUnlinkTelegram}
+                    disabled={unlinkLoading}
+                  >
+                    {unlinkLoading ? <span className="btn-spinner" /> : "Unlink"}
+                  </button>
                 </div>
               ) : (
                 <div

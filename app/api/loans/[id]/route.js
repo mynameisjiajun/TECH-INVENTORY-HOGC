@@ -140,7 +140,7 @@ export async function PUT(request, { params }) {
     }
 
     // Update loan record to 'pending'
-    await supabase
+    const { error: updateError } = await supabase
       .from("loan_requests")
       .update({
         loan_type,
@@ -149,15 +149,21 @@ export async function PUT(request, { params }) {
         location: location || "",
         start_date,
         end_date: end_date || null,
-        status: "pending", 
+        status: "pending",
         admin_notes: existingLoan.admin_notes ? `${existingLoan.admin_notes} (Modified by user)` : "Modified by user",
         updated_at: new Date().toISOString()
       })
       .eq("id", loanId);
+    if (updateError) throw updateError;
 
     // Replace items
-    await supabase.from("loan_items").delete().eq("loan_request_id", loanId);
-    await supabase.from("loan_items").insert(
+    const { error: deleteItemsError } = await supabase
+      .from("loan_items")
+      .delete()
+      .eq("loan_request_id", loanId);
+    if (deleteItemsError) throw deleteItemsError;
+
+    const { error: insertItemsError } = await supabase.from("loan_items").insert(
       resolvedItems.map((i) => ({
         loan_request_id: loanId,
         item_id: i.item_id,
@@ -166,6 +172,7 @@ export async function PUT(request, { params }) {
         quantity: i.quantity,
       }))
     );
+    if (insertItemsError) throw insertItemsError;
 
     if (restoreChanges.length > 0) {
       await syncStockToSheets(restoreChanges);
@@ -229,8 +236,11 @@ export async function DELETE(_request, { params }) {
     return NextResponse.json({ error: "Only pending loans can be cancelled" }, { status: 400 });
   }
 
-  await supabase.from("loan_items").delete().eq("loan_request_id", id);
-  await supabase.from("loan_requests").delete().eq("id", id);
+  const { error: cancelItemsError } = await supabase.from("loan_items").delete().eq("loan_request_id", id);
+  if (cancelItemsError) return NextResponse.json({ error: cancelItemsError.message || "Failed to cancel loan items" }, { status: 500 });
+
+  const { error: cancelLoanError } = await supabase.from("loan_requests").delete().eq("id", id);
+  if (cancelLoanError) return NextResponse.json({ error: cancelLoanError.message || "Failed to cancel loan" }, { status: 500 });
 
   await supabase.from("notifications").insert({
     user_id: user.id,

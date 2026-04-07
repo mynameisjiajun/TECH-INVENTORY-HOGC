@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/db/supabase";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 
 async function reply(chatId, text) {
   if (!BOT_TOKEN) return;
@@ -43,12 +44,37 @@ function daysUntil(dateStr) {
 async function handleStart(chatId, userId) {
   const { data: user } = await supabase
     .from("users")
-    .select("id, username")
+    .select("id, username, telegram_chat_id")
     .eq("id", userId)
     .single();
 
   if (!user) {
     await reply(chatId, "❌ Invalid link. Please use the link from your Profile page.");
+    return;
+  }
+
+  // Check if this Telegram account is already linked to a different user
+  const { data: alreadyLinked } = await supabase
+    .from("users")
+    .select("id")
+    .eq("telegram_chat_id", String(chatId))
+    .neq("id", userId)
+    .maybeSingle();
+
+  if (alreadyLinked) {
+    await reply(
+      chatId,
+      "⚠️ This Telegram account is already linked to another user.\n\nIf you believe this is an error, ask an admin to unlink it first.",
+    );
+    return;
+  }
+
+  // Already linked to this same user — just confirm
+  if (user.telegram_chat_id === String(chatId)) {
+    await reply(
+      chatId,
+      `✅ Already linked! Your Telegram is connected to <b>@${user.username}</b>.`,
+    );
     return;
   }
 
@@ -280,6 +306,13 @@ async function handleHistory(chatId, userId) {
 
 export async function POST(request) {
   try {
+    if (
+      WEBHOOK_SECRET &&
+      request.headers.get("x-telegram-bot-api-secret-token") !== WEBHOOK_SECRET
+    ) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
 
     if (!body.message?.text) {

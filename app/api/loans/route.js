@@ -247,7 +247,7 @@ export async function POST(request) {
     const loanId = newLoan.id;
 
     // Insert loan items with item_name + sheet_row for stability
-    await supabase.from("loan_items").insert(
+    const { error: itemsError } = await supabase.from("loan_items").insert(
       resolvedItems.map((i) => ({
         loan_request_id: loanId,
         item_id: i.item_id,
@@ -256,6 +256,11 @@ export async function POST(request) {
         quantity: i.quantity,
       })),
     );
+    if (itemsError) {
+      // Roll back the loan request if items failed to insert
+      await supabase.from("loan_requests").delete().eq("id", loanId);
+      throw itemsError;
+    }
 
     // Notify admins
     const { data: admins } = await supabase

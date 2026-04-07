@@ -407,7 +407,8 @@ export default function LoansPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    fetchLoans();
+    const timer = setTimeout(fetchLoans, 300);
+    return () => clearTimeout(timer);
   }, [fetchLoans]);
 
   // Realtime: re-fetch when any of this user's loans change status
@@ -1048,8 +1049,10 @@ export default function LoansPage() {
         )}
 
         {fetching ? (
-          <div className="loading-spinner">
-            <div className="spinner" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="skeleton skeleton-row" />
+            ))}
           </div>
         ) : loans.length === 0 ? (
           <div className="empty-state">
