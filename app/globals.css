@@ -67,22 +67,35 @@ html {
 
 body {
   background-image:
+    linear-gradient(
+      180deg,
+      rgba(99, 102, 241, 0.12) 0%,
+      rgba(99, 102, 241, 0.07) 22%,
+      rgba(59, 130, 246, 0.04) 44%,
+      rgba(10, 14, 26, 0) 78%
+    ),
     radial-gradient(
       ellipse at 20% 50%,
       rgba(99, 102, 241, 0.08) 0%,
-      transparent 50%
+      transparent 62%
     ),
     radial-gradient(
       ellipse at 80% 20%,
       rgba(168, 85, 247, 0.06) 0%,
-      transparent 50%
+      transparent 60%
     ),
     radial-gradient(
       ellipse at 50% 80%,
       rgba(59, 130, 246, 0.05) 0%,
-      transparent 50%
+      transparent 65%
     );
-  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size:
+    100% 100%,
+    140% 120%,
+    130% 110%,
+    140% 140%;
+  background-attachment: scroll;
 }
 
 a {
@@ -116,6 +129,7 @@ a:hover {
   max-width: 1400px;
   margin: 0 auto;
   padding: 24px;
+  min-height: calc(100dvh - 65px);
 }
 
 .page-header {
@@ -1585,7 +1599,7 @@ body.rickroll-lock {
   /* Tighter page padding + space for fixed bottom nav */
   .page-container {
     padding: 12px;
-    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Smaller page header */
@@ -1910,8 +1924,9 @@ body.rickroll-lock {
     border-top: 1px solid var(--border);
     display: flex;
     justify-content: space-around;
-    align-items: flex-start;
-    /* Fixed content height so the bar never shifts between pages */
+    align-items: center;
+    min-height: calc(68px + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
     padding-top: 8px;
     padding-bottom: env(safe-area-inset-bottom, 8px);
     z-index: 100;
@@ -1924,11 +1939,13 @@ body.rickroll-lock {
   }
 
   .mobile-nav .nav-link {
+    display: flex;
     flex-direction: column;
+    justify-content: center;
     font-size: 10px;
     gap: 3px;
     padding: 0 8px;
-    /* No min-height — let content dictate height; height is consistent */
+    min-height: 52px;
     min-width: 48px;
     align-items: center;
     /* Remove the background fill on active — use pill on icon instead */
