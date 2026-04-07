@@ -158,7 +158,11 @@ export default function ProfilePage() {
     return (
       <AppShellLoading
         showCartPanel={false}
-        containerStyle={{ maxWidth: 640, margin: "0 auto", padding: "24px 20px" }}
+        containerStyle={{
+          maxWidth: 640,
+          margin: "0 auto",
+          padding: "24px 20px",
+        }}
       />
     );
 
@@ -166,10 +170,13 @@ export default function ProfilePage() {
     <>
       <Navbar />
       <div
-        className="page-container"
+        className="page-container profile-page-shell"
         style={{ maxWidth: 640, margin: "0 auto", padding: "24px 20px" }}
       >
-        <div className="page-header" style={{ marginBottom: 32 }}>
+        <div
+          className="page-header profile-page-header"
+          style={{ marginBottom: 32 }}
+        >
           <h1>
             <RiUserLine style={{ verticalAlign: "middle" }} /> Profile
           </h1>
@@ -178,9 +185,16 @@ export default function ProfilePage() {
 
         {/* User Info Card */}
         {profile && (
-          <div className="glass-card" style={{ padding: 28, marginBottom: 28 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <div
+            className="glass-card profile-summary-card"
+            style={{ padding: 28, marginBottom: 28 }}
+          >
+            <div
+              className="profile-summary-head"
+              style={{ display: "flex", alignItems: "center", gap: 20 }}
+            >
               <div
+                className="profile-summary-avatar"
                 style={{
                   width: 64,
                   height: 64,
@@ -198,10 +212,14 @@ export default function ProfilePage() {
                 {profile.display_name[0].toUpperCase()}
               </div>
               <div style={{ flex: 1 }}>
-                <h2 style={{ margin: "0 0 4px 0", fontSize: 22 }}>
+                <h2
+                  className="profile-summary-name"
+                  style={{ margin: "0 0 4px 0", fontSize: 22 }}
+                >
                   {profile.display_name}
                 </h2>
                 <p
+                  className="profile-summary-username"
                   style={{
                     margin: "0 0 8px 0",
                     color: "var(--text-muted)",
@@ -218,6 +236,7 @@ export default function ProfilePage() {
               </div>
             </div>
             <p
+              className="profile-summary-meta"
               style={{
                 fontSize: 13,
                 color: "var(--text-muted)",
@@ -239,6 +258,7 @@ export default function ProfilePage() {
 
         {/* Edit Display Name */}
         <div
+          className="profile-section profile-section-edit"
           style={{
             padding: 32,
             marginBottom: 32,
@@ -248,6 +268,7 @@ export default function ProfilePage() {
           }}
         >
           <h3
+            className="profile-section-title"
             style={{
               marginTop: 0,
               marginBottom: 28,
@@ -264,6 +285,7 @@ export default function ProfilePage() {
           <form onSubmit={handleUpdateProfile}>
             <div style={{ marginBottom: 24 }}>
               <label
+                className="profile-label"
                 style={{
                   display: "block",
                   marginBottom: 12,
@@ -276,6 +298,7 @@ export default function ProfilePage() {
                 Display Name
               </label>
               <input
+                className="profile-input"
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
@@ -298,6 +321,7 @@ export default function ProfilePage() {
             </div>
             <div style={{ marginBottom: 24 }}>
               <label
+                className="profile-label"
                 style={{
                   display: "block",
                   marginBottom: 12,
@@ -316,6 +340,7 @@ export default function ProfilePage() {
                 </span>
               </label>
               <input
+                className="profile-input"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -338,6 +363,7 @@ export default function ProfilePage() {
             </div>
 
             <div
+              className="profile-helper-block profile-telegram-block"
               style={{
                 marginBottom: 24,
                 padding: 20,
@@ -347,6 +373,7 @@ export default function ProfilePage() {
               }}
             >
               <label
+                className="profile-label"
                 style={{
                   display: "block",
                   marginBottom: 8,
@@ -373,8 +400,16 @@ export default function ProfilePage() {
               profileErr.includes(
                 "Telegram",
               ) ? null : profile?.telegram_chat_id ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
                   <div
+                    className="profile-status-pill"
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -395,11 +430,16 @@ export default function ProfilePage() {
                     onClick={handleUnlinkTelegram}
                     disabled={unlinkLoading}
                   >
-                    {unlinkLoading ? <span className="btn-spinner" /> : "Unlink"}
+                    {unlinkLoading ? (
+                      <span className="btn-spinner" />
+                    ) : (
+                      "Unlink"
+                    )}
                   </button>
                 </div>
               ) : (
                 <div
+                  className="profile-helper-card"
                   style={{
                     background: "rgba(56, 189, 248, 0.1)",
                     padding: 16,
@@ -457,6 +497,7 @@ export default function ProfilePage() {
 
             {/* Notification mute toggles */}
             <div
+              className="profile-helper-block profile-toggle-block"
               style={{
                 marginBottom: 24,
                 padding: 20,
@@ -466,6 +507,7 @@ export default function ProfilePage() {
               }}
             >
               <label
+                className="profile-label"
                 style={{
                   display: "block",
                   marginBottom: 12,
@@ -484,6 +526,7 @@ export default function ProfilePage() {
                 style={{ display: "flex", flexDirection: "column", gap: 12 }}
               >
                 <label
+                  className="profile-toggle-row"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -495,7 +538,10 @@ export default function ProfilePage() {
                     border: "1px solid var(--border)",
                   }}
                 >
-                  <span style={{ fontSize: 14, color: "var(--text-primary)" }}>
+                  <span
+                    className="profile-toggle-text"
+                    style={{ fontSize: 14, color: "var(--text-primary)" }}
+                  >
                     Mute email notifications
                   </span>
                   <input
@@ -512,6 +558,7 @@ export default function ProfilePage() {
                   />
                 </label>
                 <label
+                  className="profile-toggle-row"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -523,7 +570,10 @@ export default function ProfilePage() {
                     border: "1px solid var(--border)",
                   }}
                 >
-                  <span style={{ fontSize: 14, color: "var(--text-primary)" }}>
+                  <span
+                    className="profile-toggle-text"
+                    style={{ fontSize: 14, color: "var(--text-primary)" }}
+                  >
                     Mute Telegram notifications
                   </span>
                   <input
@@ -540,6 +590,7 @@ export default function ProfilePage() {
                   />
                 </label>
                 <p
+                  className="profile-muted-note"
                   style={{
                     margin: 0,
                     fontSize: 12,
@@ -554,6 +605,7 @@ export default function ProfilePage() {
 
             {profileMsg && (
               <p
+                className="profile-feedback profile-feedback-success"
                 style={{
                   color: "var(--success)",
                   fontSize: 14,
@@ -568,6 +620,7 @@ export default function ProfilePage() {
             )}
             {profileErr && (
               <p
+                className="profile-feedback profile-feedback-error"
                 style={{
                   color: "var(--error)",
                   fontSize: 14,
@@ -582,7 +635,7 @@ export default function ProfilePage() {
             )}
             <button
               type="submit"
-              className="btn btn-primary"
+              className="btn btn-primary profile-submit-btn"
               style={{ padding: "14px 28px", fontSize: 14, marginTop: 4 }}
               disabled={profileLoading}
             >
@@ -601,6 +654,7 @@ export default function ProfilePage() {
 
         {/* Change Password */}
         <div
+          className="profile-section profile-section-password"
           style={{
             padding: 32,
             marginBottom: 32,
@@ -610,6 +664,7 @@ export default function ProfilePage() {
           }}
         >
           <h3
+            className="profile-section-title"
             style={{
               marginTop: 0,
               marginBottom: 28,
@@ -626,6 +681,7 @@ export default function ProfilePage() {
           <form onSubmit={handleChangePassword}>
             <div style={{ marginBottom: 28 }}>
               <label
+                className="profile-label"
                 style={{
                   display: "block",
                   marginBottom: 12,
@@ -638,6 +694,7 @@ export default function ProfilePage() {
                 Current Password
               </label>
               <input
+                className="profile-input"
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -661,6 +718,7 @@ export default function ProfilePage() {
             </div>
             <div style={{ marginBottom: 28 }}>
               <label
+                className="profile-label"
                 style={{
                   display: "block",
                   marginBottom: 12,
@@ -673,6 +731,7 @@ export default function ProfilePage() {
                 New Password
               </label>
               <input
+                className="profile-input"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -697,6 +756,7 @@ export default function ProfilePage() {
             </div>
             <div style={{ marginBottom: 28 }}>
               <label
+                className="profile-label"
                 style={{
                   display: "block",
                   marginBottom: 12,
@@ -709,6 +769,7 @@ export default function ProfilePage() {
                 Confirm New Password
               </label>
               <input
+                className="profile-input"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -732,6 +793,7 @@ export default function ProfilePage() {
             </div>
             {passwordMsg && (
               <p
+                className="profile-feedback profile-feedback-success"
                 style={{
                   color: "var(--success)",
                   fontSize: 14,
@@ -746,6 +808,7 @@ export default function ProfilePage() {
             )}
             {passwordErr && (
               <p
+                className="profile-feedback profile-feedback-error"
                 style={{
                   color: "var(--error)",
                   fontSize: 14,
@@ -760,7 +823,7 @@ export default function ProfilePage() {
             )}
             <button
               type="submit"
-              className="btn btn-primary"
+              className="btn btn-primary profile-submit-btn"
               style={{ padding: "14px 28px", fontSize: 14, marginTop: 4 }}
               disabled={passwordLoading}
             >

@@ -1409,6 +1409,7 @@ function AdminPageContent() {
                 return (
                   <div
                     key={loan.id}
+                    className="admin-loan-card"
                     style={{
                       background: "var(--bg-card)",
                       border: "1px solid var(--border)",
@@ -1465,9 +1466,13 @@ function AdminPageContent() {
                             </span>
                           )}
                         </div>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>
+                        <div
+                          className="admin-loan-card-name"
+                          style={{ fontWeight: 700, fontSize: 15 }}
+                        >
                           {loan.requester_name}
                           <span
+                            className="admin-loan-card-username"
                             style={{
                               fontWeight: 400,
                               color: "var(--text-muted)",
@@ -1594,6 +1599,7 @@ function AdminPageContent() {
 
                     {/* Items */}
                     <div
+                      className="admin-loan-card-items"
                       style={{
                         padding: "0 18px 12px",
                         display: "flex",
@@ -1618,6 +1624,7 @@ function AdminPageContent() {
 
                     {/* Meta row */}
                     <div
+                      className="admin-loan-card-meta"
                       style={{
                         padding: "10px 18px",
                         borderTop: "1px solid var(--border)",
@@ -1655,6 +1662,7 @@ function AdminPageContent() {
                     {/* Pending: notes + approve/reject */}
                     {loan.status === "pending" && (
                       <div
+                        className="admin-loan-card-pending"
                         style={{
                           padding: "14px 18px",
                           borderTop: "1px solid var(--border)",
@@ -1675,7 +1683,10 @@ function AdminPageContent() {
                             }))
                           }
                         />
-                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                        <div
+                          className="admin-loan-card-actions"
+                          style={{ display: "flex", gap: 8, marginTop: 10 }}
+                        >
                           <button
                             disabled={actionLoading === loan.id}
                             onClick={() =>
@@ -1755,6 +1766,7 @@ function AdminPageContent() {
                       (loan.loan_type === "temporary" ||
                         loan._source === "laptop") && (
                         <div
+                          className="admin-loan-card-return"
                           style={{
                             padding: "12px 18px",
                             borderTop: "1px solid var(--border)",
@@ -1810,6 +1822,7 @@ function AdminPageContent() {
                     {/* Footer: notes, photo, delete */}
                     {hasFooter && (
                       <div
+                        className="admin-loan-card-footer"
                         style={{
                           padding: "10px 18px",
                           borderTop: "1px solid var(--border)",
@@ -1831,6 +1844,7 @@ function AdminPageContent() {
                         >
                           {loan.admin_notes && loan.status !== "pending" && (
                             <div
+                              className="admin-loan-card-note"
                               style={{
                                 fontSize: 12,
                                 color: "var(--text-secondary)",
@@ -1842,6 +1856,7 @@ function AdminPageContent() {
                           {loan.status === "returned" &&
                             loan.return_photo_url && (
                               <a
+                                className="admin-loan-card-proof"
                                 href={loan.return_photo_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -1860,6 +1875,7 @@ function AdminPageContent() {
                         </div>
                         {loan._source !== "laptop" && (
                           <button
+                            className="admin-loan-card-delete"
                             disabled={actionLoading === loan.id}
                             aria-label={`Delete loan ${loan.id}`}
                             style={{

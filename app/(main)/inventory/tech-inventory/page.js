@@ -202,7 +202,7 @@ export default function InventoryPage() {
       <CartPanel />
       <div className="page-container">
         <div
-          className="page-header"
+          className="page-header inventory-page-header"
           style={{
             display: "flex",
             alignItems: "flex-start",
@@ -213,7 +213,10 @@ export default function InventoryPage() {
             <h1>Inventory</h1>
             <p>Browse and manage tech equipment</p>
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div
+            className="inventory-page-header-actions"
+            style={{ display: "flex", gap: 8, marginTop: 8 }}
+          >
             <button
               className="btn btn-sm btn-outline"
               onClick={handleRefresh}

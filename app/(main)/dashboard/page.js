@@ -903,6 +903,7 @@ export default function DashboardPage() {
         {/* Loan detail modal — shown when a calendar bar is clicked */}
         {selectedLoan && (
           <div
+            className="dashboard-loan-modal-overlay"
             style={{
               position: "fixed",
               inset: 0,
@@ -917,6 +918,7 @@ export default function DashboardPage() {
             onClick={() => setSelectedLoan(null)}
           >
             <div
+              className="dashboard-loan-modal"
               style={{
                 background: "var(--bg-card)",
                 borderRadius: 16,
@@ -929,6 +931,7 @@ export default function DashboardPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div
+                className="dashboard-loan-modal-header"
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
@@ -936,8 +939,14 @@ export default function DashboardPage() {
                   marginBottom: 20,
                 }}
               >
-                <h3 style={{ margin: 0, fontSize: 18 }}>📋 Loan Details</h3>
+                <h3
+                  className="dashboard-loan-modal-title"
+                  style={{ margin: 0, fontSize: 18 }}
+                >
+                  📋 Loan Details
+                </h3>
                 <button
+                  className="dashboard-loan-modal-close"
                   onClick={() => setSelectedLoan(null)}
                   style={{
                     background: "none",
@@ -951,6 +960,7 @@ export default function DashboardPage() {
                 </button>
               </div>
               <div
+                className="dashboard-loan-modal-summary"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -962,6 +972,7 @@ export default function DashboardPage() {
                 }}
               >
                 <div
+                  className="dashboard-loan-modal-avatar"
                   style={{
                     width: 44,
                     height: 44,
@@ -981,10 +992,16 @@ export default function DashboardPage() {
                     "?")[0].toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 16 }}>
+                  <div
+                    className="dashboard-loan-modal-name"
+                    style={{ fontWeight: 600, fontSize: 16 }}
+                  >
                     {selectedLoan.requester_name}
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  <div
+                    className="dashboard-loan-modal-username"
+                    style={{ fontSize: 12, color: "var(--text-muted)" }}
+                  >
                     @{selectedLoan.requester_username}
                   </div>
                 </div>
@@ -1001,6 +1018,7 @@ export default function DashboardPage() {
               </div>
               <div style={{ marginBottom: 16 }}>
                 <div
+                  className="dashboard-loan-modal-kicker"
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
@@ -1586,6 +1604,7 @@ export default function DashboardPage() {
       {/* Loan Detail Modal */}
       {selectedLoan && (
         <div
+          className="dashboard-loan-modal-overlay"
           style={{
             position: "fixed",
             inset: 0,
@@ -1600,6 +1619,7 @@ export default function DashboardPage() {
           onClick={() => setSelectedLoan(null)}
         >
           <div
+            className="dashboard-loan-modal"
             style={{
               background: "var(--bg-card)",
               borderRadius: 16,
@@ -1612,6 +1632,7 @@ export default function DashboardPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div
+              className="dashboard-loan-modal-header"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -1619,8 +1640,14 @@ export default function DashboardPage() {
                 marginBottom: 20,
               }}
             >
-              <h3 style={{ margin: 0, fontSize: 18 }}>📋 Loan Details</h3>
+              <h3
+                className="dashboard-loan-modal-title"
+                style={{ margin: 0, fontSize: 18 }}
+              >
+                📋 Loan Details
+              </h3>
               <button
+                className="dashboard-loan-modal-close"
                 onClick={() => setSelectedLoan(null)}
                 style={{
                   background: "none",
@@ -1635,6 +1662,7 @@ export default function DashboardPage() {
             </div>
 
             <div
+              className="dashboard-loan-modal-summary"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1646,6 +1674,7 @@ export default function DashboardPage() {
               }}
             >
               <div
+                className="dashboard-loan-modal-avatar"
                 style={{
                   width: 44,
                   height: 44,
@@ -1664,10 +1693,16 @@ export default function DashboardPage() {
                   "?")[0].toUpperCase()}
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>
+                <div
+                  className="dashboard-loan-modal-name"
+                  style={{ fontWeight: 600, fontSize: 16 }}
+                >
                   {selectedLoan.requester_name}
                 </div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                <div
+                  className="dashboard-loan-modal-username"
+                  style={{ fontSize: 12, color: "var(--text-muted)" }}
+                >
                   @{selectedLoan.requester_username}
                 </div>
               </div>
@@ -1685,6 +1720,7 @@ export default function DashboardPage() {
 
             <div style={{ marginBottom: 16 }}>
               <div
+                className="dashboard-loan-modal-kicker"
                 style={{
                   fontSize: 12,
                   fontWeight: 600,

@@ -137,7 +137,8 @@ export default function CartPanel() {
         });
         const data = await res.json();
         if (res.status === 401) {
-          const msg = "Session expired — please refresh the page and try again.";
+          const msg =
+            "Session expired — please refresh the page and try again.";
           setError(msg);
           toast.error(msg);
           setLoading(false);
@@ -275,6 +276,7 @@ export default function CartPanel() {
         {/* ====== SUCCESS SCREEN ====== */}
         {submitted && (
           <div
+            className="cart-success-state"
             style={{
               flex: 1,
               display: "flex",
@@ -286,11 +288,17 @@ export default function CartPanel() {
               gap: 16,
             }}
           >
-            <div style={{ fontSize: 56 }}>🎉</div>
-            <h3 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>
+            <div className="cart-success-icon" style={{ fontSize: 56 }}>
+              🎉
+            </div>
+            <h3
+              className="cart-success-title"
+              style={{ fontSize: 20, fontWeight: 700, margin: 0 }}
+            >
               Request Submitted!
             </h3>
             <p
+              className="cart-success-copy"
               style={{
                 color: "var(--text-secondary)",
                 fontSize: 14,
@@ -302,6 +310,7 @@ export default function CartPanel() {
               you when it&apos;s reviewed.
             </p>
             <div
+              className="cart-success-actions"
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -341,7 +350,7 @@ export default function CartPanel() {
             <div className="cart-items">
               {items.length === 0 ? (
                 <div
-                  className="empty-state"
+                  className="empty-state cart-empty-state"
                   style={{
                     padding: 32,
                     display: "flex",
@@ -353,7 +362,10 @@ export default function CartPanel() {
                   <div className="empty-icon">🛒</div>
                   <div style={{ textAlign: "center" }}>
                     <h3 style={{ marginBottom: 6 }}>Cart is empty</h3>
-                    <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                    <p
+                      className="cart-empty-copy"
+                      style={{ fontSize: 13, color: "var(--text-secondary)" }}
+                    >
                       Browse items to get started
                     </p>
                   </div>
@@ -402,6 +414,7 @@ export default function CartPanel() {
                     <>
                       {cartType === "mixed" && (
                         <div
+                          className="cart-section-kicker"
                           style={{
                             padding: "8px 16px",
                             fontSize: 11,
@@ -616,6 +629,7 @@ export default function CartPanel() {
                     <>
                       {cartType === "mixed" && (
                         <div
+                          className="cart-section-kicker"
                           style={{
                             padding: "8px 16px",
                             fontSize: 11,
@@ -731,10 +745,24 @@ export default function CartPanel() {
         {showForm && (
           <form
             onSubmit={handleSubmit}
-            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              minHeight: 0,
+            }}
           >
-            <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
+            <div
+              className="cart-form-body"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: "auto",
+                padding: 24,
+              }}
+            >
               <div
+                className="cart-form-header"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -749,7 +777,7 @@ export default function CartPanel() {
                 >
                   ← Back
                 </button>
-                <h3 style={{ fontSize: 16 }}>
+                <h3 className="cart-form-title" style={{ fontSize: 16 }}>
                   {modifyingLoan ? "Update Loan Request" : "Loan Request"}
                 </h3>
               </div>
@@ -762,6 +790,7 @@ export default function CartPanel() {
 
               {/* Summary */}
               <div
+                className="cart-summary-box"
                 style={{
                   marginBottom: 16,
                   padding: 12,
@@ -773,6 +802,7 @@ export default function CartPanel() {
                 {laptopItems.length > 0 && (
                   <>
                     <p
+                      className="cart-summary-kicker"
                       style={{
                         fontSize: 11,
                         fontWeight: 700,
@@ -794,6 +824,7 @@ export default function CartPanel() {
                         {g.laptops.map((l) => (
                           <p
                             key={l.id}
+                            className="cart-summary-line"
                             style={{ fontSize: 13, marginBottom: 2 }}
                           >
                             • {l.name}
@@ -824,6 +855,7 @@ export default function CartPanel() {
                       />
                     )}
                     <p
+                      className="cart-summary-kicker"
                       style={{
                         fontSize: 11,
                         fontWeight: 700,
@@ -838,6 +870,7 @@ export default function CartPanel() {
                     {techItems.map((item) => (
                       <p
                         key={item.id}
+                        className="cart-summary-line"
                         style={{ fontSize: 13, marginBottom: 2 }}
                       >
                         • {item.item} × {item.quantity}

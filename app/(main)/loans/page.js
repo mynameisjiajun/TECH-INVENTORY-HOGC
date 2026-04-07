@@ -37,7 +37,7 @@ const LOAN_STATUS_FILTERS = [
 export default function LoansPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [loans, setLoans] = useState([]);
+  const [allLoans, setAllLoans] = useState([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -113,7 +113,7 @@ export default function LoansPage() {
       const data = await res.json();
       if (res.ok) {
         toast.success(data.message || "Return submitted");
-        setLoans((prev) =>
+        setAllLoans((prev) =>
           prev.map((l) =>
             l.id === returnModalLoan.id &&
             l._loanKind === returnModalLoan._loanKind
@@ -338,19 +338,9 @@ export default function LoansPage() {
     setFetching(true);
     setError("");
     try {
-      const params = new URLSearchParams({
-        status: statusFilter,
-        search,
-        date_from: dateFrom,
-        date_to: dateTo,
-      });
-
       const [techRes, laptopRes] = await Promise.all([
-        fetch(`/api/loans?${params}`, { cache: "no-store" }),
-        fetch(
-          `/api/laptop-loans?view=my${statusFilter ? `&status=${statusFilter}` : ""}`,
-          { cache: "no-store" },
-        ),
+        fetch(`/api/loans?view=my`, { cache: "no-store" }),
+        fetch(`/api/laptop-loans?view=my`, { cache: "no-store" }),
       ]);
 
       const techData = techRes.ok ? await techRes.json() : { loans: [] };
@@ -373,25 +363,11 @@ export default function LoansPage() {
         })),
       }));
 
-      // Client-side filter laptop loans by search and date range (API doesn't support these)
-      if (search) {
-        const q = search.toLowerCase();
-        laptopLoans = laptopLoans.filter(
-          (l) =>
-            l.purpose?.toLowerCase().includes(q) ||
-            l.items.some((i) => i.item.toLowerCase().includes(q)),
-        );
-      }
-      if (dateFrom)
-        laptopLoans = laptopLoans.filter((l) => l.start_date >= dateFrom);
-      if (dateTo)
-        laptopLoans = laptopLoans.filter((l) => l.start_date <= dateTo);
-
       const allLoans = [...techLoans, ...laptopLoans].sort(
         (a, b) => new Date(b.created_at) - new Date(a.created_at),
       );
 
-      setLoans(allLoans);
+      setAllLoans(allLoans);
 
       if (!techRes.ok) {
         const d = await techRes.json().catch(() => ({}));
@@ -402,7 +378,7 @@ export default function LoansPage() {
     } finally {
       setFetching(false);
     }
-  }, [user, statusFilter, search, dateFrom, dateTo]);
+  }, [user]);
 
   // Keep ref in sync so the realtime channel always calls the latest version
   // without needing fetchLoans in the channel's dep array (which would cause
@@ -561,6 +537,24 @@ export default function LoansPage() {
     return bundles;
   };
 
+  const loans = allLoans.filter((loan) => {
+    if (statusFilter && loan.status !== statusFilter) return false;
+
+    if (search) {
+      const query = search.toLowerCase();
+      const matchesPurpose = loan.purpose?.toLowerCase().includes(query);
+      const matchesItem = loan.items.some((item) =>
+        item.item?.toLowerCase().includes(query),
+      );
+      if (!matchesPurpose && !matchesItem) return false;
+    }
+
+    if (dateFrom && loan.start_date < dateFrom) return false;
+    if (dateTo && loan.start_date > dateTo) return false;
+
+    return true;
+  });
+
   // Stats
   const counts = loans.reduce((acc, l) => {
     acc[l.status] = (acc[l.status] || 0) + 1;
@@ -592,6 +586,7 @@ export default function LoansPage() {
       >
         {overdue && (
           <div
+            className="loan-card-alert loan-card-alert-overdue"
             style={{
               display: "flex",
               alignItems: "center",
@@ -612,6 +607,7 @@ export default function LoansPage() {
         )}
         {dueSoon && (
           <div
+            className="loan-card-alert loan-card-alert-warning"
             style={{
               display: "flex",
               alignItems: "center",
@@ -646,9 +642,17 @@ export default function LoansPage() {
               {typeBadge(loan.loan_type)}
               {statusBadge(loan.status)}
             </div>
-            <p style={{ fontSize: 14, fontWeight: 500 }}>Request #{loan.id}</p>
+            <p
+              className="loan-card-request-id"
+              style={{ fontSize: 14, fontWeight: 500 }}
+            >
+              Request #{loan.id}
+            </p>
           </div>
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          <span
+            className="loan-card-created-at"
+            style={{ fontSize: 12, color: "var(--text-muted)" }}
+          >
             {new Date(loan.created_at).toLocaleDateString()}
           </span>
         </div>
@@ -682,6 +686,7 @@ export default function LoansPage() {
 
         {loan.admin_notes && (
           <div
+            className="loan-card-note"
             style={{
               marginTop: 8,
               padding: 10,
@@ -697,6 +702,7 @@ export default function LoansPage() {
 
         {(loan.status === "approved" || loan.status === "pending") && (
           <div
+            className="loan-card-actions"
             style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}
           >
             {loan.status === "approved" && (
@@ -741,11 +747,15 @@ export default function LoansPage() {
         )}
 
         {loan.status === "returned" && loan.return_photo_url && (
-          <div style={{ marginTop: 12, fontSize: 13 }}>
+          <div
+            className="loan-card-link-row"
+            style={{ marginTop: 12, fontSize: 13 }}
+          >
             <a
               href={loan.return_photo_url}
               target="_blank"
               rel="noopener noreferrer"
+              className="loan-card-link"
               style={{
                 color: "var(--accent)",
                 textDecoration: "none",
@@ -760,13 +770,12 @@ export default function LoansPage() {
         )}
 
         {loan.status === "pending" && (
-          <div style={{ marginTop: 12 }}>
+          <div className="loan-card-link-row" style={{ marginTop: 12 }}>
             <button
               className="btn btn-sm"
               onClick={() => handleCancelLoan(loan)}
               disabled={cancelLoading[loan.id]}
               style={{
-                fontSize: 12,
                 color: "var(--error)",
                 background: "rgba(239,68,68,0.08)",
                 border: "1px solid rgba(239,68,68,0.3)",
@@ -785,7 +794,7 @@ export default function LoansPage() {
         )}
 
         {(loan.status === "returned" || loan.status === "rejected") && (
-          <div style={{ marginTop: 12 }}>
+          <div className="loan-card-link-row" style={{ marginTop: 12 }}>
             <button
               className="btn btn-sm btn-outline"
               onClick={() =>
@@ -795,7 +804,6 @@ export default function LoansPage() {
               }
               disabled={borrowAgainLoading[loan.id]}
               style={{
-                fontSize: 12,
                 color: "var(--accent)",
                 borderColor: "rgba(99,102,241,0.4)",
               }}
@@ -1089,6 +1097,7 @@ export default function LoansPage() {
                 }}
               >
                 <div
+                  className="loan-bundle-header"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1133,6 +1142,7 @@ export default function LoansPage() {
                   {bundle.loans.map((loan) => (
                     <div
                       key={`${loan._loanKind}-${loan.id}`}
+                      className="loan-bundle-card"
                       style={{ marginBottom: 8 }}
                     >
                       {renderLoanCard(loan)}

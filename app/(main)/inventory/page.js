@@ -470,9 +470,8 @@ export default function InventoryLanding() {
         /* --- Mobile layout --- */
         @media (max-width: 768px) {
           .inv-shell {
-            min-height: calc(100dvh - var(--shell-navbar-safe-top, 0px) - 60px);
             align-items: flex-start;
-            padding-top: max(8px, var(--shell-navbar-safe-top, 0px));
+            padding-top: 0;
           }
           .inv-bg-circuit-line {
             background: rgba(99,102,241,0.02);

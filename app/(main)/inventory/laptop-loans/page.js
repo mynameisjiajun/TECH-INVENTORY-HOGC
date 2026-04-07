@@ -74,6 +74,7 @@ const LaptopCard = memo(function LaptopCard({
 
   return (
     <div
+      className="laptop-loan-card"
       style={{
         background: "var(--bg-card)",
         border: `1.5px solid ${isUnavailable ? statusColor.border : "var(--border)"}`,
@@ -101,6 +102,7 @@ const LaptopCard = memo(function LaptopCard({
 
       {/* Card body */}
       <div
+        className="laptop-loan-card-body"
         style={{
           padding: "20px 22px",
           flex: 1,
@@ -110,8 +112,12 @@ const LaptopCard = memo(function LaptopCard({
         }}
       >
         {/* Icon + name */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div
+          className="laptop-loan-card-head"
+          style={{ display: "flex", alignItems: "center", gap: 14 }}
+        >
           <div
+            className="laptop-loan-card-icon"
             style={{
               width: 52,
               height: 52,
@@ -129,11 +135,15 @@ const LaptopCard = memo(function LaptopCard({
             <RiMacbookLine />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.3 }}>
+            <div
+              className="laptop-loan-card-name"
+              style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.3 }}
+            >
               {laptop.name}
             </div>
             {(laptop.screen_size || laptop.cpu) && (
               <div
+                className="laptop-loan-card-specs"
                 style={{
                   fontSize: 12.5,
                   color: "var(--text-secondary)",
@@ -147,6 +157,7 @@ const LaptopCard = memo(function LaptopCard({
             )}
             {canSeeSpecs && (laptop.ram || laptop.storage) && (
               <div
+                className="laptop-loan-card-specs laptop-loan-card-specs-muted"
                 style={{
                   fontSize: 11.5,
                   color: "var(--text-muted)",
@@ -164,6 +175,7 @@ const LaptopCard = memo(function LaptopCard({
         {/* Status badge */}
         <div>
           <span
+            className="laptop-loan-card-status"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -185,6 +197,7 @@ const LaptopCard = memo(function LaptopCard({
         {/* Perm loan person */}
         {isPermLoaned && laptop.perm_loan_person && (
           <div
+            className="laptop-loan-card-assignee"
             style={{
               fontSize: 12.5,
               color: "var(--text-secondary)",
@@ -206,6 +219,7 @@ const LaptopCard = memo(function LaptopCard({
         {/* Temp loan borrower */}
         {isTempLoaned && laptop.borrower_name && (
           <div
+            className="laptop-loan-card-assignee"
             style={{
               fontSize: 12.5,
               color: "var(--text-secondary)",
@@ -223,6 +237,7 @@ const LaptopCard = memo(function LaptopCard({
       {/* Footer action */}
       {(isAvailable || (isBlocked && !isPermLoaned)) && (
         <div
+          className="laptop-loan-card-footer"
           style={{
             padding: "14px 22px",
             borderTop: "1px solid var(--border)",
@@ -231,7 +246,7 @@ const LaptopCard = memo(function LaptopCard({
         >
           {isAvailable && (
             <button
-              className="btn btn-primary"
+              className="btn btn-primary laptop-loan-card-action"
               disabled={!canBorrow}
               onClick={() => onBorrow(laptop)}
               title={
@@ -265,6 +280,7 @@ const LaptopCard = memo(function LaptopCard({
           )}
           {isBlocked && (
             <button
+              className="laptop-loan-card-action"
               onClick={() => onNotify(laptop)}
               style={{
                 width: "100%",
@@ -435,8 +451,7 @@ export default function LaptopLoansPage() {
     t.laptops.filter((l) => l.is_perm_loaned),
   );
 
-  if (loading)
-    return <AppShellLoading />;
+  if (loading) return <AppShellLoading />;
 
   if (!user) return null;
 
@@ -722,6 +737,7 @@ export default function LaptopLoansPage() {
                   style={{ position: "sticky", top: 80 }}
                 >
                   <div
+                    className="laptop-sidebar-card"
                     style={{
                       background: "var(--bg-card)",
                       border: "1px solid var(--border)",
@@ -730,6 +746,7 @@ export default function LaptopLoansPage() {
                     }}
                   >
                     <h3
+                      className="laptop-sidebar-title"
                       style={{
                         fontSize: 14,
                         fontWeight: 700,
@@ -752,6 +769,7 @@ export default function LaptopLoansPage() {
                       {returningSoon.map((laptop) => (
                         <div
                           key={laptop.id}
+                          className="laptop-sidebar-item"
                           style={{
                             display: "flex",
                             alignItems: "center",
@@ -763,6 +781,7 @@ export default function LaptopLoansPage() {
                           }}
                         >
                           <div
+                            className="laptop-sidebar-item-icon"
                             style={{
                               width: 36,
                               height: 36,
@@ -778,10 +797,14 @@ export default function LaptopLoansPage() {
                             <RiMacbookLine size={18} />
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 13 }}>
+                            <div
+                              className="laptop-sidebar-item-name"
+                              style={{ fontWeight: 600, fontSize: 13 }}
+                            >
                               {laptop.name}
                             </div>
                             <div
+                              className="laptop-sidebar-item-specs"
                               style={{
                                 fontSize: 11,
                                 color: "var(--text-muted)",
@@ -792,6 +815,7 @@ export default function LaptopLoansPage() {
                               {laptop.cpu}
                             </div>
                             <div
+                              className="laptop-sidebar-item-return"
                               style={{
                                 fontSize: 11,
                                 color: "var(--warning)",
@@ -803,6 +827,7 @@ export default function LaptopLoansPage() {
                             </div>
                           </div>
                           <button
+                            className="laptop-sidebar-notify"
                             onClick={() => handleNotify(laptop)}
                             style={{
                               padding: "4px 8px",
