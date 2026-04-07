@@ -909,12 +909,9 @@ export default function LoansPage() {
 
         {/* Filters */}
         <div
+          className="filter-shell filter-toolbar"
           style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 8,
             marginBottom: 24,
-            alignItems: "center",
           }}
         >
           <div
@@ -924,19 +921,24 @@ export default function LoansPage() {
             <RiSearchLine className="search-icon" />
             <input
               type="text"
+              aria-label="Search loans"
+              name="loan_search"
+              autoComplete="off"
+              spellCheck={false}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by item or purpose..."
+              placeholder="Search by item or purpose…"
             />
           </div>
           <select
             className="filter-select"
+            aria-label="Filter loans by status"
+            name="loan_status_filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             style={{
               flexShrink: 0,
               fontSize: 16,
-              padding: "7px 36px 7px 10px",
               width: "auto",
             }}
           >
@@ -946,47 +948,24 @@ export default function LoansPage() {
             <option value="rejected">Rejected</option>
             <option value="returned">Returned</option>
           </select>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              flexShrink: 0,
-            }}
-          >
-            <RiFilterLine
-              style={{ color: "var(--text-muted)", fontSize: 14 }}
-            />
+          <div className="filter-date-range">
+            <RiFilterLine className="filter-icon" />
             <input
+              className="filter-date-input"
               type="date"
+              aria-label="Filter loans from date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               title="From date"
-              style={{
-                background: "var(--bg-card)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                padding: "7px 8px",
-                color: "var(--text-primary)",
-                fontSize: 16,
-                width: 130,
-              }}
             />
-            <span style={{ color: "var(--text-muted)", fontSize: 12 }}>–</span>
+            <span className="filter-date-divider">–</span>
             <input
+              className="filter-date-input"
               type="date"
+              aria-label="Filter loans to date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               title="To date"
-              style={{
-                background: "var(--bg-card)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                padding: "7px 8px",
-                color: "var(--text-primary)",
-                fontSize: 16,
-                width: 130,
-              }}
             />
           </div>
           {(search || dateFrom || dateTo || statusFilter) && (

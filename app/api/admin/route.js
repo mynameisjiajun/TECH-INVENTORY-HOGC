@@ -61,8 +61,22 @@ export async function POST(request) {
     const body = await request.json();
     const { action } = body;
 
-    // SQLite still needed for inventory (storage_items, deployed_items)
-    const db = getDb();
+    const inventoryBackedActions = new Set([
+      "approve",
+      "bulk_approve",
+      "bulk_return",
+      "return",
+      "delete",
+    ]);
+
+    let db = null;
+    if (inventoryBackedActions.has(action)) {
+      // Warm the inventory snapshot before approval/return flows touch SQLite.
+      // Without this, a cold start can make admin actions fail until someone
+      // opens the inventory page and triggers the initial sheet sync.
+      await waitForSync();
+      db = getDb();
+    }
 
     // ===== BULK RETURN =====
     if (action === "bulk_return") {

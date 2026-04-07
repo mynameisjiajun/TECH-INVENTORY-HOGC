@@ -285,7 +285,7 @@ export default function Navbar() {
         <div className="navbar-inner">
           <Link href="/inventory" className="navbar-brand">
             <RiServerLine className="brand-icon" />
-            Tech Inventory
+            <span className="navbar-brand-text">Tech Inventory</span>
           </Link>
 
           <div className="navbar-links">

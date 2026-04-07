@@ -1,4 +1,5 @@
 import { Inter } from 'next/font/google';
+import { headers } from 'next/headers';
 import './globals.css';
 import './styles/web.css';
 import './styles/pwa.css';
@@ -32,12 +33,34 @@ export const viewport = {
   themeColor: '#0a0e1a',
 };
 
-export default function RootLayout({ children }) {
+function detectInitialShell(userAgent) {
+  const ua = userAgent || '';
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (/Macintosh/.test(ua) && /Mobile/.test(ua));
+  const isMobile =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(
+      ua,
+    );
+
+  return {
+    device: isMobile ? 'mobile' : 'desktop',
+    platform: isIOS ? 'ios' : 'default',
+    shell: isMobile ? 'mobile-web' : 'desktop-web',
+  };
+}
+
+export default async function RootLayout({ children }) {
+  const headerStore = await headers();
+  const userAgent = headerStore.get('user-agent') || '';
+  const initialShell = detectInitialShell(userAgent);
+
   return (
     <html
       lang="en"
-      data-shell="desktop-web"
-      data-device="desktop"
+      data-shell={initialShell.shell}
+      data-device={initialShell.device}
+      data-platform={initialShell.platform}
       className={inter.variable}
     >
       <head>

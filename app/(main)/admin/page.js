@@ -1,7 +1,7 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabaseClient } from "@/lib/db/supabaseClient";
 import { useToast } from "@/lib/context/ToastContext";
 import Navbar from "@/components/Navbar";
@@ -53,6 +53,33 @@ const LOAN_STATUSES = [
 
 function parseStateValue(value, allowedValues, fallback) {
   return allowedValues.includes(value) ? value : fallback;
+}
+
+function readAdminQueryState() {
+  if (typeof window === "undefined") {
+    return {
+      tab: "loans",
+      status: "pending",
+      source: "all",
+      q: "",
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return {
+    tab: parseStateValue(params.get("tab") || "loans", ADMIN_TABS, "loans"),
+    status: parseStateValue(
+      params.get("status") || "pending",
+      LOAN_STATUSES,
+      "pending",
+    ),
+    source: parseStateValue(
+      params.get("source") || "all",
+      LOAN_SOURCES,
+      "all",
+    ),
+    q: params.get("q") || "",
+  };
 }
 
 async function readApiResponse(res) {
@@ -187,16 +214,11 @@ function SortableTemplateItem({ t, onEdit, onDelete }) {
 function AdminPageContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const toast = useToast();
+  const initialQueryState = readAdminQueryState();
   const [loans, setLoans] = useState([]);
   const [statusFilter, setStatusFilter] = useState(() =>
-    parseStateValue(
-      searchParams.get("status") || "pending",
-      LOAN_STATUSES,
-      "pending",
-    ),
+    initialQueryState.status,
   );
   const [fetching, setFetching] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
@@ -207,9 +229,7 @@ function AdminPageContent() {
   const [bulkApproveLoading, setBulkApproveLoading] = useState(false);
   const [userActionLoading, setUserActionLoading] = useState(null);
   const [inviteCodeLoading, setInviteCodeLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState(() =>
-    parseStateValue(searchParams.get("tab") || "loans", ADMIN_TABS, "loans"),
-  );
+  const [activeTab, setActiveTab] = useState(() => initialQueryState.tab);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditFetching, setAuditFetching] = useState(false);
   const [auditError, setAuditError] = useState("");
@@ -244,13 +264,9 @@ function AdminPageContent() {
   const [templateMsg, setTemplateMsg] = useState("");
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [clockMs, setClockMs] = useState(Date.now());
-  const [loanSource, setLoanSource] = useState(() =>
-    parseStateValue(searchParams.get("source") || "all", LOAN_SOURCES, "all"),
-  ); // 'all' | 'tech' | 'laptop'
+  const [loanSource, setLoanSource] = useState(() => initialQueryState.source); // 'all' | 'tech' | 'laptop'
   const [pendingCount, setPendingCount] = useState(0);
-  const [searchQuery, setSearchQuery] = useState(
-    () => searchParams.get("q") || "",
-  );
+  const [searchQuery, setSearchQuery] = useState(() => initialQueryState.q);
 
   const filteredLoans = useMemo(() => {
     if (!searchQuery.trim()) return loans;
@@ -298,31 +314,27 @@ function AdminPageContent() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    const nextTab = parseStateValue(
-      searchParams.get("tab") || "loans",
-      ADMIN_TABS,
-      "loans",
-    );
-    const nextStatus = parseStateValue(
-      searchParams.get("status") || "pending",
-      LOAN_STATUSES,
-      "pending",
-    );
-    const nextSource = parseStateValue(
-      searchParams.get("source") || "all",
-      LOAN_SOURCES,
-      "all",
-    );
-    const nextQuery = searchParams.get("q") || "";
+    const syncFromLocation = () => {
+      const nextState = readAdminQueryState();
+      setActiveTab((prev) => (prev === nextState.tab ? prev : nextState.tab));
+      setStatusFilter((prev) =>
+        prev === nextState.status ? prev : nextState.status,
+      );
+      setLoanSource((prev) =>
+        prev === nextState.source ? prev : nextState.source,
+      );
+      setSearchQuery((prev) => (prev === nextState.q ? prev : nextState.q));
+    };
 
-    if (activeTab !== nextTab) setActiveTab(nextTab);
-    if (statusFilter !== nextStatus) setStatusFilter(nextStatus);
-    if (loanSource !== nextSource) setLoanSource(nextSource);
-    if (searchQuery !== nextQuery) setSearchQuery(nextQuery);
-  }, [searchParams, activeTab, statusFilter, loanSource, searchQuery]);
+    syncFromLocation();
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
     const nextState = {
       tab: activeTab === "loans" ? "" : activeTab,
       status: statusFilter === "pending" ? "" : statusFilter,
@@ -336,21 +348,18 @@ function AdminPageContent() {
     });
 
     const nextQueryString = params.toString();
-    const currentQueryString = searchParams.toString();
+    const currentQueryString = window.location.search.replace(/^\?/, "");
     if (nextQueryString !== currentQueryString) {
-      router.replace(
-        nextQueryString ? `${pathname}?${nextQueryString}` : pathname,
-        { scroll: false },
-      );
+      const nextUrl = nextQueryString
+        ? `${window.location.pathname}?${nextQueryString}`
+        : window.location.pathname;
+      window.history.replaceState(window.history.state, "", nextUrl);
     }
   }, [
     activeTab,
     statusFilter,
     loanSource,
     searchQuery,
-    pathname,
-    router,
-    searchParams,
   ]);
 
   const fetchLoans = useCallback(async () => {
@@ -1180,44 +1189,14 @@ function AdminPageContent() {
           <>
             {/* Unified filter bar */}
             <div
+              className="filter-shell"
               style={{
-                background: "var(--bg-card)",
-                border: "1px solid var(--border)",
-                borderRadius: 14,
-                padding: "14px 16px",
                 marginBottom: 16,
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 12,
-                  flexWrap: "wrap",
-                  gap: 8,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "var(--text-muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                  }}
-                >
-                  Loan Source
-                </span>
-                <div
-                  style={{
-                    display: "flex",
-                    background: "rgba(255,255,255,0.05)",
-                    borderRadius: 8,
-                    padding: 2,
-                    gap: 2,
-                  }}
-                >
+              <div className="filter-toolbar-header">
+                <span className="filter-kicker">Loan Source</span>
+                <div className="filter-segment">
                   {[
                     { key: "all", label: "All" },
                     { key: "tech", label: "📦 Tech" },
@@ -1225,25 +1204,11 @@ function AdminPageContent() {
                   ].map(({ key, label }) => (
                     <button
                       key={key}
+                      className={`filter-segment-button ${loanSource === key ? "active" : ""}`}
                       onClick={() => {
                         setLoanSource(key);
                         setSelectedLoans(new Set());
                         setSelectedPendingLoans(new Set());
-                      }}
-                      style={{
-                        padding: "4px 14px",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        border: "none",
-                        borderRadius: 6,
-                        cursor: "pointer",
-                        background:
-                          loanSource === key ? "var(--accent)" : "transparent",
-                        color:
-                          loanSource === key
-                            ? "white"
-                            : "var(--text-secondary)",
-                        transition: "all 0.15s",
                       }}
                     >
                       {label}
@@ -1264,16 +1229,10 @@ function AdminPageContent() {
                   style={{
                     width: "100%",
                     fontSize: 16,
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: "1px solid var(--border)",
-                    background: "rgba(255,255,255,0.04)",
-                    color: "var(--text-primary)",
-                    outline: "none",
                   }}
                 />
               </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <div className="filter-chip-row">
                 {[
                   { value: "", label: "All" },
                   { value: "pending", label: "Pending" },
@@ -1287,31 +1246,11 @@ function AdminPageContent() {
                   return (
                     <button
                       key={value}
+                      className={`filter-chip ${isActive ? "active" : ""} ${isOverdueTab ? "filter-chip-alert" : ""}`}
                       onClick={() => {
                         setStatusFilter(value);
                         setSelectedLoans(new Set());
                         setSelectedPendingLoans(new Set());
-                      }}
-                      style={{
-                        padding: "6px 14px",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        borderRadius: 20,
-                        cursor: "pointer",
-                        transition: "all 0.15s",
-                        border: isActive ? "none" : "1px solid var(--border)",
-                        background: isActive
-                          ? isOverdueTab
-                            ? "rgba(239,68,68,0.2)"
-                            : "var(--accent)"
-                          : "rgba(255,255,255,0.03)",
-                        color: isActive
-                          ? isOverdueTab
-                            ? "#ef4444"
-                            : "white"
-                          : isOverdueTab
-                            ? "rgba(239,68,68,0.7)"
-                            : "var(--text-secondary)",
                       }}
                     >
                       {label}
@@ -3963,9 +3902,5 @@ function AdminPageContent() {
 }
 
 export default function AdminPage() {
-  return (
-    <Suspense fallback={<AppShellLoading />}>
-      <AdminPageContent />
-    </Suspense>
-  );
+  return <AdminPageContent />;
 }

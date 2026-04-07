@@ -248,6 +248,7 @@ export default function InventoryLanding() {
         }
       `}</style>
       <div
+        className="inventory-landing"
         style={{
           position: "relative",
           overflow: "hidden",
