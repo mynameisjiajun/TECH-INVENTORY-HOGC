@@ -1442,6 +1442,7 @@ export default function AdminPage() {
                             onChange={(e) => handleChangeRole(u.id, e.target.value)}
                             style={{
                               padding: "5px 8px",
+                              paddingRight: 28,
                               fontSize: 12,
                               fontWeight: 600,
                               borderRadius: 7,
@@ -1463,9 +1464,9 @@ export default function AdminPage() {
                               fontFamily: "inherit",
                             }}
                           >
-                            <option value="admin">🛡️ Admin</option>
-                            <option value="tech">🔧 Tech</option>
-                            <option value="user">👤 User</option>
+                            <option value="admin">Admin</option>
+                            <option value="tech">Tech</option>
+                            <option value="user">User</option>
                           </select>
                         </td>
                         <td

@@ -511,7 +511,8 @@ export default function CartPanel() {
                                 item.loan_type === "temporary"
                                   ? "repeat(2, minmax(0, 1fr))"
                                   : "minmax(0, 1fr)",
-                              gap: 8,
+                              gap: 6,
+                              overflow: "hidden",
                             }}
                           >
                             <div style={{ minWidth: 0 }}>
@@ -544,8 +545,9 @@ export default function CartPanel() {
                                   width: "100%",
                                   boxSizing: "border-box",
                                   minWidth: 0,
-                                  fontSize: 12,
-                                  padding: "5px 8px",
+                                  /* 16px prevents iOS Safari auto-zoom */
+                                  fontSize: 16,
+                                  padding: "5px 6px",
                                 }}
                               />
                             </div>
@@ -581,8 +583,9 @@ export default function CartPanel() {
                                     width: "100%",
                                     boxSizing: "border-box",
                                     minWidth: 0,
-                                    fontSize: 12,
-                                    padding: "5px 8px",
+                                    /* 16px prevents iOS Safari auto-zoom */
+                                    fontSize: 16,
+                                    padding: "5px 6px",
                                   }}
                                 />
                               </div>
