@@ -1,0 +1,4 @@
+## 2024-05-18 - Hardcoded JWT Secret Fallback Removed
+**Vulnerability:** A hardcoded default JWT secret (`dev-fallback-change-me`) was used when `process.env.JWT_SECRET` was missing and `NODE_ENV` was not exactly `production`.
+**Learning:** Depending on `NODE_ENV` to conditionally fail or fallback to a hardcoded secret in critical security areas is an architectural gap. If `NODE_ENV` is incorrectly set or omitted in a production environment, it exposes the application to forged token attacks using the widely-known fallback secret.
+**Prevention:** Never use default or fallback secrets for cryptography or authentication. Always enforce that security-critical environment variables like `JWT_SECRET` are explicitly defined, and immediately throw an error (fail securely) on startup or use if they are missing.
