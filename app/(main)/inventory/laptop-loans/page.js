@@ -100,20 +100,20 @@ const LaptopCard = memo(function LaptopCard({
       {/* Card body */}
       <div
         style={{
-          padding: "20px 22px",
+          padding: "14px 16px",
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 10,
         }}
       >
-        {/* Icon + name */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {/* Icon + name + status badge inline */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
           <div
             style={{
-              width: 52,
-              height: 52,
-              borderRadius: 14,
+              width: 44,
+              height: 44,
+              borderRadius: 12,
               flexShrink: 0,
               background: `linear-gradient(135deg, ${statusColor.bg}, rgba(255,255,255,0.03))`,
               border: `1px solid ${statusColor.border}`,
@@ -121,21 +121,21 @@ const LaptopCard = memo(function LaptopCard({
               alignItems: "center",
               justifyContent: "center",
               color: statusColor.color,
-              fontSize: 26,
+              fontSize: 22,
             }}
           >
             <RiMacbookLine />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.3 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3 }}>
               {laptop.name}
             </div>
             {(laptop.screen_size || laptop.cpu) && (
               <div
                 style={{
-                  fontSize: 12.5,
+                  fontSize: 12,
                   color: "var(--text-secondary)",
-                  marginTop: 3,
+                  marginTop: 2,
                 }}
               >
                 {laptop.screen_size}
@@ -146,7 +146,7 @@ const LaptopCard = memo(function LaptopCard({
             {canSeeSpecs && (laptop.ram || laptop.storage) && (
               <div
                 style={{
-                  fontSize: 11.5,
+                  fontSize: 11,
                   color: "var(--text-muted)",
                   marginTop: 2,
                 }}
@@ -157,36 +157,51 @@ const LaptopCard = memo(function LaptopCard({
               </div>
             )}
           </div>
-        </div>
-
-        {/* Status badge */}
-        <div>
+          {/* Status badge — right-aligned inline with name */}
           <span
             style={{
+              flexShrink: 0,
               display: "inline-flex",
               alignItems: "center",
-              gap: 5,
-              fontSize: 12,
+              gap: 4,
+              fontSize: 11,
               fontWeight: 600,
-              padding: "5px 12px",
+              padding: "4px 10px",
               borderRadius: 20,
               background: statusColor.bg,
               color: statusColor.color,
               border: `1px solid ${statusColor.border}`,
+              alignSelf: "flex-start",
+              whiteSpace: "nowrap",
             }}
           >
-            {isPermLoaned && <RiPushpinLine style={{ fontSize: 12 }} />}
-            {statusLabel}
+            {isPermLoaned && <RiPushpinLine style={{ fontSize: 11 }} />}
+            {isAvailable
+              ? "Available"
+              : isPermLoaned
+                ? "Deployed"
+                : isTempLoaned
+                  ? "On Loan"
+                  : "Unavailable"}
           </span>
         </div>
+
+        {/* Return date (for unavailable) */}
+        {(isTempLoaned || (isBlocked && laptop.return_date)) && (
+          <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+            Returns{" "}
+            <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+              {laptop.return_date}
+            </span>
+          </div>
+        )}
 
         {/* Perm loan person */}
         {isPermLoaned && laptop.perm_loan_person && (
           <div
             style={{
-              fontSize: 12.5,
+              fontSize: 12,
               color: "var(--text-secondary)",
-              marginTop: -8,
             }}
           >
             Assigned to{" "}
@@ -205,9 +220,8 @@ const LaptopCard = memo(function LaptopCard({
         {isTempLoaned && laptop.borrower_name && (
           <div
             style={{
-              fontSize: 12.5,
+              fontSize: 12,
               color: "var(--text-secondary)",
-              marginTop: -8,
             }}
           >
             Borrowed by{" "}
@@ -222,7 +236,7 @@ const LaptopCard = memo(function LaptopCard({
       {(isAvailable || (isBlocked && !isPermLoaned)) && (
         <div
           style={{
-            padding: "14px 22px",
+            padding: "10px 16px",
             borderTop: "1px solid var(--border)",
             background: "rgba(255,255,255,0.02)",
           }}
