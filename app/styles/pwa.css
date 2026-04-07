@@ -10,28 +10,32 @@ html[data-shell="pwa"] {
   --shell-sheet-bottom-safe: calc(18px + env(safe-area-inset-bottom, 0px));
 }
 
+html[data-shell="pwa"][data-platform="ios"] {
+  --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 26px);
+}
+
 html[data-shell="pwa"] body {
   background-image:
     linear-gradient(
       180deg,
-      rgba(99, 102, 241, 0.1) 0%,
-      rgba(99, 102, 241, 0.05) 24%,
-      rgba(59, 130, 246, 0.03) 48%,
-      rgba(10, 14, 26, 0) 78%
+      rgba(114, 102, 255, 0.12) 0%,
+      rgba(114, 102, 255, 0.06) 24%,
+      rgba(43, 56, 104, 0.04) 48%,
+      rgba(7, 11, 22, 0) 78%
     ),
     radial-gradient(
       ellipse at 16% 18%,
-      rgba(99, 102, 241, 0.08) 0%,
+      rgba(66, 80, 156, 0.08) 0%,
       transparent 58%
     ),
     radial-gradient(
       ellipse at 84% 14%,
-      rgba(56, 189, 248, 0.06) 0%,
-      transparent 60%
+      rgba(114, 102, 255, 0.08) 0%,
+      transparent 58%
     ),
     radial-gradient(
       ellipse at 50% 84%,
-      rgba(99, 102, 241, 0.05) 0%,
+      rgba(32, 45, 89, 0.06) 0%,
       transparent 66%
     );
 }
@@ -216,7 +220,7 @@ html[data-shell="pwa"][data-platform="ios"] body {
 }
 
 html[data-shell="pwa"][data-platform="ios"] .page-container {
-  padding-top: calc(14px + 66px + var(--shell-navbar-safe-top));
+  padding-top: calc(12px + 66px + var(--shell-navbar-safe-top));
 }
 
 html[data-shell="pwa"][data-platform="ios"] .page-shell-loading {
@@ -290,6 +294,53 @@ html[data-shell="pwa"][data-platform="ios"] .logout-btn {
 html[data-shell="pwa"][data-platform="ios"] .notification-badge {
   top: -2px;
   right: -1px;
+}
+
+html[data-shell="pwa"] .inventory-landing {
+  min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top));
+}
+
+html[data-shell="pwa"] .dashboard-stats-grid {
+  gap: 12px;
+}
+
+html[data-shell="pwa"] .dashboard-stat-card {
+  min-height: 128px;
+}
+
+html[data-shell="pwa"] .dashboard-stat-card .stat-value {
+  font-size: 28px;
+}
+
+html[data-shell="pwa"] .dashboard-stat-card .stat-label {
+  font-size: 12px;
+}
+
+html[data-shell="pwa"][data-device="mobile"] .dashboard-stats-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card {
+  min-height: 104px;
+  padding: 14px 12px;
+  border-radius: 14px;
+}
+
+html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card .stat-icon {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card .stat-value {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card .stat-label {
+  font-size: 11px;
+  line-height: 1.25;
+  text-wrap: balance;
 }
 
 html[data-shell="pwa"][data-platform="ios"] .mobile-nav {

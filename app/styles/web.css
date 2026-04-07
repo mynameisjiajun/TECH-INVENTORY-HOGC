@@ -1,13 +1,13 @@
 html[data-shell="desktop-web"] {
   --bg-primary: #060914;
-  --bg-secondary: #0d1425;
-  --bg-card: rgba(14, 20, 35, 0.82);
-  --bg-card-hover: rgba(19, 28, 48, 0.9);
-  --bg-glass: rgba(9, 13, 24, 0.72);
-  --border: rgba(115, 126, 255, 0.16);
-  --border-hover: rgba(129, 140, 248, 0.34);
-  --text-secondary: #99a6c0;
-  --text-muted: #697895;
+  --bg-secondary: #0d1326;
+  --bg-card: rgba(13, 19, 36, 0.84);
+  --bg-card-hover: rgba(19, 27, 50, 0.92);
+  --bg-glass: rgba(8, 12, 24, 0.74);
+  --border: rgba(114, 102, 255, 0.16);
+  --border-hover: rgba(139, 129, 255, 0.32);
+  --text-secondary: #9aa4c2;
+  --text-muted: #6b7590;
   --shell-navbar-safe-top: 0px;
   --shell-mobile-nav-min-height: 68px;
   --shell-mobile-nav-padding-bottom: 8px;
@@ -17,9 +17,8 @@ html[data-shell="desktop-web"] {
   --shell-install-banner-bottom: 72px;
   --shell-sticky-top-mobile: 52px;
   scrollbar-gutter: auto;
-  background:
-    radial-gradient(circle at top right, rgba(99, 102, 241, 0.18), transparent 28%),
-    linear-gradient(180deg, #0a0f1d 0%, #060914 100%);
+  background: #060914;
+  scrollbar-color: var(--text-muted) #060914;
 }
 
 html[data-shell="desktop-web"] body {
@@ -27,24 +26,24 @@ html[data-shell="desktop-web"] body {
   background-image:
     linear-gradient(
       180deg,
-      rgba(82, 93, 228, 0.22) 0%,
-      rgba(82, 93, 228, 0.1) 18%,
-      rgba(56, 189, 248, 0.035) 42%,
+      rgba(114, 102, 255, 0.18) 0%,
+      rgba(114, 102, 255, 0.1) 18%,
+      rgba(45, 58, 112, 0.05) 42%,
       rgba(6, 9, 20, 0) 72%
     ),
     radial-gradient(
       ellipse at 14% 20%,
-      rgba(99, 102, 241, 0.11) 0%,
+      rgba(63, 78, 150, 0.1) 0%,
       transparent 54%
     ),
     radial-gradient(
       ellipse at 86% 12%,
-      rgba(76, 95, 201, 0.16) 0%,
+      rgba(114, 102, 255, 0.14) 0%,
       transparent 42%
     ),
     radial-gradient(
       ellipse at 82% 80%,
-      rgba(33, 93, 170, 0.12) 0%,
+      rgba(29, 40, 79, 0.12) 0%,
       transparent 52%
     ),
     linear-gradient(180deg, #0a0f1d 0%, #060914 100%);
@@ -54,7 +53,13 @@ html[data-shell="desktop-web"] body {
     105% 92%,
     110% 110%,
     100% 100%;
-  background-attachment: fixed;
+  background-attachment: scroll;
+  overflow-y: auto;
+}
+
+html[data-shell="desktop-web"]::-webkit-scrollbar-track,
+html[data-shell="desktop-web"] body::-webkit-scrollbar-track {
+  background: #060914;
 }
 
 html[data-shell="desktop-web"] .page-container {

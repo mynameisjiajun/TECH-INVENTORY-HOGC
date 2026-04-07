@@ -632,7 +632,10 @@ export default function DashboardPage() {
 
           {myFetching ? (
             <>
-              <div className="stats-grid" style={{ marginBottom: 24 }}>
+              <div
+                className="stats-grid dashboard-stats-grid"
+                style={{ marginBottom: 24 }}
+              >
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="skeleton skeleton-stat" />
                 ))}
@@ -644,8 +647,11 @@ export default function DashboardPage() {
           ) : (
             <>
               {/* Stats row */}
-              <div className="stats-grid" style={{ marginBottom: 24 }}>
-                <div className="stat-card">
+              <div
+                className="stats-grid dashboard-stats-grid"
+                style={{ marginBottom: 24 }}
+              >
+                <div className="stat-card dashboard-stat-card">
                   <div className="stat-icon" style={{ color: "#10b981" }}>
                     <RiHandHeartLine />
                   </div>
@@ -654,7 +660,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="stat-label">My Current Loans</div>
                 </div>
-                <div className="stat-card">
+                <div className="stat-card dashboard-stat-card">
                   <div className="stat-icon" style={{ color: "var(--info)" }}>
                     <RiTimeLine />
                   </div>
@@ -663,7 +669,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="stat-label">My Pending Requests</div>
                 </div>
-                <div className="stat-card">
+                <div className="stat-card dashboard-stat-card">
                   <div className="stat-icon" style={{ color: "var(--error)" }}>
                     <RiAlertLine />
                   </div>
@@ -673,7 +679,7 @@ export default function DashboardPage() {
                   <div className="stat-label">My Overdues</div>
                 </div>
                 {dueSoonMyLoans.length > 0 && (
-                  <div className="stat-card">
+                  <div className="stat-card dashboard-stat-card">
                     <div
                       className="stat-icon"
                       style={{ color: "var(--warning)" }}
@@ -1481,15 +1487,15 @@ export default function DashboardPage() {
 
         {/* Stats Cards */}
         {!stats && (
-          <div className="stats-grid">
+          <div className="stats-grid dashboard-stats-grid">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="skeleton skeleton-stat" />
             ))}
           </div>
         )}
         {stats && (
-          <div className="stats-grid">
-            <div className="stat-card">
+          <div className="stats-grid dashboard-stats-grid">
+            <div className="stat-card dashboard-stat-card">
               <div className="stat-icon" style={{ color: "var(--accent)" }}>
                 <RiArchiveLine />
               </div>
@@ -1498,7 +1504,7 @@ export default function DashboardPage() {
               </div>
               <div className="stat-label">Items Available</div>
             </div>
-            <div className="stat-card">
+            <div className="stat-card dashboard-stat-card">
               <div className="stat-icon" style={{ color: "var(--warning)" }}>
                 <RiHandHeartLine />
               </div>
@@ -1507,7 +1513,7 @@ export default function DashboardPage() {
               </div>
               <div className="stat-label">Items Loaned Out</div>
             </div>
-            <div className="stat-card">
+            <div className="stat-card dashboard-stat-card">
               <div className="stat-icon" style={{ color: "var(--info)" }}>
                 <RiTimeLine />
               </div>
@@ -1516,7 +1522,7 @@ export default function DashboardPage() {
               </div>
               <div className="stat-label">Pending Requests</div>
             </div>
-            <div className="stat-card">
+            <div className="stat-card dashboard-stat-card">
               <div className="stat-icon" style={{ color: "var(--error)" }}>
                 <RiAlertLine />
               </div>
@@ -1525,7 +1531,7 @@ export default function DashboardPage() {
               </div>
               <div className="stat-label">Low in Stock</div>
             </div>
-            <div className="stat-card">
+            <div className="stat-card dashboard-stat-card">
               <div className="stat-icon" style={{ color: "var(--success)" }}>
                 <RiCheckboxCircleLine />
               </div>
@@ -1535,7 +1541,7 @@ export default function DashboardPage() {
               <div className="stat-label">Deployed Items</div>
             </div>
             {stats.laptopActive > 0 || stats.laptopPending > 0 ? (
-              <div className="stat-card">
+              <div className="stat-card dashboard-stat-card">
                 <div className="stat-icon" style={{ color: "#10b981" }}>
                   💻
                 </div>
