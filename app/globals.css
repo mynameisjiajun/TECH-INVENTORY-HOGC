@@ -50,7 +50,13 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
+  min-height: -webkit-fill-available;
   -webkit-font-smoothing: antialiased;
+  /* Prevent horizontal overflow and bounce scroll on iOS PWA */
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  /* Remove tap highlight on iOS */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -313,6 +319,10 @@ a:hover {
   transition: var(--transition);
   border: none;
   white-space: nowrap;
+  /* Prevent 300ms tap delay and double-tap zoom on iOS */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .btn-primary {
@@ -414,6 +424,9 @@ textarea {
 
 input[type="date"] {
   color-scheme: dark;
+  /* Prevent iOS Safari auto-zoom (requires font-size >= 16px) */
+  font-size: 16px;
+  touch-action: manipulation;
 }
 
 .input:focus,
@@ -722,6 +735,9 @@ tr:last-child td {
   flex-direction: column;
   transform: translateX(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* iOS PWA: account for notch/status bar */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .cart-panel.open {
@@ -759,7 +775,10 @@ tr:last-child td {
 .cart-items {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .cart-item {
@@ -1566,6 +1585,10 @@ body.rickroll-lock {
   /* Cart full width on mobile */
   .cart-panel {
     width: 100vw;
+    /* Remove right safe-area padding on mobile (full bleed) */
+    padding-right: 0;
+    /* Bottom safe area for iPhone home bar */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   /* Search bar stacked */
@@ -2298,7 +2321,10 @@ body.rickroll-lock {
   top: 70px;
   z-index: 10;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  overflow: visible;
+  overflow: hidden;
+  /* Prevent overflow on iOS */
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .laptop-loan-type-toggle {
@@ -2377,8 +2403,9 @@ body.rickroll-lock {
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    font-size: 12px;
-    padding: 6px 8px;
+    /* 16px prevents iOS Safari auto-zoom on input focus */
+    font-size: 16px;
+    padding: 8px 10px;
   }
 
   .laptop-loan-type-toggle button {
