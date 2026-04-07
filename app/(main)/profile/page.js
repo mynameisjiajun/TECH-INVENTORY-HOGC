@@ -4,6 +4,7 @@ import { useToast } from "@/lib/context/ToastContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
+import AppShellLoading from "@/components/AppShellLoading";
 import {
   RiUserLine,
   RiLockLine,
@@ -155,9 +156,10 @@ export default function ProfilePage() {
 
   if (loading || !user)
     return (
-      <div className="loading-spinner">
-        <div className="spinner" />
-      </div>
+      <AppShellLoading
+        showCartPanel={false}
+        containerStyle={{ maxWidth: 640, margin: "0 auto", padding: "24px 20px" }}
+      />
     );
 
   return (

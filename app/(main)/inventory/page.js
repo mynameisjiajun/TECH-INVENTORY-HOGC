@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
+import AppShellLoading from "@/components/AppShellLoading";
 import {
   RiMacbookLine,
   RiArchiveLine,
@@ -18,7 +19,11 @@ import {
 export default function InventoryLanding() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(max-width: 768px)").matches
+      : false,
+  );
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -26,26 +31,13 @@ export default function InventoryLanding() {
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
-    setIsMobile(mq.matches);
     const handler = (e) => setIsMobile(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
 
   if (loading || !user)
-    return (
-      <div
-        className="loading-spinner"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div className="spinner" />
-      </div>
-    );
+    return <AppShellLoading />;
 
   const floatingIcons = [
     { Icon: RiCpuLine, top: "12%", left: "8%", size: 28, delay: 0, dur: 20 },

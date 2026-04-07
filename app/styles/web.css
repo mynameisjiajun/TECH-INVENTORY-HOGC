@@ -1,0 +1,73 @@
+html[data-shell="desktop-web"] {
+  --shell-navbar-safe-top: 0px;
+  --shell-mobile-nav-min-height: 68px;
+  --shell-mobile-nav-padding-bottom: 8px;
+  --shell-page-mobile-bottom: 88px;
+  --shell-notification-mobile-top: 56px;
+  --shell-cart-header-mobile-top: 14px;
+  --shell-install-banner-bottom: 72px;
+  --shell-sticky-top-mobile: 52px;
+}
+
+html[data-shell="desktop-web"] body {
+  background-size:
+    100% 100%,
+    150% 125%,
+    135% 120%,
+    145% 145%;
+}
+
+html[data-shell="desktop-web"] .page-container {
+  max-width: 1440px;
+  padding: 28px 32px 36px;
+  min-height: calc(100dvh - 64px);
+}
+
+html[data-shell="desktop-web"] .page-header h1 {
+  text-wrap: balance;
+}
+
+html[data-shell="desktop-web"] .navbar {
+  background: rgba(10, 14, 26, 0.82);
+  border-bottom-color: rgba(99, 102, 241, 0.12);
+}
+
+html[data-shell="desktop-web"] .navbar-inner {
+  max-width: 1440px;
+  height: 68px;
+  gap: 20px;
+}
+
+html[data-shell="desktop-web"] .navbar-brand {
+  gap: 12px;
+  font-size: 18px;
+}
+
+html[data-shell="desktop-web"] .navbar-links {
+  gap: 8px;
+}
+
+html[data-shell="desktop-web"] .nav-link {
+  min-height: 40px;
+}
+
+html[data-shell="desktop-web"] .navbar-right {
+  gap: 10px;
+}
+
+html[data-shell="desktop-web"] .user-menu {
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(99, 102, 241, 0.08);
+}
+
+html[data-shell="desktop-web"] .notification-dropdown {
+  width: 380px;
+  top: calc(100% + 10px);
+  border-radius: 16px;
+}
+
+html[data-shell="desktop-web"] .mobile-nav,
+html[data-shell="desktop-web"] .install-banner {
+  display: none !important;
+}

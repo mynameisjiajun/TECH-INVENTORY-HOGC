@@ -14,7 +14,6 @@ export default function RegisterPage() {
     confirm_password: "",
     display_name: "",
     email: "",
-    telegram_handle: "",
     invite_code: "",
   });
   const [error, setError] = useState("");
@@ -46,8 +45,7 @@ export default function RegisterPage() {
       formData.password,
       formData.display_name,
       formData.invite_code,
-      formData.email,
-      formData.telegram_handle
+      formData.email
     );
     if (result.ok) {
       router.push("/inventory");
@@ -123,28 +121,6 @@ export default function RegisterPage() {
             </span>
           </div>
           <div className="input-group">
-            <label>Telegram Handle</label>
-            <input
-              type="text"
-              value={formData.telegram_handle}
-              onChange={update("telegram_handle")}
-              placeholder="@your_username (Optional)"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-            <span
-              style={{
-                fontSize: 11,
-                color: "var(--text-muted)",
-                marginTop: 4,
-                display: "block",
-              }}
-            >
-              Used for loan approvals/return notifications
-            </span>
-          </div>
-          <div className="input-group">
             <label>Username</label>
             <input
               type="text"
@@ -193,6 +169,17 @@ export default function RegisterPage() {
             {loading ? "Creating account..." : "Create Account"}
           </button>
         </form>
+
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--text-muted)",
+            marginTop: 14,
+            textAlign: "center",
+          }}
+        >
+          Telegram linking is done after signup from your Profile page.
+        </p>
 
         <p className="auth-footer">
           Already have an account? <Link href="/login">Sign In</Link>

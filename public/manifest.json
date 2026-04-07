@@ -8,7 +8,7 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0a0e1a",
-  "theme_color": "#6366f1",
+  "theme_color": "#0a0e1a",
   "orientation": "portrait",
   "categories": ["productivity", "utilities"],
   "shortcuts": [

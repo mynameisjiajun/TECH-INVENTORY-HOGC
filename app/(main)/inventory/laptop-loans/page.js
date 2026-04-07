@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
+import AppShellLoading from "@/components/AppShellLoading";
 import {
   RiArrowLeftLine,
   RiMacbookLine,
@@ -435,20 +436,7 @@ export default function LaptopLoansPage() {
   );
 
   if (loading)
-    return (
-      <>
-        <Navbar />
-        <CartPanel />
-        <div className="page-container">
-          <div
-            className="loading-spinner"
-            style={{ minHeight: "calc(100dvh - 180px)" }}
-          >
-            <div className="spinner" />
-          </div>
-        </div>
-      </>
-    );
+    return <AppShellLoading />;
 
   if (!user) return null;
 

@@ -1,0 +1,458 @@
+html[data-shell="mobile-web"] {
+  --shell-navbar-safe-top: 0px;
+  --shell-mobile-nav-min-height: 68px;
+  --shell-mobile-nav-padding-bottom: 8px;
+  --shell-page-mobile-bottom: 88px;
+  --shell-notification-mobile-top: 56px;
+  --shell-cart-header-mobile-top: 14px;
+  --shell-install-banner-bottom: 72px;
+  --shell-sticky-top-mobile: 52px;
+}
+
+@media (max-width: 768px) {
+  html[data-shell="mobile-web"] body {
+    background-size:
+      100% 100%,
+      125% 110%,
+      120% 100%,
+      130% 130%;
+  }
+
+  html[data-shell="mobile-web"] .page-container {
+    padding: 12px;
+    padding-bottom: var(--shell-page-mobile-bottom);
+  }
+
+  html[data-shell="mobile-web"] .page-header {
+    margin-bottom: 16px;
+  }
+
+  html[data-shell="mobile-web"] .page-header h1 {
+    font-size: 18px;
+  }
+
+  html[data-shell="mobile-web"] .page-header p {
+    font-size: 11px;
+  }
+
+  html[data-shell="mobile-web"] .navbar {
+    padding: 0 12px;
+    background: rgba(10, 14, 26, 0.88);
+  }
+
+  html[data-shell="mobile-web"] .navbar-links {
+    display: none;
+  }
+
+  html[data-shell="mobile-web"] .navbar-inner {
+    height: 52px;
+  }
+
+  html[data-shell="mobile-web"] .navbar-brand {
+    gap: 6px;
+    font-size: 15px;
+  }
+
+  html[data-shell="mobile-web"] .navbar-brand svg,
+  html[data-shell="mobile-web"] .navbar-brand .brand-icon {
+    font-size: 18px;
+  }
+
+  html[data-shell="mobile-web"] .navbar-right {
+    gap: 6px;
+  }
+
+  html[data-shell="mobile-web"] .user-menu {
+    gap: 5px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  html[data-shell="mobile-web"] .user-avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+  }
+
+  html[data-shell="mobile-web"] .notification-btn,
+  html[data-shell="mobile-web"] .logout-btn {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  html[data-shell="mobile-web"] .notification-btn {
+    font-size: 17px;
+    padding: 6px;
+  }
+
+  html[data-shell="mobile-web"] .notification-badge {
+    width: 15px;
+    height: 15px;
+    font-size: 9px;
+  }
+
+  html[data-shell="mobile-web"] .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  html[data-shell="mobile-web"] .stat-card {
+    padding: 8px;
+  }
+
+  html[data-shell="mobile-web"] .stat-card .stat-value {
+    font-size: 16px;
+  }
+
+  html[data-shell="mobile-web"] .stat-card .stat-label {
+    font-size: 10px;
+  }
+
+  html[data-shell="mobile-web"] .search-bar,
+  html[data-shell="mobile-web"] .loans-filter-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  html[data-shell="mobile-web"] .search-input-wrap,
+  html[data-shell="mobile-web"] .filter-select {
+    min-width: 100%;
+  }
+
+  html[data-shell="mobile-web"] .search-input-wrap input,
+  html[data-shell="mobile-web"] .filter-select,
+  html[data-shell="mobile-web"] .filter-select-compact,
+  html[data-shell="mobile-web"] .input,
+  html[data-shell="mobile-web"] input[type="text"],
+  html[data-shell="mobile-web"] input[type="password"],
+  html[data-shell="mobile-web"] input[type="email"],
+  html[data-shell="mobile-web"] input[type="date"],
+  html[data-shell="mobile-web"] input[type="number"],
+  html[data-shell="mobile-web"] select,
+  html[data-shell="mobile-web"] textarea {
+    font-size: 16px;
+  }
+
+  html[data-shell="mobile-web"] .search-input-wrap input {
+    padding: 8px 12px 8px 36px;
+  }
+
+  html[data-shell="mobile-web"] .search-input-wrap .search-icon {
+    left: 12px;
+    font-size: 14px;
+  }
+
+  html[data-shell="mobile-web"] .filter-select {
+    padding: 8px 30px 8px 10px;
+  }
+
+  html[data-shell="mobile-web"] .inventory-filter-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  html[data-shell="mobile-web"] .tabs {
+    margin-bottom: 14px;
+    padding: 3px;
+    gap: 1px;
+  }
+
+  html[data-shell="mobile-web"] .tab {
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  html[data-shell="mobile-web"] .table-summary {
+    margin: -4px 0 10px;
+    font-size: 11px;
+  }
+
+  html[data-shell="mobile-web"] table {
+    font-size: 12px;
+  }
+
+  html[data-shell="mobile-web"] th {
+    padding: 6px 8px;
+    font-size: 9px;
+    letter-spacing: 0.3px;
+  }
+
+  html[data-shell="mobile-web"] td {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  html[data-shell="mobile-web"] .table-container table thead th:first-child,
+  html[data-shell="mobile-web"] .table-container table tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background: #111827;
+    max-width: 130px;
+  }
+
+  html[data-shell="mobile-web"] .table-container table thead th:first-child {
+    background: #0f1629;
+    z-index: 11;
+  }
+
+  html[data-shell="mobile-web"] .table-container table thead th:last-child,
+  html[data-shell="mobile-web"] .table-container table tbody td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 10;
+    background: #111827;
+  }
+
+  html[data-shell="mobile-web"] .table-container table thead th:last-child {
+    background: #0f1629;
+    z-index: 11;
+  }
+
+  html[data-shell="mobile-web"] .btn {
+    padding: 7px 12px;
+    font-size: 12px;
+    gap: 4px;
+  }
+
+  html[data-shell="mobile-web"] .btn-sm,
+  html[data-shell="mobile-web"] .badge,
+  html[data-shell="mobile-web"] .loan-item-chip {
+    font-size: 10px;
+  }
+
+  html[data-shell="mobile-web"] .type-badge {
+    font-size: 10px !important;
+    padding: 2px 7px !important;
+  }
+
+  html[data-shell="mobile-web"] .loan-card {
+    padding: 12px;
+  }
+
+  html[data-shell="mobile-web"] .loan-card-meta,
+  html[data-shell="mobile-web"] .notification-item .notif-time {
+    font-size: 10px;
+  }
+
+  html[data-shell="mobile-web"] .loan-card-meta,
+  html[data-shell="mobile-web"] .loans-filter-status-pills {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  html[data-shell="mobile-web"] .gantt-label {
+    width: 100px;
+    min-width: 100px;
+    font-size: 10px;
+  }
+
+  html[data-shell="mobile-web"] .reminder-times-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  html[data-shell="mobile-web"] .notification-dropdown {
+    position: fixed;
+    top: var(--shell-notification-mobile-top);
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 70vh;
+  }
+
+  html[data-shell="mobile-web"] .notification-item p {
+    font-size: 12px;
+  }
+
+  html[data-shell="mobile-web"] .modal-overlay {
+    padding: 12px;
+  }
+
+  html[data-shell="mobile-web"] .modal-header {
+    padding: 14px 16px;
+  }
+
+  html[data-shell="mobile-web"] .modal-header h2 {
+    font-size: 16px;
+  }
+
+  html[data-shell="mobile-web"] .modal-body {
+    padding: 16px;
+  }
+
+  html[data-shell="mobile-web"] .modal-footer {
+    padding: 12px 16px;
+    flex-direction: column-reverse;
+  }
+
+  html[data-shell="mobile-web"] .modal-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  html[data-shell="mobile-web"] .cart-fab {
+    display: none;
+  }
+
+  html[data-shell="mobile-web"] .mobile-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    min-height: var(--shell-mobile-nav-min-height);
+    padding-top: 8px;
+    padding-bottom: var(--shell-mobile-nav-padding-bottom);
+    background: rgba(10, 14, 26, 0.95);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 100;
+  }
+
+  html[data-shell="mobile-web"] .mobile-nav .nav-link {
+    display: flex;
+    min-width: 48px;
+    min-height: 52px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 8px;
+    font-size: 10px;
+    background: none !important;
+  }
+
+  html[data-shell="mobile-web"] .mobile-nav .nav-icon-wrap {
+    display: flex;
+    width: 44px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    transition: background 0.15s;
+  }
+
+  html[data-shell="mobile-web"] .mobile-nav .nav-link.active .nav-icon-wrap {
+    background: rgba(99, 102, 241, 0.18);
+  }
+
+  html[data-shell="mobile-web"] .mobile-nav .nav-link svg {
+    font-size: 19px;
+  }
+
+  html[data-shell="mobile-web"] .auth-card {
+    padding: 28px 20px;
+  }
+
+  html[data-shell="mobile-web"] .auth-card h1 {
+    font-size: 20px;
+  }
+
+  html[data-shell="mobile-web"] .auth-card .auth-subtitle {
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  html[data-shell="mobile-web"] .empty-state {
+    padding: 40px 16px;
+  }
+
+  html[data-shell="mobile-web"] .empty-state .empty-icon {
+    font-size: 36px;
+  }
+
+  html[data-shell="mobile-web"] .empty-state h3 {
+    font-size: 15px;
+  }
+
+  html[data-shell="mobile-web"] .cart-header {
+    padding: 14px 16px;
+    padding-top: var(--shell-cart-header-mobile-top);
+  }
+
+  html[data-shell="mobile-web"] .cart-header h2 {
+    font-size: 16px;
+  }
+
+  html[data-shell="mobile-web"] .cart-items {
+    padding: 12px;
+  }
+
+  html[data-shell="mobile-web"] .cart-item {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  html[data-shell="mobile-web"] .cart-item-info h4 {
+    font-size: 12px;
+  }
+
+  html[data-shell="mobile-web"] .cart-item-info p {
+    font-size: 10px;
+  }
+
+  html[data-shell="mobile-web"] .cart-footer {
+    padding: 12px 16px;
+  }
+
+  html[data-shell="mobile-web"] .cart-delete-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+  }
+
+  html[data-shell="mobile-web"] .cart-checkout-buttons {
+    display: flex;
+    gap: 8px;
+  }
+
+  html[data-shell="mobile-web"] .cart-checkout-btn {
+    padding: 9px 6px !important;
+    font-size: 12px !important;
+  }
+
+  html[data-shell="mobile-web"] .hide-mobile {
+    display: none !important;
+  }
+
+  html[data-shell="mobile-web"] .admin-loan-card-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  html[data-shell="mobile-web"] .admin-loan-card-header-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  html[data-shell="mobile-web"] .admin-loan-return-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  html[data-shell="mobile-web"] .laptop-sticky-bar {
+    top: var(--shell-sticky-top-mobile);
+  }
+}
+
+@media (max-width: 520px) {
+  html[data-shell="mobile-web"] .reminder-times-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 769px) {
+  html[data-shell="mobile-web"] .mobile-nav,
+  html[data-shell="mobile-web"] .install-banner {
+    display: none;
+  }
+}

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
+import AppShellLoading from "@/components/AppShellLoading";
 import { TypeBadge } from "@/lib/utils/typeColors";
 import {
   RiSearchLine,
@@ -174,20 +175,7 @@ export default function InventoryPage() {
   }, [fetchItems, toast]);
 
   if (loading)
-    return (
-      <>
-        <Navbar />
-        <CartPanel />
-        <div className="page-container">
-          <div
-            className="loading-spinner"
-            style={{ minHeight: "calc(100dvh - 180px)" }}
-          >
-            <div className="spinner" />
-          </div>
-        </div>
-      </>
-    );
+    return <AppShellLoading />;
 
   if (!user) return null;
 

@@ -23,7 +23,7 @@ export async function POST(request) {
     const ip =
       request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       "unknown";
-    const { action, username, password, display_name, invite_code, email, telegram_handle } =
+    const { action, username, password, display_name, invite_code, email } =
       await request.json();
 
     if (action === "register") {
@@ -82,10 +82,6 @@ export async function POST(request) {
       }
 
       const hash = await hashPassword(password);
-      const cleanTelegram = telegram_handle
-        ? telegram_handle.trim().replace(/^@/, "")
-        : null;
-
       const { data: newUser, error: insertError } = await supabase
         .from("users")
         .insert({
@@ -94,7 +90,6 @@ export async function POST(request) {
           display_name: display_name || normalizedUsername,
           role: "user",
           email: cleanEmail,
-          telegram_chat_id: cleanTelegram,
         })
         .select("id, username, role, display_name")
         .single();

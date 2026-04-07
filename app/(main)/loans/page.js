@@ -7,6 +7,7 @@ import { useToast } from "@/lib/context/ToastContext";
 import { useCart } from "@/lib/context/CartContext";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
+import AppShellLoading from "@/components/AppShellLoading";
 import { supabaseClient } from "@/lib/db/supabaseClient";
 import {
   RiTimeLine,
@@ -453,20 +454,7 @@ export default function LoansPage() {
   }, [user]);
 
   if (loading)
-    return (
-      <>
-        <Navbar />
-        <CartPanel />
-        <div className="page-container">
-          <div
-            className="loading-spinner"
-            style={{ minHeight: "calc(100dvh - 180px)" }}
-          >
-            <div className="spinner" />
-          </div>
-        </div>
-      </>
-    );
+    return <AppShellLoading />;
 
   if (!user) return null;
 

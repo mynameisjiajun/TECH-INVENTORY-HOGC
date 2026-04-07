@@ -1,11 +1,12 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { supabaseClient } from "@/lib/db/supabaseClient";
 import { useToast } from "@/lib/context/ToastContext";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
+import AppShellLoading from "@/components/AppShellLoading";
 import {
   RiCheckLine,
   RiCloseLine,
@@ -38,6 +39,21 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+const ADMIN_TABS = ["loans", "users", "audit", "templates", "laptops"];
+const LOAN_SOURCES = ["all", "tech", "laptop"];
+const LOAN_STATUSES = [
+  "",
+  "pending",
+  "approved",
+  "overdue",
+  "rejected",
+  "returned",
+];
+
+function parseStateValue(value, allowedValues, fallback) {
+  return allowedValues.includes(value) ? value : fallback;
+}
 
 function SortableTemplateItem({ t, onEdit, onDelete }) {
   const {
@@ -113,6 +129,7 @@ function SortableTemplateItem({ t, onEdit, onDelete }) {
           </button>
           <button
             className="btn btn-sm"
+            aria-label={`Delete template ${t.name}`}
             style={{
               color: "var(--error)",
               background: "none",
@@ -138,12 +155,20 @@ function SortableTemplateItem({ t, onEdit, onDelete }) {
   );
 }
 
-export default function AdminPage() {
+function AdminPageContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const toast = useToast();
   const [loans, setLoans] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [statusFilter, setStatusFilter] = useState(() =>
+    parseStateValue(
+      searchParams.get("status") || "pending",
+      LOAN_STATUSES,
+      "pending",
+    ),
+  );
   const [fetching, setFetching] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [adminNotes, setAdminNotes] = useState({});
@@ -153,7 +178,9 @@ export default function AdminPage() {
   const [bulkApproveLoading, setBulkApproveLoading] = useState(false);
   const [userActionLoading, setUserActionLoading] = useState(null);
   const [inviteCodeLoading, setInviteCodeLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("loans");
+  const [activeTab, setActiveTab] = useState(() =>
+    parseStateValue(searchParams.get("tab") || "loans", ADMIN_TABS, "loans"),
+  );
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditFetching, setAuditFetching] = useState(false);
   const [users, setUsers] = useState([]);
@@ -187,9 +214,13 @@ export default function AdminPage() {
   const [templateMsg, setTemplateMsg] = useState("");
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [clockMs, setClockMs] = useState(Date.now());
-  const [loanSource, setLoanSource] = useState("all"); // 'all' | 'tech' | 'laptop'
+  const [loanSource, setLoanSource] = useState(() =>
+    parseStateValue(searchParams.get("source") || "all", LOAN_SOURCES, "all"),
+  ); // 'all' | 'tech' | 'laptop'
   const [pendingCount, setPendingCount] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(
+    () => searchParams.get("q") || "",
+  );
 
   const filteredLoans = useMemo(() => {
     if (!searchQuery.trim()) return loans;
@@ -235,6 +266,62 @@ export default function AdminPage() {
     if (!loading && !user) router.replace("/login");
     if (!loading && user && user.role !== "admin") router.replace("/dashboard");
   }, [user, loading, router]);
+
+  useEffect(() => {
+    const nextTab = parseStateValue(
+      searchParams.get("tab") || "loans",
+      ADMIN_TABS,
+      "loans",
+    );
+    const nextStatus = parseStateValue(
+      searchParams.get("status") || "pending",
+      LOAN_STATUSES,
+      "pending",
+    );
+    const nextSource = parseStateValue(
+      searchParams.get("source") || "all",
+      LOAN_SOURCES,
+      "all",
+    );
+    const nextQuery = searchParams.get("q") || "";
+
+    if (activeTab !== nextTab) setActiveTab(nextTab);
+    if (statusFilter !== nextStatus) setStatusFilter(nextStatus);
+    if (loanSource !== nextSource) setLoanSource(nextSource);
+    if (searchQuery !== nextQuery) setSearchQuery(nextQuery);
+  }, [searchParams, activeTab, statusFilter, loanSource, searchQuery]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    const nextState = {
+      tab: activeTab === "loans" ? "" : activeTab,
+      status: statusFilter === "pending" ? "" : statusFilter,
+      source: loanSource === "all" ? "" : loanSource,
+      q: searchQuery.trim(),
+    };
+
+    Object.entries(nextState).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    });
+
+    const nextQueryString = params.toString();
+    const currentQueryString = searchParams.toString();
+    if (nextQueryString !== currentQueryString) {
+      router.replace(
+        nextQueryString ? `${pathname}?${nextQueryString}` : pathname,
+        { scroll: false },
+      );
+    }
+  }, [
+    activeTab,
+    statusFilter,
+    loanSource,
+    searchQuery,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   const fetchLoans = useCallback(async () => {
     setFetching(true);
@@ -364,24 +451,24 @@ export default function AdminPage() {
   const handleDragEnd = async (event) => {
     const { active, over } = event;
 
-    if (active.id !== over.id) {
-      const oldIndex = templates.findIndex((t) => t.id === active.id);
-      const newIndex = templates.findIndex((t) => t.id === over.id);
-      const newTemplates = arrayMove(templates, oldIndex, newIndex);
-      setTemplates(newTemplates);
+    if (!over || active.id === over.id) return;
 
-      // Save new ordering to the server
-      fetch("/api/admin/templates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "reorder",
-          orderedIds: newTemplates.map((t) => t.id),
-        }),
-      }).catch(() => {
-        toast.error("Could not save template order — please try again");
-      });
-    }
+    const oldIndex = templates.findIndex((t) => t.id === active.id);
+    const newIndex = templates.findIndex((t) => t.id === over.id);
+    const newTemplates = arrayMove(templates, oldIndex, newIndex);
+    setTemplates(newTemplates);
+
+    // Save new ordering to the server
+    fetch("/api/admin/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "reorder",
+        orderedIds: newTemplates.map((t) => t.id),
+      }),
+    }).catch(() => {
+      toast.error("Could not save template order — please try again");
+    });
   };
 
   const fetchAllItems = async () => {
@@ -429,16 +516,21 @@ export default function AdminPage() {
   const fetchPendingCount = useCallback(async () => {
     try {
       const [r1, r2] = await Promise.all([
-        fetch("/api/loans?view=all&status=pending"),
-        fetch("/api/laptop-loans?view=all&status=pending"),
+        fetch("/api/loans?view=all&status=pending&count_only=true"),
+        fetch("/api/laptop-loans?view=all&status=pending&count_only=true"),
       ]);
       const d1 = r1.ok ? await r1.json() : {};
       const d2 = r2.ok ? await r2.json() : {};
-      setPendingCount((d1.loans?.length || 0) + (d2.loans?.length || 0));
+      setPendingCount((d1.count || 0) + (d2.count || 0));
     } catch {
       /* silent */
     }
   }, []);
+
+  const refreshLoansTab = useCallback(() => {
+    fetchLoans();
+    fetchPendingCount();
+  }, [fetchLoans, fetchPendingCount]);
 
   const handleLaptopLoanAction = async (loanId, action) => {
     setActionLoading(loanId);
@@ -511,7 +603,14 @@ export default function AdminPage() {
           "postgres_changes",
           { event: "*", schema: "public", table: "loan_requests" },
           () => {
-            fetchLoans();
+            refreshLoansTab();
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "laptop_loan_requests" },
+          () => {
+            refreshLoansTab();
           },
         )
         .subscribe((_status, err) => {
@@ -529,13 +628,13 @@ export default function AdminPage() {
     }
 
     // Fallback poll every 60s in case Realtime drops
-    const fallback = setInterval(fetchLoans, 60000);
+    const fallback = setInterval(refreshLoansTab, 60000);
 
     return () => {
       if (channel) supabaseClient.removeChannel(channel);
       clearInterval(fallback);
     };
-  }, [user, activeTab, fetchLoans]);
+  }, [user, activeTab, refreshLoansTab]);
 
   const handleAction = async (loanId, action) => {
     setActionLoading(loanId);
@@ -604,7 +703,11 @@ export default function AdminPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "bulk_approve", loan_ids: techIds }),
-          }),
+          }).then(async (res) => ({
+            ok: res.ok,
+            ids: techIds,
+            body: await res.json().catch(() => ({})),
+          })),
         );
       }
       for (const lid of laptopIds) {
@@ -613,16 +716,36 @@ export default function AdminPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "approve" }),
-          }),
+          }).then(async (res) => ({
+            ok: res.ok,
+            ids: [lid],
+            body: await res.json().catch(() => ({})),
+          })),
         );
       }
 
-      await Promise.all(tasks);
-      setSelectedPendingLoans(new Set());
-      fetchLoans();
-      toast.success(
-        `${selectedPendingLoans.size} loan(s) approved successfully`,
-      );
+      const results = await Promise.all(tasks);
+      const failedIds = results
+        .filter((result) => !result.ok)
+        .flatMap((result) => result.ids);
+      const succeededCount = selectedIds.length - failedIds.length;
+
+      if (failedIds.length === 0) {
+        setSelectedPendingLoans(new Set());
+        toast.success(`${selectedIds.length} loan(s) approved successfully`);
+      } else {
+        setSelectedPendingLoans(new Set(failedIds));
+        const firstError = results.find((result) => !result.ok)?.body?.error;
+        toast.error(
+          firstError ||
+            `${failedIds.length} approval(s) failed. Failed requests stayed selected.`,
+        );
+        if (succeededCount > 0) {
+          toast.success(`${succeededCount} loan(s) approved successfully`);
+        }
+      }
+
+      refreshLoansTab();
     } catch {
       toast.error("Network error — bulk approve could not be completed");
     } finally {
@@ -668,7 +791,7 @@ export default function AdminPage() {
   };
 
   const selectAll = () => {
-    const ids = loans
+    const ids = filteredLoans
       .filter(
         (l) =>
           l.status === "approved" &&
@@ -689,7 +812,9 @@ export default function AdminPage() {
   };
 
   const selectAllPending = () => {
-    const ids = loans.filter((l) => l.status === "pending").map((l) => l.id);
+    const ids = filteredLoans
+      .filter((l) => l.status === "pending")
+      .map((l) => l.id);
     setSelectedPendingLoans(new Set(ids));
   };
 
@@ -840,19 +965,7 @@ export default function AdminPage() {
   };
 
   if (loading)
-    return (
-      <>
-        <Navbar />
-        <div className="page-container">
-          <div
-            className="loading-spinner"
-            style={{ minHeight: "calc(100dvh - 180px)" }}
-          >
-            <div className="spinner" />
-          </div>
-        </div>
-      </>
-    );
+    return <AppShellLoading />;
 
   if (!user) return null;
 
@@ -1004,6 +1117,7 @@ export default function AdminPage() {
 
         {error && (
           <div
+            aria-live="polite"
             style={{
               padding: "10px 16px",
               background: "rgba(239,68,68,0.1)",
@@ -1019,6 +1133,7 @@ export default function AdminPage() {
           >
             <span>{error}</span>
             <button
+              aria-label="Dismiss error message"
               onClick={() => setError("")}
               style={{
                 background: "none",
@@ -1113,9 +1228,13 @@ export default function AdminPage() {
               <div style={{ marginBottom: 10 }}>
                 <input
                   type="text"
+                  aria-label="Search loans"
+                  name="loan_search"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name, department, or item..."
+                  placeholder="Search by name, department, or item…"
                   style={{
                     width: "100%",
                     fontSize: 16,
@@ -1145,6 +1264,7 @@ export default function AdminPage() {
                       onClick={() => {
                         setStatusFilter(value);
                         setSelectedLoans(new Set());
+                        setSelectedPendingLoans(new Set());
                       }}
                       style={{
                         padding: "6px 14px",
@@ -1425,7 +1545,10 @@ export default function AdminPage() {
                             #{loan.id} · {timeAgo(loan.created_at)}
                           </span>
                           {statusFilter === "pending" && (
-                            <div
+                            <button
+                              type="button"
+                              aria-label={`Select loan ${loan.id} for bulk approval`}
+                              aria-pressed={selectedPendingLoans.has(loan.id)}
                               style={{
                                 cursor: "pointer",
                                 display: "flex",
@@ -1434,6 +1557,9 @@ export default function AdminPage() {
                                 fontSize: 12,
                                 color: "var(--text-secondary)",
                                 fontWeight: 500,
+                                background: "none",
+                                border: "none",
+                                padding: 0,
                               }}
                               onClick={() => toggleSelectPending(loan.id)}
                             >
@@ -1459,12 +1585,15 @@ export default function AdminPage() {
                                 )}
                               </div>
                               Select
-                            </div>
+                            </button>
                           )}
                           {statusFilter === "approved" &&
                             loan.loan_type === "temporary" &&
                             loan._source !== "laptop" && (
-                              <div
+                              <button
+                                type="button"
+                                aria-label={`Select loan ${loan.id} for bulk return`}
+                                aria-pressed={selectedLoans.has(loan.id)}
                                 style={{
                                   cursor: "pointer",
                                   display: "flex",
@@ -1473,6 +1602,9 @@ export default function AdminPage() {
                                   fontSize: 12,
                                   color: "var(--text-secondary)",
                                   fontWeight: 500,
+                                  background: "none",
+                                  border: "none",
+                                  padding: 0,
                                 }}
                                 onClick={() => toggleSelect(loan.id)}
                               >
@@ -1501,7 +1633,7 @@ export default function AdminPage() {
                                   )}
                                 </div>
                                 Select
-                              </div>
+                              </button>
                             )}
                         </div>
                       </div>
@@ -1576,6 +1708,9 @@ export default function AdminPage() {
                         >
                           <input
                             type="text"
+                            aria-label={`Admin notes for loan ${loan.id}`}
+                            name={`admin_notes_${loan.id}`}
+                            autoComplete="off"
                             className="admin-notes-input"
                             placeholder="Admin notes (optional — sent to requester)"
                             value={adminNotes[loan.id] || ""}
@@ -1774,6 +1909,7 @@ export default function AdminPage() {
                           {loan._source !== "laptop" && (
                             <button
                               disabled={actionLoading === loan.id}
+                              aria-label={`Delete loan ${loan.id}`}
                               style={{
                                 color: "var(--error)",
                                 background: "none",
@@ -1812,6 +1948,7 @@ export default function AdminPage() {
           <>
             {userMsg && (
               <div
+                aria-live="polite"
                 style={{
                   padding: "10px 16px",
                   background: "rgba(99,102,241,0.08)",
@@ -1824,6 +1961,7 @@ export default function AdminPage() {
               >
                 {userMsg}
                 <button
+                  aria-label="Dismiss admin message"
                   onClick={() => setUserMsg("")}
                   style={{
                     float: "right",
@@ -1873,9 +2011,12 @@ export default function AdminPage() {
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input
                   type="text"
+                  aria-label="Registration invite code"
+                  name="invite_code"
+                  autoComplete="off"
                   value={inviteCodeInput}
                   onChange={(e) => setInviteCodeInput(e.target.value)}
-                  placeholder="Enter invite code"
+                  placeholder="Enter invite code…"
                   style={{
                     flex: 1,
                     padding: "7px 10px",
@@ -2083,10 +2224,10 @@ export default function AdminPage() {
                           {u.telegram_chat_id ? (
                             <div>
                               <span
-                                title="Telegram Handle"
+                                title="Telegram linked"
                                 style={{ color: "#3b82f6" }}
                               >
-                                💬 @{u.telegram_chat_id}
+                                💬 Telegram linked
                               </span>
                             </div>
                           ) : null}
@@ -2163,6 +2304,9 @@ export default function AdminPage() {
                           >
                             <input
                               type="password"
+                              aria-label={`New password for ${u.display_name}`}
+                              name={`reset_password_${u.id}`}
+                              autoComplete="new-password"
                               placeholder="New pass"
                               value={resetPasswords[u.id] || ""}
                               onChange={(e) =>
@@ -2183,6 +2327,7 @@ export default function AdminPage() {
                             />
                             <button
                               className="btn btn-sm btn-outline"
+                              aria-label={`Reset password for ${u.display_name}`}
                               onClick={() => handleResetPassword(u.id)}
                               disabled={userActionLoading === `reset-${u.id}`}
                               title="Reset password"
@@ -2199,6 +2344,7 @@ export default function AdminPage() {
                           {u.id !== user.id && (
                             <button
                               className="btn btn-sm btn-danger"
+                              aria-label={`Delete user ${u.display_name}`}
                               onClick={() => handleDeleteUser(u.id, u.username)}
                               disabled={userActionLoading === `delete-${u.id}`}
                               title="Delete user"
@@ -2284,6 +2430,7 @@ export default function AdminPage() {
           <>
             {templateMsg && (
               <div
+                aria-live="polite"
                 style={{
                   padding: "10px 16px",
                   background: "rgba(99,102,241,0.08)",
@@ -2298,6 +2445,7 @@ export default function AdminPage() {
               >
                 {templateMsg}
                 <button
+                  aria-label="Dismiss template message"
                   onClick={() => setTemplateMsg("")}
                   style={{
                     background: "none",
@@ -2342,6 +2490,9 @@ export default function AdminPage() {
                 }}
               >
                 <input
+                  aria-label="Template name"
+                  name="template_name"
+                  autoComplete="off"
                   value={templateForm.name}
                   onChange={(e) =>
                     setTemplateForm((p) => ({ ...p, name: e.target.value }))
@@ -2378,6 +2529,9 @@ export default function AdminPage() {
                 </select>
               </div>
               <input
+                aria-label="Template description"
+                name="template_description"
+                autoComplete="off"
                 value={templateForm.description}
                 onChange={(e) =>
                   setTemplateForm((p) => ({
@@ -2402,9 +2556,12 @@ export default function AdminPage() {
               {/* Item picker */}
               <div style={{ marginBottom: 10 }}>
                 <input
+                  aria-label="Search inventory items for template"
+                  name="template_item_search"
+                  autoComplete="off"
                   value={templateItemSearch}
                   onChange={(e) => setTemplateItemSearch(e.target.value)}
-                  placeholder="Search items to add..."
+                  placeholder="Search items to add…"
                   style={{
                     width: "100%",
                     padding: "9px 12px",
@@ -2528,6 +2685,7 @@ export default function AdminPage() {
                         }}
                       />
                       <button
+                        aria-label={`Remove ${ti.item_name} from template`}
                         onClick={() =>
                           setTemplateForm((p) => ({
                             ...p,
@@ -3745,5 +3903,13 @@ export default function AdminPage() {
         )}
       </div>
     </>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={<AppShellLoading />}>
+      <AdminPageContent />
+    </Suspense>
   );
 }

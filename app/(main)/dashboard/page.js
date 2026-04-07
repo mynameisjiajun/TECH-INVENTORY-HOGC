@@ -6,6 +6,7 @@ import { useToast } from "@/lib/context/ToastContext";
 import { supabaseClient } from "@/lib/db/supabaseClient";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
+import AppShellLoading from "@/components/AppShellLoading";
 import {
   RiArchiveLine,
   RiHandHeartLine,
@@ -388,11 +389,7 @@ export default function DashboardPage() {
   ]);
 
   if (loading || !user)
-    return (
-      <div className="loading-spinner">
-        <div className="spinner" />
-      </div>
-    );
+    return <AppShellLoading />;
 
   const monthNames = [
     "January",

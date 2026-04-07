@@ -30,7 +30,7 @@ function parseJwtPayload(token) {
   }
 }
 
-export default function middleware(request) {
+export default function proxy(request) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(COOKIE_NAME)?.value;
   const user = token ? parseJwtPayload(token) : null;

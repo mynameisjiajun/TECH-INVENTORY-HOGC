@@ -8,8 +8,9 @@ export default function InstallPrompt() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // Don't show if already installed as PWA
-    if (window.matchMedia("(display-mode: standalone)").matches) return;
+    const shell = document.documentElement.dataset.shell;
+    if (shell !== "mobile-web") return;
+
     // Don't show if dismissed recently
     const dismissed = localStorage.getItem("pwa-install-dismissed");
     if (
@@ -23,23 +24,11 @@ export default function InstallPrompt() {
     const isiOS =
       /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    const isMobile =
-      /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
-        ua,
-      ) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-    if (!isMobile) return;
-
     if (isiOS) {
-      // Check if already in standalone (home screen) mode
-      if (!navigator.standalone) {
-        // Use timeout to avoid synchronous setState in effect body
-        setTimeout(() => {
-          setIsIOS(true);
-          setShowBanner(true);
-        }, 0);
-      }
+      setTimeout(() => {
+        setIsIOS(true);
+        setShowBanner(true);
+      }, 0);
       return;
     }
 
@@ -119,7 +108,11 @@ export default function InstallPrompt() {
             <RiDownload2Line /> Install
           </button>
         )}
-        <button className="install-banner-close" onClick={handleDismiss}>
+        <button
+          className="install-banner-close"
+          aria-label="Dismiss install prompt"
+          onClick={handleDismiss}
+        >
           <RiCloseLine />
         </button>
       </div>

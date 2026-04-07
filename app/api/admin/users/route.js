@@ -2,6 +2,19 @@ import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser, hashPassword } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
 
+async function deleteByUserId(table, userIdColumn, userId) {
+  const { error } = await supabase.from(table).delete().eq(userIdColumn, userId);
+  if (error) throw new Error(error.message || `Failed to delete ${table}`);
+}
+
+async function nullifyUserReference(table, userIdColumn, userId) {
+  const { error } = await supabase
+    .from(table)
+    .update({ [userIdColumn]: null })
+    .eq(userIdColumn, userId);
+  if (error) throw new Error(error.message || `Failed to update ${table}`);
+}
+
 // GET: list all users (admin only)
 export async function GET() {
   const user = await getCurrentUser();
@@ -135,7 +148,76 @@ export async function POST(request) {
       .single();
     if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    // Log audit before delete (so user_id reference is still valid)
+    try {
+      const [{ data: techLoans }, { data: laptopLoans }] = await Promise.all([
+        supabase.from("loan_requests").select("id").eq("user_id", user_id),
+        supabase
+          .from("laptop_loan_requests")
+          .select("id")
+          .eq("user_id", user_id),
+      ]);
+
+      const techLoanIds = (techLoans || []).map((loan) => loan.id);
+      const laptopLoanIds = (laptopLoans || []).map((loan) => loan.id);
+
+      if (techLoanIds.length > 0) {
+        const { error: loanItemsError } = await supabase
+          .from("loan_items")
+          .delete()
+          .in("loan_request_id", techLoanIds);
+        if (loanItemsError) throw new Error(loanItemsError.message || "Failed to delete loan items");
+
+        const { error: loansError } = await supabase
+          .from("loan_requests")
+          .delete()
+          .eq("user_id", user_id);
+        if (loansError) throw new Error(loansError.message || "Failed to delete loan requests");
+      }
+
+      if (laptopLoanIds.length > 0) {
+        const { error: laptopLoanItemsError } = await supabase
+          .from("laptop_loan_items")
+          .delete()
+          .in("loan_request_id", laptopLoanIds);
+        if (laptopLoanItemsError) {
+          throw new Error(
+            laptopLoanItemsError.message || "Failed to delete laptop loan items",
+          );
+        }
+
+        const { error: laptopLoansError } = await supabase
+          .from("laptop_loan_requests")
+          .delete()
+          .eq("user_id", user_id);
+        if (laptopLoansError) {
+          throw new Error(
+            laptopLoansError.message || "Failed to delete laptop loan requests",
+          );
+        }
+      }
+
+      await Promise.all([
+        deleteByUserId("notifications", "user_id", user_id),
+        deleteByUserId("laptop_notifications", "user_id", user_id),
+        nullifyUserReference("loan_templates", "created_by", user_id),
+        nullifyUserReference("activity_feed", "user_id", user_id),
+        nullifyUserReference("audit_log", "user_id", user_id),
+      ]);
+
+      const { error: deleteError } = await supabase
+        .from("users")
+        .delete()
+        .eq("id", user_id);
+      if (deleteError) {
+        throw new Error(deleteError.message || "Failed to delete user");
+      }
+    } catch (deleteErr) {
+      return NextResponse.json(
+        { error: deleteErr.message || "Failed to delete user" },
+        { status: 500 },
+      );
+    }
+
     await supabase.from("audit_log").insert({
       user_id: user.id,
       action: "delete_user",
@@ -143,15 +225,6 @@ export async function POST(request) {
       target_id: user_id,
       details: `Deleted user @${target.username}`,
     });
-
-    // ON DELETE CASCADE handles: notifications, loan_items (via loan_requests), loan_requests
-    const { error: deleteError } = await supabase.from("users").delete().eq("id", user_id);
-    if (deleteError) {
-      return NextResponse.json(
-        { error: deleteError.message || "Failed to delete user" },
-        { status: 500 },
-      );
-    }
 
     return NextResponse.json({ message: `User @${target.username} deleted` });
   }
