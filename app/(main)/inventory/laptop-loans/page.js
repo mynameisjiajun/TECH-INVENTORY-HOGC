@@ -1,6 +1,7 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useCart } from "@/lib/context/CartContext";
+import { useToast } from "@/lib/context/ToastContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import Navbar from "@/components/Navbar";
@@ -297,6 +298,7 @@ const LaptopCard = memo(function LaptopCard({
 export default function LaptopLoansPage() {
   const { user, loading } = useAuth();
   const { addLaptopItem, items: cartItems } = useCart();
+  const toast = useToast();
   const router = useRouter();
 
   const [tab, setTab] = useState("available"); // "available" | "perm"
@@ -372,29 +374,41 @@ export default function LaptopLoansPage() {
         loanType === "temporary" ? endDate : null,
         loanType,
       );
+      toast.success(`${laptop.name} added to cart`);
     },
-    [addLaptopItem, startDate, endDate, loanType],
+    [addLaptopItem, startDate, endDate, loanType, toast],
   );
 
-  const handleNotify = useCallback(async (laptop) => {
-    try {
-      const res = await fetch(`/api/laptop-notify/${laptop.id}`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        setTiers((prev) =>
-          prev.map((tier) => ({
-            ...tier,
-            laptops: tier.laptops.map((l) =>
-              l.id === laptop.id ? { ...l, notify_me: !l.notify_me } : l,
-            ),
-          })),
-        );
+  const handleNotify = useCallback(
+    async (laptop) => {
+      try {
+        const res = await fetch(`/api/laptop-notify/${laptop.id}`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          const nowNotifying = !laptop.notify_me;
+          setTiers((prev) =>
+            prev.map((tier) => ({
+              ...tier,
+              laptops: tier.laptops.map((l) =>
+                l.id === laptop.id ? { ...l, notify_me: nowNotifying } : l,
+              ),
+            })),
+          );
+          toast.success(
+            nowNotifying
+              ? "You'll be notified when this laptop is available"
+              : "Notification removed",
+          );
+        } else {
+          toast.error("Could not update notification — please try again");
+        }
+      } catch {
+        toast.error("Network error — could not update notification");
       }
-    } catch {
-      /* silent */
-    }
-  }, []);
+    },
+    [toast],
+  );
 
   const isAdmin = user?.role === "admin";
   const canPermanent = ["admin", "tech"].includes(user?.role);

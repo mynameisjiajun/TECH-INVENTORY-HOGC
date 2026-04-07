@@ -1,6 +1,7 @@
 "use client";
 import { useCart } from "@/lib/context/CartContext";
 import { useAuth } from "@/lib/context/AuthContext";
+import { useToast } from "@/lib/context/ToastContext";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +18,7 @@ import {
 
 export default function CartPanel() {
   const { user } = useAuth();
+  const toast = useToast();
   const router = useRouter();
   const canPermanent = ["admin", "tech"].includes(user?.role);
   const {
@@ -77,6 +79,15 @@ export default function CartPanel() {
     }
   }, [modifyingLoan]);
 
+  // Reset success/form state each time the panel is opened fresh
+  useEffect(() => {
+    if (isOpen) {
+      setSubmitted(false);
+      setShowForm(false);
+      setError("");
+    }
+  }, [isOpen]);
+
   const openCheckoutForm = () => {
     setError("");
     const today = new Date().toISOString().split("T")[0];
@@ -126,7 +137,9 @@ export default function CartPanel() {
         });
         const data = await res.json();
         if (res.status === 401) {
-          setError("Session expired — please refresh the page and try again.");
+          const msg = "Session expired — please refresh the page and try again.";
+          setError(msg);
+          toast.error(msg);
           setLoading(false);
           return;
         }
@@ -160,9 +173,10 @@ export default function CartPanel() {
           });
           const data = await res.json();
           if (res.status === 401) {
-            setError(
-              "Session expired — please refresh the page and try again.",
-            );
+            const msg =
+              "Session expired — please refresh the page and try again.";
+            setError(msg);
+            toast.error(msg);
             setLoading(false);
             return;
           }
@@ -190,9 +204,10 @@ export default function CartPanel() {
           });
           const data = await res.json();
           if (res.status === 401) {
-            setError(
-              "Session expired — please refresh the page and try again.",
-            );
+            const msg =
+              "Session expired — please refresh the page and try again.";
+            setError(msg);
+            toast.error(msg);
             setLoading(false);
             return;
           }
@@ -202,15 +217,19 @@ export default function CartPanel() {
       }
 
       if (errors.length > 0) {
-        setError(errors.join(" | "));
+        const msg = errors.join(" | ");
+        setError(msg);
+        toast.error(msg);
         return;
       }
 
       clearCart();
       setShowForm(false);
       setSubmitted(true);
+      toast.success("Request submitted! We'll notify you when it's reviewed.");
     } catch (err) {
       setError(err.message);
+      toast.error(err.message || "Submission failed. Please try again.");
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useCart } from "@/lib/context/CartContext";
+import { useToast } from "@/lib/context/ToastContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import Navbar from "@/components/Navbar";
@@ -14,9 +15,16 @@ import {
 } from "react-icons/ri";
 
 export default function InventoryPage() {
-  const TABLE_TABS = ["storage", "deployed", "total_quantity", "total_breakdown", "low_stock"];
+  const TABLE_TABS = [
+    "storage",
+    "deployed",
+    "total_quantity",
+    "total_breakdown",
+    "low_stock",
+  ];
   const { user, loading } = useAuth();
   const { addItem, updateQuantity } = useCart();
+  const toast = useToast();
   const router = useRouter();
   const [tab, setTab] = useState("storage");
   const [items, setItems] = useState([]);
@@ -82,7 +90,8 @@ export default function InventoryPage() {
           if (!cancelled) setError(data.error || "Auto-sync failed");
         }
       } catch {
-        if (!cancelled) setError("Network error — could not auto-sync inventory");
+        if (!cancelled)
+          setError("Network error — could not auto-sync inventory");
       } finally {
         if (!cancelled) {
           setSyncing(false);
@@ -131,10 +140,16 @@ export default function InventoryPage() {
           added++;
         }
       });
-      if (added === 0)
+      if (added === 0) {
         setError("None of the template items are currently in stock");
+        toast.error("None of the template items are currently in stock");
+      } else {
+        toast.success(
+          `${added} item${added > 1 ? "s" : ""} added to cart`,
+        );
+      }
     },
-    [items, addItem, updateQuantity],
+    [items, addItem, updateQuantity, toast],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -144,19 +159,33 @@ export default function InventoryPage() {
       const syncRes = await fetch("/api/items/sync", { method: "POST" });
       if (!syncRes.ok) {
         const data = await syncRes.json().catch(() => ({}));
-        setError(data.error || "Sync failed");
+        const msg = data.error || "Sync failed";
+        setError(msg);
+        toast.error(msg);
+      } else {
+        toast.success("Inventory synced from Google Sheets");
       }
     } catch {
-      setError("Network error — could not sync from Google Sheets");
+      const msg = "Network error — could not sync from Google Sheets";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setSyncing(false);
     }
     await fetchItems();
-  }, [fetchItems]);
+  }, [fetchItems, toast]);
 
   if (loading || !user)
     return (
-      <div className="loading-spinner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <div
+        className="loading-spinner"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+        }}
+      >
         <div className="spinner" />
       </div>
     );
@@ -169,9 +198,13 @@ export default function InventoryPage() {
     { id: "total_breakdown", label: "Qty Breakdown" },
     { id: "low_stock", label: "Low in Stock" },
   ];
-  const tabs = user.role === "admin" 
-    ? allTabs 
-    : [{ id: "presets", label: "Presets" }, { id: "storage", label: "Storage Spare" }];
+  const tabs =
+    user.role === "admin"
+      ? allTabs
+      : [
+          { id: "presets", label: "Presets" },
+          { id: "storage", label: "Storage Spare" },
+        ];
   const isTableTab = TABLE_TABS.includes(tab);
 
   return (
@@ -372,16 +405,21 @@ export default function InventoryPage() {
           <>
             {/* Presets Grid */}
             {tab === "presets" && (
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-                gap: "16px",
-                marginTop: "16px",
-              }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                  gap: "16px",
+                  marginTop: "16px",
+                }}
+              >
                 {templates.length === 0 ? (
                   <div className="empty-state" style={{ gridColumn: "1 / -1" }}>
                     <h3>No presets found</h3>
-                    <p>Admins can create presets in the Admin -{'>'} Templates page to allow requesting a group of items quickly.</p>
+                    <p>
+                      Admins can create presets in the Admin -{">"} Templates
+                      page to allow requesting a group of items quickly.
+                    </p>
                   </div>
                 ) : (
                   templates.map((t) => (
@@ -395,22 +433,50 @@ export default function InventoryPage() {
                         background: "var(--bg-card)",
                         border: "1px solid var(--border)",
                         borderRadius: "12px",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                       }}
                     >
                       <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                          <span className={`badge \${t.loan_type === 'permanent' ? 'badge-permanent' : 'badge-temporary'}`}>
-                            {t.loan_type === 'permanent' ? '📌 Permanent' : '⏱️ Temporary'}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <span
+                            className={`badge \${t.loan_type === 'permanent' ? 'badge-permanent' : 'badge-temporary'}`}
+                          >
+                            {t.loan_type === "permanent"
+                              ? "📌 Permanent"
+                              : "⏱️ Temporary"}
                           </span>
-                          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{t.name}</h3>
+                          <h3
+                            style={{ margin: 0, fontSize: 16, fontWeight: 600 }}
+                          >
+                            {t.name}
+                          </h3>
                         </div>
                         {t.description && (
-                          <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                          <p
+                            style={{
+                              fontSize: 13,
+                              color: "var(--text-secondary)",
+                              marginBottom: 12,
+                            }}
+                          >
                             {t.description}
                           </p>
                         )}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 6,
+                            marginBottom: 16,
+                          }}
+                        >
                           {t.items.map((item) => (
                             <span key={item.item_id} className="loan-item-chip">
                               {item.item_name} × {item.quantity}

@@ -344,23 +344,21 @@ export default function AdminPage() {
     const { active, over } = event;
 
     if (active.id !== over.id) {
-      setTemplates((items) => {
-        const oldIndex = items.findIndex((t) => t.id === active.id);
-        const newIndex = items.findIndex((t) => t.id === over.id);
+      const oldIndex = templates.findIndex((t) => t.id === active.id);
+      const newIndex = templates.findIndex((t) => t.id === over.id);
+      const newTemplates = arrayMove(templates, oldIndex, newIndex);
+      setTemplates(newTemplates);
 
-        const newTemplates = arrayMove(items, oldIndex, newIndex);
-
-        // Fire async request to save ordering
-        fetch("/api/admin/templates", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "reorder",
-            orderedIds: newTemplates.map((t) => t.id),
-          }),
-        }).catch(() => {});
-
-        return newTemplates;
+      // Save new ordering to the server
+      fetch("/api/admin/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reorder",
+          orderedIds: newTemplates.map((t) => t.id),
+        }),
+      }).catch(() => {
+        toast.error("Could not save template order — please try again");
       });
     }
   };
@@ -719,9 +717,16 @@ export default function AdminPage() {
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
-      if (res.ok) fetchUsers();
+      if (res.ok) {
+        toast.success(data.message || "Role updated");
+        fetchUsers();
+      } else {
+        toast.error(data.error || "Failed to change role");
+      }
     } catch {
-      setUserMsg("Network error — could not change role");
+      const msg = "Network error — could not change role";
+      setUserMsg(msg);
+      toast.error(msg);
     } finally {
       setUserActionLoading(null);
     }
@@ -738,9 +743,16 @@ export default function AdminPage() {
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
-      if (res.ok) fetchUsers();
+      if (res.ok) {
+        toast.success(data.message || "User deleted");
+        fetchUsers();
+      } else {
+        toast.error(data.error || "Failed to delete user");
+      }
     } catch {
-      setUserMsg("Network error — could not delete user");
+      const msg = "Network error — could not delete user";
+      setUserMsg(msg);
+      toast.error(msg);
     } finally {
       setUserActionLoading(null);
     }
@@ -763,9 +775,16 @@ export default function AdminPage() {
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
-      if (res.ok) setInviteCode(inviteCodeInput.trim());
+      if (res.ok) {
+        toast.success(data.message || "Invite code updated");
+        setInviteCode(inviteCodeInput.trim());
+      } else {
+        toast.error(data.error || "Failed to update invite code");
+      }
     } catch {
-      setUserMsg("Network error — could not update invite code");
+      const msg = "Network error — could not update invite code";
+      setUserMsg(msg);
+      toast.error(msg);
     } finally {
       setInviteCodeLoading(false);
     }
@@ -784,9 +803,16 @@ export default function AdminPage() {
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
-      if (res.ok) setReminderTimes(reminderTimesInput);
+      if (res.ok) {
+        toast.success(data.message || "Reminder times updated");
+        setReminderTimes(reminderTimesInput);
+      } else {
+        toast.error(data.error || "Failed to update reminder times");
+      }
     } catch {
-      setUserMsg("Network error — could not update reminder times");
+      const msg = "Network error — could not update reminder times";
+      setUserMsg(msg);
+      toast.error(msg);
     } finally {
       setReminderTimesLoading(false);
     }
@@ -2551,6 +2577,9 @@ export default function AdminPage() {
                     const data = await res.json();
                     setTemplateMsg(data.message || data.error);
                     if (res.ok) {
+                      toast.success(
+                        editingTemplate ? "Template saved" : "Template created",
+                      );
                       // Optimistically update the UI
                       if (editingTemplate) {
                         setTemplates((prev) =>
@@ -2576,6 +2605,8 @@ export default function AdminPage() {
                       });
                       setEditingTemplate(null);
                       fetchTemplates();
+                    } else {
+                      toast.error(data.error || "Failed to save template");
                     }
                   }}
                 >
@@ -2650,7 +2681,7 @@ export default function AdminPage() {
                             prev.filter((x) => x.id !== t.id),
                           );
 
-                          await fetch("/api/admin/templates", {
+                          const res = await fetch("/api/admin/templates", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
@@ -2658,6 +2689,11 @@ export default function AdminPage() {
                               id: t.id,
                             }),
                           });
+                          if (res.ok) {
+                            toast.success(`Template "${t.name}" deleted`);
+                          } else {
+                            toast.error("Failed to delete template");
+                          }
                           fetchTemplates();
                         }}
                       />

@@ -1916,6 +1916,11 @@ body.rickroll-lock {
     padding-bottom: env(safe-area-inset-bottom, 8px);
     z-index: 100;
     -webkit-tap-highlight-color: transparent;
+    /* GPU compositing layer — prevents iOS WebKit from repositioning this
+       element during page-load layout reflows / viewport height changes */
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
   }
 
   .mobile-nav .nav-link {
@@ -1950,7 +1955,9 @@ body.rickroll-lock {
   .mobile-nav .nav-link:active .nav-icon-wrap {
     background: rgba(99, 102, 241, 0.3);
     transform: scale(0.9);
-    transition: transform 0.1s, background 0.1s;
+    transition:
+      transform 0.1s,
+      background 0.1s;
   }
 
   .mobile-nav .nav-link svg {
