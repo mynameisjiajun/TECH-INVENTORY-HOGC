@@ -1,4 +1,9 @@
 html[data-shell="pwa"] {
+  --bg-primary: #060914;
+  --bg-secondary: #0d1326;
+  --bg-card: rgba(13, 19, 36, 0.84);
+  --bg-card-hover: rgba(19, 27, 50, 0.92);
+  --bg-glass: rgba(8, 12, 24, 0.74);
   --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 16px);
   --shell-mobile-nav-min-height: calc(72px + env(safe-area-inset-bottom, 0px));
   --shell-mobile-nav-padding-bottom: env(safe-area-inset-bottom, 10px);
@@ -13,33 +18,41 @@ html[data-shell="pwa"] {
 }
 
 html[data-shell="pwa"][data-platform="ios"] {
-  --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 34px);
+  --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 44px);
 }
 
 html[data-shell="pwa"] body {
+  background-color: #060914;
   background-image:
     linear-gradient(
       180deg,
-      rgba(114, 102, 255, 0.12) 0%,
-      rgba(114, 102, 255, 0.06) 24%,
-      rgba(43, 56, 104, 0.04) 48%,
-      rgba(7, 11, 22, 0) 78%
+      rgba(114, 102, 255, 0.18) 0%,
+      rgba(114, 102, 255, 0.1) 18%,
+      rgba(45, 58, 112, 0.05) 42%,
+      rgba(6, 9, 20, 0) 72%
     ),
     radial-gradient(
-      ellipse at 16% 18%,
-      rgba(66, 80, 156, 0.08) 0%,
-      transparent 58%
+      ellipse at 14% 20%,
+      rgba(63, 78, 150, 0.1) 0%,
+      transparent 54%
     ),
     radial-gradient(
-      ellipse at 84% 14%,
-      rgba(114, 102, 255, 0.08) 0%,
-      transparent 58%
+      ellipse at 86% 12%,
+      rgba(114, 102, 255, 0.14) 0%,
+      transparent 42%
     ),
     radial-gradient(
-      ellipse at 50% 84%,
-      rgba(32, 45, 89, 0.06) 0%,
-      transparent 66%
-    );
+      ellipse at 82% 80%,
+      rgba(29, 40, 79, 0.12) 0%,
+      transparent 52%
+    ),
+    linear-gradient(180deg, #0a0f1d 0%, #060914 100%);
+  background-size:
+    100% 100%,
+    120% 110%,
+    105% 92%,
+    110% 110%,
+    100% 100%;
 }
 
 html[data-shell="pwa"] .page-container {
@@ -61,12 +74,100 @@ html[data-shell="pwa"] .page-header p {
   font-size: 11px;
 }
 
+html[data-shell="pwa"] .search-bar,
+html[data-shell="pwa"] .filter-toolbar {
+  gap: 7px;
+}
+
+html[data-shell="pwa"] .filter-shell {
+  padding: 12px;
+  border-radius: 14px;
+}
+
+html[data-shell="pwa"] .filter-toolbar-header {
+  gap: 7px;
+  margin-bottom: 8px;
+}
+
+html[data-shell="pwa"] .filter-kicker {
+  font-size: 10px;
+}
+
+html[data-shell="pwa"] .filter-segment {
+  padding: 2px;
+}
+
+html[data-shell="pwa"] .filter-segment-button {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+html[data-shell="pwa"] .filter-chip {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+html[data-shell="pwa"] .loans-status-filter-select {
+  display: none;
+}
+
+html[data-shell="pwa"] .loans-status-filter-chips {
+  display: flex;
+  width: 100%;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+html[data-shell="pwa"] .loans-status-filter-chips::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-shell="pwa"] .loans-status-filter-chip {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
+html[data-shell="pwa"] .search-input-wrap input {
+  padding: 7px 11px 7px 34px !important;
+}
+
+html[data-shell="pwa"] .search-input-wrap .search-icon {
+  left: 11px;
+  font-size: 13px;
+}
+
+html[data-shell="pwa"] .filter-select,
+html[data-shell="pwa"] .filter-select-compact {
+  padding: 7px 28px 7px 10px;
+}
+
+html[data-shell="pwa"] .filter-date-range {
+  width: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 9px;
+}
+
+html[data-shell="pwa"] .filter-date-input {
+  width: calc(50% - 18px) !important;
+  min-width: 0;
+}
+
 html[data-shell="pwa"] .navbar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   padding: 0 14px;
+  padding-top: var(--shell-navbar-safe-top);
   background:
     linear-gradient(180deg, rgba(8, 12, 22, 0.98), rgba(8, 12, 22, 0.92)),
     rgba(8, 12, 22, 0.96);
@@ -536,6 +637,7 @@ html[data-shell="pwa"][data-platform="ios"] .modal-footer {
 
   html[data-shell="pwa"] .navbar {
     padding: 0 20px;
+    padding-top: var(--shell-navbar-safe-top);
   }
 
   html[data-shell="pwa"] .navbar-inner {

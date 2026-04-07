@@ -76,6 +76,7 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     left: 0;
     right: 0;
     padding: 0 14px;
+    padding-top: var(--shell-navbar-safe-top);
     background:
       linear-gradient(180deg, rgba(8, 12, 22, 0.98), rgba(8, 12, 22, 0.92)),
       rgba(8, 12, 22, 0.96);
@@ -236,9 +237,70 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     gap: 8px !important;
   }
 
+  html[data-shell="mobile-web"] .search-bar,
+  html[data-shell="mobile-web"] .filter-toolbar {
+    gap: 7px !important;
+  }
+
+  html[data-shell="mobile-web"] .filter-shell {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  html[data-shell="mobile-web"] .filter-toolbar-header {
+    gap: 7px;
+    margin-bottom: 8px;
+  }
+
+  html[data-shell="mobile-web"] .filter-kicker {
+    font-size: 10px;
+  }
+
+  html[data-shell="mobile-web"] .filter-segment {
+    padding: 2px;
+  }
+
+  html[data-shell="mobile-web"] .filter-segment-button {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 10px;
+  }
+
+  html[data-shell="mobile-web"] .filter-chip {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 10px;
+  }
+
   html[data-shell="mobile-web"] .search-input-wrap,
   html[data-shell="mobile-web"] .filter-select {
     min-width: 100%;
+  }
+
+  html[data-shell="mobile-web"] .loans-status-filter-select {
+    display: none;
+  }
+
+  html[data-shell="mobile-web"] .loans-status-filter-chips {
+    display: flex;
+    width: 100%;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html[data-shell="mobile-web"] .loans-status-filter-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  html[data-shell="mobile-web"] .loans-status-filter-chip {
+    flex: 0 0 auto;
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 10px;
   }
 
   html[data-shell="mobile-web"] .search-input-wrap input,
@@ -256,23 +318,35 @@ html[data-shell="mobile-web"][data-platform="ios"] {
   }
 
   html[data-shell="mobile-web"] .search-input-wrap input {
-    padding: 8px 12px 8px 36px;
+    padding: 7px 11px 7px 34px;
   }
 
   html[data-shell="mobile-web"] .search-input-wrap .search-icon {
-    left: 12px;
-    font-size: 14px;
+    left: 11px;
+    font-size: 13px;
   }
 
   html[data-shell="mobile-web"] .filter-select {
-    padding: 8px 30px 8px 10px;
+    padding: 7px 28px 7px 10px;
+  }
+
+  html[data-shell="mobile-web"] .filter-date-range {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 9px;
+  }
+
+  html[data-shell="mobile-web"] .filter-date-input {
+    width: calc(50% - 18px) !important;
+    min-width: 0;
   }
 
   html[data-shell="mobile-web"] .inventory-filter-row {
     width: 100%;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
   }
 
   html[data-shell="mobile-web"] .tabs {

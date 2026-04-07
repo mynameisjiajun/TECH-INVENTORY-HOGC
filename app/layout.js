@@ -31,7 +31,7 @@ export const viewport = {
   initialScale: 1,
   minimumScale: 1,
   viewportFit: "cover",
-  themeColor: "#0a0e1a",
+  themeColor: "#060914",
 };
 
 function detectInitialShell(userAgent) {

@@ -26,6 +26,14 @@ import {
   RiArchiveLine,
 } from "react-icons/ri";
 
+const LOAN_STATUS_FILTERS = [
+  { value: "", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+  { value: "returned", label: "Returned" },
+];
+
 export default function LoansPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -453,8 +461,7 @@ export default function LoansPage() {
     };
   }, [user]);
 
-  if (loading)
-    return <AppShellLoading />;
+  if (loading) return <AppShellLoading />;
 
   if (!user) return null;
 
@@ -930,24 +937,44 @@ export default function LoansPage() {
               placeholder="Search by item or purpose…"
             />
           </div>
-          <select
-            className="filter-select"
+          <div className="loans-status-filter-select">
+            <select
+              className="filter-select"
+              aria-label="Filter loans by status"
+              name="loan_status_filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                width: "auto",
+              }}
+            >
+              {LOAN_STATUS_FILTERS.map((filter) => (
+                <option key={filter.value || "all"} value={filter.value}>
+                  {filter.value ? filter.label : "All Statuses"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div
+            className="loans-status-filter-chips"
+            role="group"
             aria-label="Filter loans by status"
-            name="loan_status_filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{
-              flexShrink: 0,
-              fontSize: 16,
-              width: "auto",
-            }}
           >
-            <option value="">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="returned">Returned</option>
-          </select>
+            {LOAN_STATUS_FILTERS.map((filter) => {
+              const isActive = statusFilter === filter.value;
+              return (
+                <button
+                  key={filter.value || "all-chip"}
+                  type="button"
+                  className={`filter-chip loans-status-filter-chip ${isActive ? "active" : ""}`}
+                  aria-pressed={isActive}
+                  onClick={() => setStatusFilter(filter.value)}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
           <div className="filter-date-range">
             <RiFilterLine className="filter-icon" />
             <input
