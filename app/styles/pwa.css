@@ -7,6 +7,7 @@ html[data-shell="pwa"] {
   --shell-cart-header-mobile-top: calc(16px + env(safe-area-inset-top, 0px));
   --shell-install-banner-bottom: 72px;
   --shell-sticky-top-mobile: calc(58px + env(safe-area-inset-top, 0px));
+  --shell-sheet-bottom-safe: calc(18px + env(safe-area-inset-bottom, 0px));
 }
 
 html[data-shell="pwa"] body {
@@ -162,10 +163,6 @@ html[data-shell="pwa"][data-platform="ios"] .shell-loading-card {
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-html[data-shell="pwa"][data-platform="ios"] .navbar {
-  position: sticky;
-}
-
 html[data-shell="pwa"][data-platform="ios"] .navbar::before {
   content: "";
   position: absolute;
@@ -233,6 +230,7 @@ html[data-shell="pwa"][data-platform="ios"] .cart-panel {
 
 html[data-shell="pwa"][data-platform="ios"] .notification-dropdown {
   border-color: rgba(255, 255, 255, 0.08);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 html[data-shell="pwa"][data-platform="ios"] .cart-overlay,
@@ -279,7 +277,13 @@ html[data-shell="pwa"][data-platform="ios"] .cart-header::before {
 }
 
 html[data-shell="pwa"][data-platform="ios"] .cart-items {
-  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--shell-sheet-bottom-safe);
+}
+
+html[data-shell="pwa"][data-platform="ios"] .cart-footer {
+  padding-bottom: var(--shell-sheet-bottom-safe);
+  background:
+    linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(17, 24, 39, 0.98));
 }
 
 html[data-shell="pwa"][data-platform="ios"] .modal-overlay {
@@ -292,6 +296,10 @@ html[data-shell="pwa"][data-platform="ios"] .modal {
   max-height: 84dvh;
   border-radius: 26px;
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-shell="pwa"][data-platform="ios"] .modal-footer {
+  padding-bottom: var(--shell-sheet-bottom-safe);
 }
 
 @media (min-width: 960px) {

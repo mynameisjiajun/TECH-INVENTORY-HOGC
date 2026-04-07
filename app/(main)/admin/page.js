@@ -429,9 +429,14 @@ function AdminPageContent() {
         const data = await res.json();
         // Templates come back ordered correctly from the DB
         setTemplates(data.templates);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setTemplateMsg(
+          data.error || `Failed to load templates (${res.status})`,
+        );
       }
     } catch {
-      /* silent */
+      setTemplateMsg("Network error — could not load templates");
     } finally {
       setTemplatesFetching(false);
     }
@@ -477,9 +482,14 @@ function AdminPageContent() {
       if (res.ok) {
         const data = await res.json();
         setAllItems(data.items || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setTemplateMsg(data.error || `Failed to load inventory (${res.status})`);
+        setAllItems([]);
       }
     } catch {
-      /* silent */
+      setTemplateMsg("Network error — could not load inventory");
+      setAllItems([]);
     }
   };
 

@@ -73,119 +73,133 @@ function respond(data) {
 }
 
 export async function GET(request) {
-  const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const user = await getCurrentUser();
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await waitForSync();
-  const db = getDb();
-  const { searchParams } = new URL(request.url);
-  const tab = searchParams.get("tab") || "storage";
-  const search = searchParams.get("search") || "";
-  const type = searchParams.get("type") || "";
-  const brand = searchParams.get("brand") || "";
+    await waitForSync();
+    const db = getDb();
+    const { searchParams } = new URL(request.url);
+    const tab = searchParams.get("tab") || "storage";
+    const search = searchParams.get("search") || "";
+    const type = searchParams.get("type") || "";
+    const brand = searchParams.get("brand") || "";
 
-  if (tab === "storage") {
-    let query = "SELECT * FROM storage_items WHERE 1=1";
-    const params = [];
-    if (type) {
-      query += " AND type = ?";
-      params.push(type);
+    if (tab === "storage") {
+      let query = "SELECT * FROM storage_items WHERE 1=1";
+      const params = [];
+      if (type) {
+        query += " AND type = ?";
+        params.push(type);
+      }
+      if (brand) {
+        query += " AND brand = ?";
+        params.push(brand);
+      }
+      query += " ORDER BY sheet_row ASC, id ASC";
+      let items = db.prepare(query).all(...params);
+
+      if (search) {
+        items = items.filter(
+          (item) =>
+            fuzzyMatch(item.item, search) ||
+            fuzzyMatch(item.brand, search) ||
+            fuzzyMatch(item.type, search) ||
+            fuzzyMatch(item.model, search) ||
+            fuzzyMatch(item.location, search),
+        );
+      }
+
+      const filters = await getFilters(db, "storage_items");
+      return respond({ items, filters });
     }
-    if (brand) {
-      query += " AND brand = ?";
-      params.push(brand);
-    }
-    query += " ORDER BY sheet_row ASC, id ASC";
-    let items = db.prepare(query).all(...params);
 
-    if (search) {
-      items = items.filter(
-        (item) =>
-          fuzzyMatch(item.item, search) ||
-          fuzzyMatch(item.brand, search) ||
-          fuzzyMatch(item.type, search) ||
-          fuzzyMatch(item.model, search) ||
-          fuzzyMatch(item.location, search),
+    if (tab === "deployed") {
+      let query = "SELECT * FROM deployed_items WHERE 1=1";
+      const params = [];
+      if (type) {
+        query += " AND type = ?";
+        params.push(type);
+      }
+      if (brand) {
+        query += " AND brand = ?";
+        params.push(brand);
+      }
+      query += " ORDER BY id ASC";
+      let items = db.prepare(query).all(...params);
+
+      if (search) {
+        items = items.filter(
+          (item) =>
+            fuzzyMatch(item.item, search) ||
+            fuzzyMatch(item.brand, search) ||
+            fuzzyMatch(item.type, search) ||
+            fuzzyMatch(item.model, search),
+        );
+      }
+
+      const filters = await getFilters(db, "deployed_items");
+      return respond({ items, filters });
+    }
+
+    if (tab === "total_quantity") {
+      const items = await cached(
+        "total_quantity",
+        () =>
+          db.prepare(`
+            SELECT type,
+                   SUM(quantity_spare) as total_spare,
+                   SUM(current) as total_current,
+                   SUM(quantity_spare - current) as total_loaned
+            FROM storage_items
+            GROUP BY type
+            ORDER BY type
+          `).all(),
+        CACHE_TTL,
       );
+      return respond({ items });
     }
 
-    const filters = await getFilters(db, "storage_items");
-    return respond({ items, filters });
-  }
-
-  if (tab === "deployed") {
-    let query = "SELECT * FROM deployed_items WHERE 1=1";
-    const params = [];
-    if (type) {
-      query += " AND type = ?";
-      params.push(type);
-    }
-    if (brand) {
-      query += " AND brand = ?";
-      params.push(brand);
-    }
-    query += " ORDER BY id ASC";
-    let items = db.prepare(query).all(...params);
-
-    if (search) {
-      items = items.filter(
-        (item) =>
-          fuzzyMatch(item.item, search) ||
-          fuzzyMatch(item.brand, search) ||
-          fuzzyMatch(item.type, search) ||
-          fuzzyMatch(item.model, search),
+    if (tab === "total_breakdown") {
+      const items = await cached(
+        "total_breakdown",
+        () =>
+          db.prepare(`
+            SELECT item, type, brand, model, quantity_spare,
+                   current, (quantity_spare - current) as loaned_out
+            FROM storage_items
+            ORDER BY sheet_row ASC, id ASC
+          `).all(),
+        CACHE_TTL,
       );
+      return respond({ items });
     }
 
-    const filters = await getFilters(db, "deployed_items");
-    return respond({ items, filters });
-  }
+    if (tab === "low_stock") {
+      const items = await cached(
+        "low_stock",
+        () =>
+          db.prepare(`
+            SELECT * FROM storage_items
+            WHERE current <= 2 AND quantity_spare > 0
+            ORDER BY current ASC, item ASC
+          `).all(),
+        CACHE_TTL,
+      );
+      return respond({ items });
+    }
 
-  if (tab === "total_quantity") {
-    const items = await cached("total_quantity", () =>
-      db.prepare(`
-        SELECT type,
-               SUM(quantity_spare) as total_spare,
-               SUM(current) as total_current,
-               SUM(quantity_spare - current) as total_loaned
-        FROM storage_items
-        GROUP BY type
-        ORDER BY type
-      `).all(),
-      CACHE_TTL
+    if (tab === "presets") {
+      return respond({ items: [] });
+    }
+
+    return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
+  } catch (error) {
+    console.error("Items GET error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to load inventory" },
+      { status: 500 },
     );
-    return respond({ items });
   }
-
-  if (tab === "total_breakdown") {
-    const items = await cached("total_breakdown", () =>
-      db.prepare(`
-        SELECT item, type, brand, model, quantity_spare,
-               current, (quantity_spare - current) as loaned_out
-        FROM storage_items
-        ORDER BY sheet_row ASC, id ASC
-      `).all(),
-      CACHE_TTL
-    );
-    return respond({ items });
-  }
-
-  if (tab === "low_stock") {
-    const items = await cached("low_stock", () =>
-      db.prepare(`
-        SELECT * FROM storage_items
-        WHERE current <= 2 AND quantity_spare > 0
-        ORDER BY current ASC, item ASC
-      `).all(),
-      CACHE_TTL
-    );
-    return respond({ items });
-  }
-
-  if (tab === "presets") {
-    return respond({ items: [] });
-  }
-
-  return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
 }

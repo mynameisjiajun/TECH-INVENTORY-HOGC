@@ -80,6 +80,7 @@ html {
   background: var(--bg-primary);
   color-scheme: dark;
   scrollbar-color: var(--text-muted) transparent;
+  scroll-padding-top: calc(var(--shell-sticky-top-mobile) + 24px);
 }
 
 body {
