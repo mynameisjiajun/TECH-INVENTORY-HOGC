@@ -57,6 +57,11 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     flex-wrap: wrap;
   }
 
+  html[data-shell="mobile-web"] .inventory-page-header-copy {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+
   html[data-shell="mobile-web"] .inventory-page-header-actions {
     width: 100%;
     margin-top: 0 !important;
@@ -417,6 +422,21 @@ html[data-shell="mobile-web"][data-platform="ios"] {
 
   html[data-shell="mobile-web"] .loan-card {
     padding: 12px;
+  }
+
+  html[data-shell="mobile-web"] .loan-card-badges {
+    gap: 5px;
+  }
+
+  html[data-shell="mobile-web"] .loan-badge {
+    gap: 4px;
+    min-height: 24px;
+    padding: 2px 8px;
+    font-size: 9px;
+  }
+
+  html[data-shell="mobile-web"] .loan-badge svg {
+    font-size: 10px;
   }
 
   html[data-shell="mobile-web"] .loan-card-meta,

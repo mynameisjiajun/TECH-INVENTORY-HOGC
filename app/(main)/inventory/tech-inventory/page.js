@@ -199,7 +199,7 @@ export default function InventoryPage() {
     <>
       <Navbar />
       <CartPanel />
-      <div className="page-container">
+      <div className="page-container inventory-tech-page">
         <div
           className="page-header inventory-page-header"
           style={{
@@ -208,7 +208,7 @@ export default function InventoryPage() {
             justifyContent: "space-between",
           }}
         >
-          <div>
+          <div className="inventory-page-header-copy">
             <h1>Inventory</h1>
             <p>Browse and manage tech equipment</p>
           </div>
@@ -236,6 +236,7 @@ export default function InventoryPage() {
         {/* Overdue banner */}
         {overdueCount > 0 && (
           <div
+            className="inventory-tech-overdue-banner"
             style={{
               padding: "12px 16px",
               background: "rgba(239,68,68,0.1)",
@@ -397,6 +398,7 @@ export default function InventoryPage() {
             {/* Presets Grid */}
             {tab === "presets" && (
               <div
+                className="inventory-tech-presets-grid"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
@@ -415,6 +417,7 @@ export default function InventoryPage() {
                 ) : (
                   templates.map((t) => (
                     <div
+                      className="inventory-tech-preset-card"
                       key={t.id}
                       style={{
                         display: "flex",
@@ -429,6 +432,7 @@ export default function InventoryPage() {
                     >
                       <div>
                         <div
+                          className="inventory-tech-preset-head"
                           style={{
                             display: "flex",
                             alignItems: "center",
@@ -444,6 +448,7 @@ export default function InventoryPage() {
                               : "⏱️ Temporary"}
                           </span>
                           <h3
+                            className="inventory-tech-preset-title"
                             style={{ margin: 0, fontSize: 16, fontWeight: 600 }}
                           >
                             {t.name}
@@ -451,6 +456,7 @@ export default function InventoryPage() {
                         </div>
                         {t.description && (
                           <p
+                            className="inventory-tech-preset-description"
                             style={{
                               fontSize: 13,
                               color: "var(--text-secondary)",

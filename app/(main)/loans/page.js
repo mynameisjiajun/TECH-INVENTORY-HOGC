@@ -24,6 +24,7 @@ import {
   RiEdit2Line,
   RiMacbookLine,
   RiArchiveLine,
+  RiBookmarkLine,
 } from "react-icons/ri";
 
 const LOAN_STATUS_FILTERS = [
@@ -478,7 +479,7 @@ export default function LoansPage() {
     };
     const s = map[status] || { cls: "", text: status };
     return (
-      <span className={`badge ${s.cls}`}>
+      <span className={`badge loan-badge loan-status-badge ${s.cls}`}>
         {s.icon} {s.text}
       </span>
     );
@@ -486,32 +487,16 @@ export default function LoansPage() {
 
   const typeBadge = (type) => (
     <span
-      className={`badge ${type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
+      className={`badge loan-badge loan-type-badge ${type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
     >
-      {type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
+      {type === "permanent" ? <RiBookmarkLine /> : <RiTimeLine />}
+      {type === "permanent" ? "Permanent" : "Temporary"}
     </span>
   );
 
   const kindBadge = (loanKind) => (
     <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        fontSize: 10,
-        fontWeight: 700,
-        padding: "2px 8px",
-        borderRadius: 5,
-        background:
-          loanKind === "laptop"
-            ? "rgba(99,102,241,0.12)"
-            : "rgba(100,116,139,0.12)",
-        color:
-          loanKind === "laptop" ? "var(--accent)" : "var(--text-secondary)",
-        border: `1px solid ${loanKind === "laptop" ? "rgba(99,102,241,0.3)" : "rgba(100,116,139,0.2)"}`,
-        textTransform: "uppercase",
-        letterSpacing: 0.5,
-      }}
+      className={`badge loan-badge loan-kind-badge loan-kind-badge-${loanKind}`}
     >
       {loanKind === "laptop" ? <RiMacbookLine /> : <RiArchiveLine />}
       {loanKind === "laptop" ? "Laptop Loan" : "Tech Loan"}
@@ -630,6 +615,7 @@ export default function LoansPage() {
         <div className="loan-card-header">
           <div>
             <div
+              className="loan-card-badges"
               style={{
                 display: "flex",
                 gap: 6,

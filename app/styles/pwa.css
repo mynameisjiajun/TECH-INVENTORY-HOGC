@@ -59,6 +59,11 @@ html[data-shell="pwa"] .inventory-page-header {
   flex-wrap: wrap;
 }
 
+html[data-shell="pwa"] .inventory-page-header-copy {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
 html[data-shell="pwa"] .inventory-page-header-actions {
   width: 100%;
   margin-top: 0 !important;
@@ -139,6 +144,148 @@ html[data-shell="pwa"] .search-input-wrap .search-icon {
 html[data-shell="pwa"] .filter-select,
 html[data-shell="pwa"] .filter-select-compact {
   padding: 7px 28px 7px 10px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .page-header {
+  margin-bottom: 16px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .page-header h1 {
+  font-size: 17px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .page-header p {
+  font-size: 10px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .inventory-page-header-actions .btn,
+html[data-shell="pwa"]
+  .inventory-tech-page
+  .inventory-page-header-actions
+  .btn-sm {
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 10px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .tabs {
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .tab {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 11px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .search-bar {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .search-input-wrap {
+  min-width: 0;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .search-input-wrap input {
+  min-height: 42px;
+  padding: 7px 11px 7px 34px !important;
+  font-size: 16px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .inventory-filter-row {
+  width: 100%;
+  gap: 8px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .filter-select,
+html[data-shell="pwa"] .inventory-tech-page .filter-select-compact {
+  min-height: 42px;
+  min-width: 0;
+  font-size: 16px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .table-summary {
+  margin: -2px 0 10px;
+  font-size: 11px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .table-container {
+  border-radius: 12px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page table {
+  font-size: 11px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page th {
+  padding: 10px 12px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+html[data-shell="pwa"] .inventory-tech-page td {
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .type-badge {
+  padding: 2px 8px !important;
+  border-radius: 999px !important;
+  font-size: 9px !important;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .loan-item-chip {
+  padding: 2px 8px;
+  font-size: 9px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .btn,
+html[data-shell="pwa"] .inventory-tech-page .btn-sm {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .inventory-tech-overdue-banner {
+  padding: 10px 12px !important;
+  border-radius: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+html[data-shell="pwa"]
+  .inventory-tech-page
+  .inventory-tech-overdue-banner
+  span {
+  font-size: 11px;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .inventory-tech-presets-grid {
+  grid-template-columns: 1fr !important;
+  gap: 12px !important;
+  margin-top: 12px !important;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .inventory-tech-preset-card {
+  padding: 12px !important;
+  border-radius: 10px !important;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .inventory-tech-preset-head {
+  gap: 6px !important;
+  margin-bottom: 6px !important;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .inventory-tech-preset-title {
+  font-size: 14px !important;
+}
+
+html[data-shell="pwa"] .inventory-tech-page .inventory-tech-preset-description {
+  font-size: 11px !important;
+  margin-bottom: 10px !important;
 }
 
 html[data-shell="pwa"] .filter-date-range {
@@ -437,6 +584,21 @@ html[data-shell="pwa"] .loan-card {
 html[data-shell="pwa"] .loan-card-header {
   gap: 8px;
   margin-bottom: 8px;
+}
+
+html[data-shell="pwa"] .loan-card-badges {
+  gap: 5px;
+}
+
+html[data-shell="pwa"] .loan-badge {
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 8px;
+  font-size: 9px;
+}
+
+html[data-shell="pwa"] .loan-badge svg {
+  font-size: 10px;
 }
 
 html[data-shell="pwa"] .loan-card-request-id {

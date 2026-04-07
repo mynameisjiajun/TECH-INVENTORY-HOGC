@@ -287,9 +287,7 @@ export default function InventoryLanding() {
         .inv-shell {
           position: relative;
           overflow: hidden;
-          min-height: calc(100vh - 64px);
-          display: flex;
-          align-items: center;
+          min-height: 100%;
         }
         .inv-bg-layer {
           position: absolute;
@@ -317,8 +315,10 @@ export default function InventoryLanding() {
           z-index: 1;
           display: flex;
           width: 100%;
+          min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top, 0px));
           flex-direction: column;
           align-items: center;
+          justify-content: center;
         }
         .inv-heading-wrap {
           margin-bottom: 48px;
@@ -470,7 +470,6 @@ export default function InventoryLanding() {
         /* --- Mobile layout --- */
         @media (max-width: 768px) {
           .inv-shell {
-            align-items: flex-start;
             padding-top: 0;
           }
           .inv-bg-circuit-line {

@@ -900,6 +900,46 @@ tr:last-child td {
   letter-spacing: 0.3px;
 }
 
+.loan-badge {
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.loan-badge svg {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.loan-kind-badge {
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.loan-kind-badge-tech {
+  background: rgba(100, 116, 139, 0.12);
+  border-color: rgba(100, 116, 139, 0.2);
+  color: var(--text-secondary);
+}
+
+.loan-kind-badge-laptop {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.28);
+  color: var(--accent);
+}
+
+.loan-card-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
 .badge-success {
   background: var(--success-bg);
   color: var(--success);
