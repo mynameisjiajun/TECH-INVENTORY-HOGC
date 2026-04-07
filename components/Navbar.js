@@ -358,11 +358,12 @@ export default function Navbar() {
             className={`nav-link ${pathname === link.href ? "active" : ""}`}
             style={{ position: "relative" }}
           >
-            {link.icon}
+            {/* pill wraps icon only — active state highlights this, not the full item */}
+            <span className="nav-icon-wrap">{link.icon}</span>
             <span>{link.label}</span>
             {link.href === "/admin" && adminPendingCount > 0 && (
               <span style={{
-                position: "absolute", top: 4, right: 4,
+                position: "absolute", top: 0, right: 0,
                 background: "#f59e0b", color: "white",
                 minWidth: 16, height: 16, borderRadius: 8,
                 fontSize: 9, display: "flex", alignItems: "center", justifyContent: "center",
@@ -378,24 +379,35 @@ export default function Navbar() {
           onClick={() => setIsOpen(true)}
           style={{ position: "relative" }}
         >
-          <RiShoppingCart2Line />
+          <span className="nav-icon-wrap" style={{ position: "relative" }}>
+            <RiShoppingCart2Line />
+            {totalItems > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
+                  background: "var(--error)",
+                  color: "white",
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  fontSize: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                }}
+              >
+                {totalItems}
+              </span>
+            )}
+          </span>
           <span>Cart</span>
           {totalItems > 0 && (
             <span
               style={{
-                position: "absolute",
-                top: 2,
-                right: 8,
-                background: "var(--error)",
-                color: "white",
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                fontSize: 9,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 700,
+                display: "none", // badge now on icon wrap above
               }}
             >
               {totalItems}

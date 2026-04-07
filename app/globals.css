@@ -1910,8 +1910,10 @@ body.rickroll-lock {
     border-top: 1px solid var(--border);
     display: flex;
     justify-content: space-around;
-    /* Safe area: clear the iPhone home indicator */
-    padding: 6px 0 max(env(safe-area-inset-bottom), 6px);
+    align-items: flex-start;
+    /* Fixed content height so the bar never shifts between pages */
+    padding-top: 8px;
+    padding-bottom: env(safe-area-inset-bottom, 8px);
     z-index: 100;
     -webkit-tap-highlight-color: transparent;
   }
@@ -1919,23 +1921,40 @@ body.rickroll-lock {
   .mobile-nav .nav-link {
     flex-direction: column;
     font-size: 10px;
-    gap: 2px;
-    padding: 4px 6px;
-    /* Apple HIG: minimum tap target 44×44pt */
-    min-height: 44px;
-    min-width: 44px;
-    justify-content: center;
+    gap: 3px;
+    padding: 0 8px;
+    /* No min-height — let content dictate height; height is consistent */
+    min-width: 48px;
+    align-items: center;
+    /* Remove the background fill on active — use pill on icon instead */
+    background: none !important;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
 
-  .mobile-nav .nav-link:active {
-    opacity: 0.6;
-    transform: scale(0.93);
+  /* Active indicator: pill behind the icon only (native iOS tab bar style) */
+  .mobile-nav .nav-link .nav-icon-wrap {
+    width: 44px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    transition: background 0.15s;
+  }
+
+  .mobile-nav .nav-link.active .nav-icon-wrap {
+    background: rgba(99, 102, 241, 0.18);
+  }
+
+  .mobile-nav .nav-link:active .nav-icon-wrap {
+    background: rgba(99, 102, 241, 0.3);
+    transform: scale(0.9);
+    transition: transform 0.1s, background 0.1s;
   }
 
   .mobile-nav .nav-link svg {
-    font-size: 20px;
+    font-size: 19px;
   }
 
   /* Auth pages compact */

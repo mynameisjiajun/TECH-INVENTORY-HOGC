@@ -2116,6 +2116,8 @@ export default function AdminPage() {
                               opacity: u.id === user.id ? 0.5 : 1,
                               fontFamily: "inherit",
                               touchAction: "manipulation",
+                              /* Override global width:100% so narrow table cell doesn't collapse text */
+                              width: "auto",
                               minWidth: 88,
                             }}
                           >

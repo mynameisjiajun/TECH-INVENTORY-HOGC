@@ -28,7 +28,8 @@ export default function Home() {
   return (
     <>
       <FluidBackground />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', position: 'relative', zIndex: 1 }}>
+      {/* position:fixed inset:0 is immune to parent height/overflow quirks on iOS PWA */}
+      <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
         <div className="spinner" />
       </div>
     </>

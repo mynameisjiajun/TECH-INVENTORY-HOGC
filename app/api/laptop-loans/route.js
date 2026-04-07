@@ -5,7 +5,8 @@ import { NextResponse } from "next/server";
 
 export async function GET(request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const view = searchParams.get("view") || "my";
@@ -13,7 +14,9 @@ export async function GET(request) {
   const countOnly = searchParams.get("count_only") === "true";
 
   if (countOnly && user.role === "admin") {
-    let cq = supabase.from("laptop_loan_requests").select("id", { count: "exact", head: true });
+    let cq = supabase
+      .from("laptop_loan_requests")
+      .select("id", { count: "exact", head: true });
     if (status) cq = cq.eq("status", status);
     const { count } = await cq;
     return NextResponse.json({ count: count || 0 });
@@ -35,7 +38,8 @@ export async function GET(request) {
   }
 
   const { data: loanRows, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
 
   const loans = (loanRows || []).map((lr) => ({
     ...lr,
@@ -56,7 +60,8 @@ export async function GET(request) {
 
     const byLoan = new Map();
     for (const item of items || []) {
-      if (!byLoan.has(item.loan_request_id)) byLoan.set(item.loan_request_id, []);
+      if (!byLoan.has(item.loan_request_id))
+        byLoan.set(item.loan_request_id, []);
       byLoan.get(item.loan_request_id).push(item);
     }
     for (const loan of loans) loan.laptops = byLoan.get(loan.id) || [];
@@ -67,26 +72,72 @@ export async function GET(request) {
 
 export async function POST(request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { loan_groups, purpose, department } = await request.json();
   // loan_groups = [{ loan_type, start_date, end_date, laptop_ids: [] }]
 
-  if (!loan_groups?.length) return NextResponse.json({ error: "No laptops selected" }, { status: 400 });
-  if (!purpose?.trim()) return NextResponse.json({ error: "Purpose is required" }, { status: 400 });
+  if (!loan_groups?.length)
+    return NextResponse.json({ error: "No laptops selected" }, { status: 400 });
+  if (!purpose?.trim())
+    return NextResponse.json({ error: "Purpose is required" }, { status: 400 });
 
   const hasPermanent = loan_groups.some((g) => g.loan_type === "permanent");
   if (hasPermanent && !["admin", "tech"].includes(user.role)) {
-    return NextResponse.json({ error: "Only Tech team members can request permanent loans" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only Tech team members can request permanent loans" },
+      { status: 403 },
+    );
   }
+
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  for (const group of loan_groups) {
+    const { loan_type, start_date, end_date } = group;
+    if (!["temporary", "permanent"].includes(loan_type)) {
+      return NextResponse.json({ error: "Invalid loan type" }, { status: 400 });
+    }
+    if (
+      !start_date ||
+      !dateRegex.test(start_date) ||
+      isNaN(Date.parse(start_date))
+    ) {
+      return NextResponse.json(
+        { error: "Valid start date is required" },
+        { status: 400 },
+      );
+    }
+    if (loan_type === "temporary") {
+      if (
+        !end_date ||
+        !dateRegex.test(end_date) ||
+        isNaN(Date.parse(end_date))
+      ) {
+        return NextResponse.json(
+          { error: "Valid end date required for temporary loans" },
+          { status: 400 },
+        );
+      }
+      if (end_date < start_date) {
+        return NextResponse.json(
+          { error: "End date cannot be before start date" },
+          { status: 400 },
+        );
+      }
+    }
+  }
+
+  // Pre-fetch all active loans once for conflict checking (avoids per-group queries)
+  const { data: activeLoans } = await supabase
+    .from("laptop_loan_requests")
+    .select("id, start_date, end_date, laptop_loan_items(laptop_id)")
+    .in("status", ["approved", "pending"]);
 
   const createdLoans = [];
 
   for (const group of loan_groups) {
     const { loan_type, start_date, end_date, laptop_ids } = group;
 
-    if (!start_date) return NextResponse.json({ error: "Start date is required" }, { status: 400 });
-    if (loan_type === "temporary" && !end_date) return NextResponse.json({ error: "End date required for temporary loans" }, { status: 400 });
     if (!laptop_ids?.length) continue;
 
     // Verify laptops exist and are not perm-loaned
@@ -97,26 +148,26 @@ export async function POST(request) {
 
     for (const laptop of laptops || []) {
       if (laptop.is_perm_loaned) {
-        return NextResponse.json({ error: `Laptop "${laptop.name}" is permanently loaned` }, { status: 400 });
+        return NextResponse.json(
+          { error: `Laptop "${laptop.name}" is permanently loaned` },
+          { status: 400 },
+        );
       }
     }
 
-    // Check for date conflicts (only for temp loans)
+    // Check for date conflicts using pre-fetched active loans
     if (loan_type === "temporary") {
-      const { data: conflicts } = await supabase
-        .from("laptop_loan_requests")
-        .select("id, start_date, end_date, laptop_loan_items(laptop_id)")
-        .in("status", ["approved", "pending"]);
-
-      for (const conflict of conflicts || []) {
+      for (const conflict of activeLoans || []) {
         const cEnd = conflict.end_date || "9999-12-31";
         if (conflict.start_date <= end_date && cEnd >= start_date) {
           for (const item of conflict.laptop_loan_items || []) {
             if (laptop_ids.includes(item.laptop_id)) {
               const laptop = laptops?.find((l) => l.id === item.laptop_id);
               return NextResponse.json(
-                { error: `Laptop "${laptop?.name || item.laptop_id}" is already booked for those dates` },
-                { status: 409 }
+                {
+                  error: `Laptop "${laptop?.name || item.laptop_id}" is already booked for those dates`,
+                },
+                { status: 409 },
               );
             }
           }
@@ -139,17 +190,25 @@ export async function POST(request) {
       .select()
       .single();
 
-    if (loanErr) return NextResponse.json({ error: loanErr.message }, { status: 500 });
+    if (loanErr)
+      return NextResponse.json({ error: loanErr.message }, { status: 500 });
 
-    await supabase.from("laptop_loan_items").insert(
-      laptop_ids.map((lid) => ({ loan_request_id: loan.id, laptop_id: lid }))
-    );
+    const { error: itemsErr } = await supabase
+      .from("laptop_loan_items")
+      .insert(
+        laptop_ids.map((lid) => ({ loan_request_id: loan.id, laptop_id: lid })),
+      );
+    if (itemsErr)
+      return NextResponse.json({ error: itemsErr.message }, { status: 500 });
 
     createdLoans.push(loan);
   }
 
   // Notify admins
-  const { data: admins } = await supabase.from("users").select("id, mute_telegram").eq("role", "admin");
+  const { data: admins } = await supabase
+    .from("users")
+    .select("id, mute_telegram")
+    .eq("role", "admin");
   const laptopNames = loan_groups.flatMap((g) => g.laptop_ids).length;
 
   if (admins?.length) {
@@ -158,13 +217,13 @@ export async function POST(request) {
         user_id: a.id,
         message: `${user.display_name} submitted ${createdLoans.length} laptop loan request(s) for ${laptopNames} laptop(s).`,
         link: "/admin",
-      }))
+      })),
     );
     for (const admin of admins) {
       if (!admin.mute_telegram) {
         sendTelegramMessage(
           admin.id,
-          `💻 <b>New Laptop Loan Request</b>\n<b>${user.display_name}</b> requested ${laptopNames} laptop(s).\nPurpose: ${purpose.trim()}`
+          `💻 <b>New Laptop Loan Request</b>\n<b>${user.display_name}</b> requested ${laptopNames} laptop(s).\nPurpose: ${purpose.trim()}`,
         ).catch(() => {});
       }
     }
@@ -177,5 +236,8 @@ export async function POST(request) {
     link: "/loans",
   });
 
-  return NextResponse.json({ message: "Laptop loan request submitted!", loans: createdLoans });
+  return NextResponse.json({
+    message: "Laptop loan request submitted!",
+    loans: createdLoans,
+  });
 }

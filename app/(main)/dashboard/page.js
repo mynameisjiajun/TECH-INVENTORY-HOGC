@@ -21,21 +21,8 @@ import {
   RiCheckLine,
   RiArrowGoBackLine,
 } from "react-icons/ri";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-} from "recharts";
+import {} from // recharts is loaded dynamically below — no static import
+"recharts";
 
 const COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"];
 
@@ -59,6 +46,7 @@ export default function DashboardPage() {
   const [showClearActivityConfirm, setShowClearActivityConfirm] =
     useState(false);
   const [clearActivityLoading, setClearActivityLoading] = useState(false);
+  const [rc, setRc] = useState(null);
   const channelRef = useRef(null);
 
   // User-only state
@@ -76,6 +64,11 @@ export default function DashboardPage() {
     const handler = (e) => setIsMobile(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Defer recharts (~400 KB) — load after mount so it doesn't block initial render
+  useEffect(() => {
+    import("recharts").then(setRc);
   }, []);
 
   useEffect(() => {
@@ -1388,6 +1381,20 @@ export default function DashboardPage() {
   }
 
   // ====== ADMIN DASHBOARD ======
+  // Destructure recharts components from the lazily loaded module (null until loaded)
+  const {
+    ResponsiveContainer,
+    PieChart,
+    Pie,
+    Cell,
+    Tooltip,
+    BarChart,
+    CartesianGrid,
+    XAxis,
+    YAxis,
+    Bar,
+  } = rc || {};
+
   return (
     <>
       <Navbar />
@@ -1580,7 +1587,7 @@ export default function DashboardPage() {
             >
               {showCharts ? "▲ Hide Analytics" : "▼ Show Analytics"}
             </button>
-            {showCharts && (
+            {showCharts && rc && (
               <div
                 style={{
                   display: "grid",
