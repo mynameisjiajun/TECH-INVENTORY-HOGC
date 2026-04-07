@@ -39,6 +39,7 @@ html[data-shell="pwa"] body {
 html[data-shell="pwa"] .page-container {
   padding: calc(14px + 58px + var(--shell-navbar-safe-top)) 14px var(--shell-page-mobile-bottom);
   min-height: calc(100dvh - 58px - var(--shell-navbar-safe-top));
+  overflow-x: clip;
 }
 
 html[data-shell="pwa"] .page-header {
@@ -70,11 +71,17 @@ html[data-shell="pwa"] .navbar-links {
 
 html[data-shell="pwa"] .navbar-inner {
   height: 58px;
+  gap: 10px;
 }
 
 html[data-shell="pwa"] .navbar-brand {
   gap: 8px;
   font-size: 15px;
+  min-width: 0;
+  max-width: calc(100vw - 170px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 html[data-shell="pwa"] .navbar-brand svg,
@@ -86,6 +93,7 @@ html[data-shell="pwa"] .user-menu {
   gap: 6px;
   padding: 4px 8px;
   font-size: 11px;
+  min-width: 0;
 }
 
 html[data-shell="pwa"] .user-avatar {
@@ -112,19 +120,67 @@ html[data-shell="pwa"] .notification-dropdown {
 }
 
 html[data-shell="pwa"] .mobile-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  min-height: var(--shell-mobile-nav-min-height);
+  padding-top: 10px;
+  padding-bottom: var(--shell-mobile-nav-padding-bottom);
   background: rgba(8, 12, 22, 0.99);
   border-top-color: rgba(99, 102, 241, 0.16);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.22);
+  z-index: 100;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link {
+  display: flex;
+  min-width: 48px;
   min-height: 56px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
+  padding: 0 8px;
+  font-size: 10px;
+  background: none !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  color: var(--text-muted);
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link .nav-icon-wrap {
+  display: flex;
   width: 46px;
   height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+html[data-shell="pwa"] .mobile-nav .nav-link.active {
+  color: var(--text-primary);
+}
+
+html[data-shell="pwa"] .mobile-nav .nav-link.active .nav-icon-wrap {
+  background:
+    linear-gradient(180deg, rgba(129, 140, 248, 0.24), rgba(99, 102, 241, 0.16));
+}
+
+html[data-shell="pwa"] .mobile-nav .nav-link:active .nav-icon-wrap {
+  transform: scale(0.94);
+}
+
+html[data-shell="pwa"] .mobile-nav .nav-link svg {
+  font-size: 19px;
 }
 
 html[data-shell="pwa"] .cart-header {
@@ -178,6 +234,20 @@ html[data-shell="pwa"][data-platform="ios"] .navbar::before {
 
 html[data-shell="pwa"][data-platform="ios"] .navbar-inner {
   position: relative;
+}
+
+html[data-shell="pwa"][data-platform="ios"] .navbar-right {
+  gap: 4px;
+}
+
+html[data-shell="pwa"][data-platform="ios"] .user-menu span {
+  display: none;
+}
+
+html[data-shell="pwa"][data-platform="ios"] .user-menu {
+  padding: 0;
+  background: transparent;
+  border: none;
 }
 
 html[data-shell="pwa"][data-platform="ios"] .mobile-nav {
@@ -335,5 +405,23 @@ html[data-shell="pwa"][data-platform="ios"] .modal-footer {
     right: 0;
     width: 360px;
     max-height: 420px;
+  }
+}
+
+@media (max-width: 430px) {
+  html[data-shell="pwa"] .navbar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  html[data-shell="pwa"] .navbar-brand {
+    max-width: calc(100vw - 132px);
+    font-size: 14px;
+  }
+
+  html[data-shell="pwa"] .notification-btn,
+  html[data-shell="pwa"] .logout-btn {
+    min-width: 36px;
+    min-height: 36px;
   }
 }
