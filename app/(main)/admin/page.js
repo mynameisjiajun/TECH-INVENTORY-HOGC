@@ -909,7 +909,7 @@ export default function AdminPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name, department, or item..."
-                  style={{ width: "100%", fontSize: 13, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.04)", color: "var(--text-primary)", outline: "none" }}
+                  style={{ width: "100%", fontSize: 16, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.04)", color: "var(--text-primary)", outline: "none" }}
                 />
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1331,7 +1331,7 @@ export default function AdminPage() {
                         border: "1px solid var(--border)",
                         borderRadius: 6,
                         color: "var(--text-primary)",
-                        fontSize: 12,
+                        fontSize: 16,
                         boxSizing: "border-box",
                         colorScheme: "dark",
                         minWidth: 0,
@@ -1441,8 +1441,10 @@ export default function AdminPage() {
                             disabled={u.id === user.id || userActionLoading === `role-${u.id}`}
                             onChange={(e) => handleChangeRole(u.id, e.target.value)}
                             style={{
-                              padding: "5px 8px",
-                              fontSize: 12,
+                              /* paddingRight must accommodate the custom SVG arrow */
+                              padding: "5px 36px 5px 8px",
+                              /* 16px: prevents iOS zoom on focus */
+                              fontSize: 16,
                               fontWeight: 600,
                               borderRadius: 7,
                               border: "1px solid var(--border)",
@@ -1463,9 +1465,10 @@ export default function AdminPage() {
                               fontFamily: "inherit",
                             }}
                           >
-                            <option value="admin">🛡️ Admin</option>
-                            <option value="tech">🔧 Tech</option>
-                            <option value="user">👤 User</option>
+                            {/* No emojis — they render broken in styled <select> on iOS */}
+                            <option value="admin">Admin</option>
+                            <option value="tech">Tech</option>
+                            <option value="user">User</option>
                           </select>
                         </td>
                         <td
@@ -1677,16 +1680,16 @@ export default function AdminPage() {
                     }))
                   }
                   style={{
-                    padding: "9px 12px",
+                    padding: "9px 36px 9px 12px",
                     background: "var(--bg-secondary)",
                     border: "1px solid var(--border)",
                     borderRadius: 8,
                     color: "var(--text-primary)",
-                    fontSize: 13,
+                    fontSize: 16,
                   }}
                 >
-                  <option value="temporary">⏱️ Temporary</option>
-                  <option value="permanent">📌 Permanent</option>
+                  <option value="temporary">Temporary</option>
+                  <option value="permanent">Permanent</option>
                 </select>
               </div>
               <input

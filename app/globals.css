@@ -732,8 +732,8 @@ tr:last-child td {
 .filter-select-compact {
   min-width: 145px;
   max-width: 190px;
-  font-size: 12px;
-  padding: 8px 30px 8px 10px;
+  font-size: 16px;
+  padding: 8px 36px 8px 10px;
 }
 
 .table-summary {

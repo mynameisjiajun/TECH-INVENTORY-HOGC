@@ -613,7 +613,7 @@ export default function LoansPage() {
               placeholder="Search by item or purpose..."
             />
           </div>
-          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ flexShrink: 0, fontSize: 12, padding: '7px 10px', width: 'auto' }}>
+          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ flexShrink: 0, fontSize: 16, padding: '7px 36px 7px 10px', width: 'auto' }}>
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
@@ -624,11 +624,11 @@ export default function LoansPage() {
             <RiFilterLine style={{ color: 'var(--text-muted)', fontSize: 14 }} />
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
               title="From date"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', color: 'var(--text-primary)', fontSize: 12, width: 130 }} />
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', color: 'var(--text-primary)', fontSize: 16, width: 130 }} />
             <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>–</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
               title="To date"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', color: 'var(--text-primary)', fontSize: 12, width: 130 }} />
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', color: 'var(--text-primary)', fontSize: 16, width: 130 }} />
           </div>
           {(search || dateFrom || dateTo || statusFilter) && (
             <button className="btn btn-sm btn-outline" onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setStatusFilter(''); }}>
