@@ -55,6 +55,35 @@ function parseStateValue(value, allowedValues, fallback) {
   return allowedValues.includes(value) ? value : fallback;
 }
 
+async function readApiResponse(res) {
+  const contentType = res.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return res.json().catch(() => ({}));
+  }
+
+  const text = await res.text().catch(() => "");
+  return text ? { error: text.slice(0, 200) } : {};
+}
+
+async function fetchJson(url, init = {}) {
+  const headers = new Headers(init.headers || {});
+  headers.set("Accept", "application/json");
+
+  const res = await fetch(url, {
+    ...init,
+    cache: "no-store",
+    headers,
+  });
+
+  const data = await readApiResponse(res);
+  if (!res.ok) {
+    throw new Error(data.error || `Request failed (${res.status})`);
+  }
+
+  return data;
+}
+
 function SortableTemplateItem({ t, onEdit, onDelete }) {
   const {
     attributes,
@@ -183,6 +212,7 @@ function AdminPageContent() {
   );
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditFetching, setAuditFetching] = useState(false);
+  const [auditError, setAuditError] = useState("");
   const [users, setUsers] = useState([]);
   const [usersFetching, setUsersFetching] = useState(false);
   const [resetPasswords, setResetPasswords] = useState({});
@@ -379,17 +409,12 @@ function AdminPageContent() {
 
   const fetchAuditLogs = useCallback(async () => {
     setAuditFetching(true);
+    setAuditError("");
     try {
-      const res = await fetch("/api/audit?limit=100");
-      if (res.ok) {
-        const data = await res.json();
-        setAuditLogs(data.logs);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || `Failed to load audit logs (${res.status})`);
-      }
+      const data = await fetchJson("/api/audit?limit=100");
+      setAuditLogs(Array.isArray(data.logs) ? data.logs : []);
     } catch (err) {
-      setError("Network error — could not load audit logs");
+      setAuditError(err.message || "Could not load audit logs");
     } finally {
       setAuditFetching(false);
     }
@@ -424,19 +449,11 @@ function AdminPageContent() {
   const fetchTemplates = async () => {
     setTemplatesFetching(true);
     try {
-      const res = await fetch("/api/admin/templates");
-      if (res.ok) {
-        const data = await res.json();
-        // Templates come back ordered correctly from the DB
-        setTemplates(data.templates);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setTemplateMsg(
-          data.error || `Failed to load templates (${res.status})`,
-        );
-      }
-    } catch {
-      setTemplateMsg("Network error — could not load templates");
+      const data = await fetchJson("/api/admin/templates");
+      setTemplateMsg("");
+      setTemplates(Array.isArray(data.templates) ? data.templates : []);
+    } catch (err) {
+      setTemplateMsg(err.message || "Could not load templates");
     } finally {
       setTemplatesFetching(false);
     }
@@ -478,17 +495,10 @@ function AdminPageContent() {
 
   const fetchAllItems = async () => {
     try {
-      const res = await fetch("/api/items?tab=storage");
-      if (res.ok) {
-        const data = await res.json();
-        setAllItems(data.items || []);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setTemplateMsg(data.error || `Failed to load inventory (${res.status})`);
-        setAllItems([]);
-      }
-    } catch {
-      setTemplateMsg("Network error — could not load inventory");
+      const data = await fetchJson("/api/items?tab=storage");
+      setAllItems(Array.isArray(data.items) ? data.items : []);
+    } catch (err) {
+      setTemplateMsg(err.message || "Could not load inventory");
       setAllItems([]);
     }
   };
@@ -594,6 +604,12 @@ function AdminPageContent() {
     fetchCurrentlyOut,
     fetchPendingCount,
   ]);
+
+  useEffect(() => {
+    setError("");
+    if (activeTab !== "audit") setAuditError("");
+    if (activeTab !== "templates") setTemplateMsg("");
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "loans") return;
@@ -2379,11 +2395,41 @@ function AdminPageContent() {
         {/* ====== AUDIT LOG TAB ====== */}
         {activeTab === "audit" && (
           <>
+            {auditError && (
+              <div
+                aria-live="polite"
+                style={{
+                  padding: "10px 16px",
+                  background: "rgba(239,68,68,0.1)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: 8,
+                  marginBottom: 16,
+                  fontSize: 13,
+                  color: "var(--error)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                {auditError}
+                <button
+                  aria-label="Dismiss audit error message"
+                  onClick={() => setAuditError("")}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--error)",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             {auditFetching ? (
               <div className="loading-spinner">
                 <div className="spinner" />
               </div>
-            ) : auditLogs.length === 0 ? (
+            ) : !auditError && auditLogs.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">📋</div>
                 <h3>No audit logs yet</h3>

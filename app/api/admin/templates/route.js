@@ -1,7 +1,9 @@
 import { supabase } from "@/lib/db/supabase";
-import { getDb } from "@/lib/db/db";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -95,6 +97,7 @@ export async function POST(request) {
         );
       }
 
+      const { getDb } = await import("@/lib/db/db");
       const db = getDb();
       for (const item of items) {
         const existing = db

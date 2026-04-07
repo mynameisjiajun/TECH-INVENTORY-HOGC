@@ -3,6 +3,9 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import { cached } from "@/lib/utils/cache";
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 // Fuzzy search: handles word reordering, partial matches, and normalized comparisons.
 // e.g. "type c to HDMI cable" will match "HDMI to Type C Cable"
 function fuzzyMatch(text, search) {
