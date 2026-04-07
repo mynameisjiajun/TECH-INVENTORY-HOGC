@@ -1,5 +1,5 @@
 html[data-shell="pwa"] {
-  --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 12px);
+  --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 16px);
   --shell-mobile-nav-min-height: calc(72px + env(safe-area-inset-bottom, 0px));
   --shell-mobile-nav-padding-bottom: env(safe-area-inset-bottom, 10px);
   --shell-page-mobile-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
@@ -8,10 +8,12 @@ html[data-shell="pwa"] {
   --shell-install-banner-bottom: 72px;
   --shell-sticky-top-mobile: calc(66px + var(--shell-navbar-safe-top));
   --shell-sheet-bottom-safe: calc(18px + env(safe-area-inset-bottom, 0px));
+  -webkit-text-size-adjust: 92%;
+  text-size-adjust: 92%;
 }
 
 html[data-shell="pwa"][data-platform="ios"] {
-  --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 26px);
+  --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 34px);
 }
 
 html[data-shell="pwa"] body {
@@ -41,7 +43,8 @@ html[data-shell="pwa"] body {
 }
 
 html[data-shell="pwa"] .page-container {
-  padding: calc(14px + 66px + var(--shell-navbar-safe-top)) 14px var(--shell-page-mobile-bottom);
+  padding: calc(14px + 66px + var(--shell-navbar-safe-top)) 14px
+    var(--shell-page-mobile-bottom);
   min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top));
   overflow-x: clip;
 }
@@ -51,11 +54,11 @@ html[data-shell="pwa"] .page-header {
 }
 
 html[data-shell="pwa"] .page-header h1 {
-  font-size: 20px;
+  font-size: 18px;
 }
 
 html[data-shell="pwa"] .page-header p {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 html[data-shell="pwa"] .navbar {
@@ -82,7 +85,7 @@ html[data-shell="pwa"] .navbar-inner {
 
 html[data-shell="pwa"] .navbar-brand {
   gap: 8px;
-  font-size: 15px;
+  font-size: 14px;
   min-width: 0;
   max-width: calc(100vw - 170px);
   overflow: hidden;
@@ -100,26 +103,38 @@ html[data-shell="pwa"] .navbar-brand-text {
 
 html[data-shell="pwa"] .navbar-brand svg,
 html[data-shell="pwa"] .navbar-brand .brand-icon {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 html[data-shell="pwa"] .user-menu {
   gap: 6px;
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: 10px;
   min-width: 0;
 }
 
 html[data-shell="pwa"] .user-avatar {
   width: 28px;
   height: 28px;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 html[data-shell="pwa"] .logout-btn,
 html[data-shell="pwa"] .notification-btn {
   min-width: 40px;
   min-height: 40px;
+}
+
+html[data-shell="pwa"] .account-btn {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+html[data-shell="pwa"] .account-menu-dropdown {
+  position: fixed;
+  top: var(--shell-notification-mobile-top);
+  right: 12px;
+  width: min(248px, calc(100vw - 24px));
 }
 
 html[data-shell="pwa"] .notification-badge {
@@ -168,7 +183,7 @@ html[data-shell="pwa"] .mobile-nav .nav-link {
   justify-content: center;
   gap: 4px;
   padding: 0 8px;
-  font-size: 10px;
+  font-size: 9px;
   background: none !important;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -182,7 +197,9 @@ html[data-shell="pwa"] .mobile-nav .nav-link .nav-icon-wrap {
   align-items: center;
   justify-content: center;
   border-radius: 16px;
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link.active {
@@ -190,8 +207,11 @@ html[data-shell="pwa"] .mobile-nav .nav-link.active {
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link.active .nav-icon-wrap {
-  background:
-    linear-gradient(180deg, rgba(129, 140, 248, 0.24), rgba(99, 102, 241, 0.16));
+  background: linear-gradient(
+    180deg,
+    rgba(129, 140, 248, 0.24),
+    rgba(99, 102, 241, 0.16)
+  );
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link:active .nav-icon-wrap {
@@ -199,7 +219,26 @@ html[data-shell="pwa"] .mobile-nav .nav-link:active .nav-icon-wrap {
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link svg {
-  font-size: 19px;
+  font-size: 18px;
+}
+
+html[data-shell="pwa"] .btn,
+html[data-shell="pwa"] .btn-sm,
+html[data-shell="pwa"] .badge,
+html[data-shell="pwa"] .loan-item-chip,
+html[data-shell="pwa"] .notification-item p,
+html[data-shell="pwa"] .notification-item .notif-time,
+html[data-shell="pwa"] .table-summary,
+html[data-shell="pwa"] td,
+html[data-shell="pwa"] th,
+html[data-shell="pwa"] .loan-card-meta,
+html[data-shell="pwa"] .gantt-header h3,
+html[data-shell="pwa"] .gantt-label,
+html[data-shell="pwa"] .modal-header h2,
+html[data-shell="pwa"] .empty-state h3,
+html[data-shell="pwa"] .empty-state p,
+html[data-shell="pwa"] .auth-subtitle {
+  font-size: 0.94em;
 }
 
 html[data-shell="pwa"] .cart-header {
@@ -220,7 +259,7 @@ html[data-shell="pwa"][data-platform="ios"] body {
 }
 
 html[data-shell="pwa"][data-platform="ios"] .page-container {
-  padding-top: calc(12px + 66px + var(--shell-navbar-safe-top));
+  padding-top: calc(18px + 66px + var(--shell-navbar-safe-top));
 }
 
 html[data-shell="pwa"][data-platform="ios"] .page-shell-loading {
@@ -287,6 +326,11 @@ html[data-shell="pwa"][data-platform="ios"] .logout-btn {
   min-height: 38px;
 }
 
+html[data-shell="pwa"][data-platform="ios"] .account-btn {
+  min-width: 38px;
+  min-height: 38px;
+}
+
 html[data-shell="pwa"][data-platform="ios"] .logout-btn {
   display: none;
 }
@@ -300,6 +344,11 @@ html[data-shell="pwa"] .inventory-landing {
   min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top));
 }
 
+html[data-shell="pwa"][data-platform="ios"] .inventory-landing {
+  min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top));
+  padding-top: 10px;
+}
+
 html[data-shell="pwa"] .dashboard-stats-grid {
   gap: 12px;
 }
@@ -309,11 +358,11 @@ html[data-shell="pwa"] .dashboard-stat-card {
 }
 
 html[data-shell="pwa"] .dashboard-stat-card .stat-value {
-  font-size: 28px;
+  font-size: 24px;
 }
 
 html[data-shell="pwa"] .dashboard-stat-card .stat-label {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 html[data-shell="pwa"][data-device="mobile"] .dashboard-stats-grid {
@@ -328,17 +377,17 @@ html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card {
 }
 
 html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card .stat-icon {
-  font-size: 18px;
+  font-size: 16px;
   margin-bottom: 10px;
 }
 
 html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card .stat-value {
-  font-size: 22px;
+  font-size: 20px;
   margin-bottom: 6px;
 }
 
 html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card .stat-label {
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.25;
   text-wrap: balance;
 }
@@ -371,13 +420,22 @@ html[data-shell="pwa"][data-platform="ios"] .mobile-nav .nav-link.active {
   color: var(--text-primary);
 }
 
-html[data-shell="pwa"][data-platform="ios"] .mobile-nav .nav-link .nav-icon-wrap {
+html[data-shell="pwa"][data-platform="ios"]
+  .mobile-nav
+  .nav-link
+  .nav-icon-wrap {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-html[data-shell="pwa"][data-platform="ios"] .mobile-nav .nav-link.active .nav-icon-wrap {
-  background:
-    linear-gradient(180deg, rgba(129, 140, 248, 0.28), rgba(99, 102, 241, 0.18));
+html[data-shell="pwa"][data-platform="ios"]
+  .mobile-nav
+  .nav-link.active
+  .nav-icon-wrap {
+  background: linear-gradient(
+    180deg,
+    rgba(129, 140, 248, 0.28),
+    rgba(99, 102, 241, 0.18)
+  );
 }
 
 html[data-shell="pwa"][data-platform="ios"] .notification-dropdown,
@@ -445,8 +503,11 @@ html[data-shell="pwa"][data-platform="ios"] .cart-items {
 
 html[data-shell="pwa"][data-platform="ios"] .cart-footer {
   padding-bottom: var(--shell-sheet-bottom-safe);
-  background:
-    linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(17, 24, 39, 0.98));
+  background: linear-gradient(
+    180deg,
+    rgba(17, 24, 39, 0.92),
+    rgba(17, 24, 39, 0.98)
+  );
 }
 
 html[data-shell="pwa"][data-platform="ios"] .modal-overlay {
@@ -509,7 +570,7 @@ html[data-shell="pwa"][data-platform="ios"] .modal-footer {
 
   html[data-shell="pwa"] .navbar-brand {
     max-width: calc(100vw - 124px);
-    font-size: 14px;
+    font-size: 13px;
   }
 
   html[data-shell="pwa"] .notification-btn,

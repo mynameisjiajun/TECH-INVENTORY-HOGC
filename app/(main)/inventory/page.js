@@ -36,8 +36,7 @@ export default function InventoryLanding() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  if (loading || !user)
-    return <AppShellLoading />;
+  if (loading || !user) return <AppShellLoading />;
 
   const floatingIcons = [
     { Icon: RiCpuLine, top: "12%", left: "8%", size: 28, delay: 0, dur: 20 },
@@ -82,6 +81,142 @@ export default function InventoryLanding() {
       size: 20,
       delay: 7,
       dur: 26,
+    },
+  ];
+
+  const circuitRows = isMobile
+    ? [18, 36, 54, 72, 90]
+    : [15, 30, 45, 60, 75, 90];
+  const circuitColumns = isMobile
+    ? [10, 30, 50, 70, 90]
+    : [10, 25, 40, 55, 70, 85];
+  const circuitNodes = isMobile
+    ? [
+        { top: "18%", left: "30%" },
+        { top: "18%", left: "70%" },
+        { top: "36%", left: "10%" },
+        { top: "36%", left: "50%" },
+        { top: "54%", left: "70%" },
+        { top: "72%", left: "10%" },
+        { top: "72%", left: "50%" },
+        { top: "90%", left: "30%" },
+      ]
+    : [
+        { top: "15%", left: "25%" },
+        { top: "15%", left: "70%" },
+        { top: "30%", left: "10%" },
+        { top: "30%", left: "55%" },
+        { top: "30%", left: "85%" },
+        { top: "45%", left: "25%" },
+        { top: "45%", left: "40%" },
+        { top: "60%", left: "55%" },
+        { top: "60%", left: "85%" },
+        { top: "75%", left: "10%" },
+        { top: "75%", left: "40%" },
+        { top: "75%", left: "70%" },
+        { top: "90%", left: "25%" },
+        { top: "90%", left: "55%" },
+      ];
+  const circuitTraces = isMobile
+    ? [
+        {
+          axis: "h",
+          style: {
+            top: "36%",
+            left: "10%",
+            width: "40%",
+            animation: "circuitPulse1 6s ease-in-out infinite",
+          },
+        },
+        {
+          axis: "h",
+          style: {
+            top: "72%",
+            left: "30%",
+            width: "40%",
+            animation: "circuitPulse2 7s ease-in-out 1s infinite",
+          },
+        },
+        {
+          axis: "v",
+          style: {
+            left: "50%",
+            top: "36%",
+            height: "18%",
+            animation: "circuitPulse3 8s ease-in-out 2s infinite",
+          },
+        },
+      ]
+    : [
+        {
+          axis: "h",
+          style: {
+            top: "30%",
+            left: "10%",
+            width: "45%",
+            animation: "circuitPulse1 6s ease-in-out infinite",
+          },
+        },
+        {
+          axis: "h",
+          style: {
+            top: "75%",
+            left: "40%",
+            width: "45%",
+            animation: "circuitPulse2 6s ease-in-out 1s infinite",
+          },
+        },
+        {
+          axis: "v",
+          style: {
+            left: "55%",
+            top: "30%",
+            height: "30%",
+            animation: "circuitPulse3 6s ease-in-out 2s infinite",
+          },
+        },
+        {
+          axis: "h",
+          style: {
+            top: "45%",
+            left: "25%",
+            width: "30%",
+            animation: "circuitPulse2 8s ease-in-out 3s infinite",
+          },
+        },
+        {
+          axis: "v",
+          style: {
+            left: "25%",
+            top: "45%",
+            height: "30%",
+            animation: "circuitPulse1 7s ease-in-out 1.5s infinite",
+          },
+        },
+        {
+          axis: "h",
+          style: {
+            top: "60%",
+            left: "55%",
+            width: "30%",
+            animation: "circuitPulse3 9s ease-in-out 0.5s infinite",
+          },
+        },
+      ];
+  const inventoryOptions = [
+    {
+      key: "tech",
+      href: "/inventory/tech-inventory",
+      title: "Tech Inventory",
+      description: "Cables, adapters, cameras & more",
+      Icon: RiArchiveLine,
+    },
+    {
+      key: "laptop",
+      href: "/inventory/laptop-loans",
+      title: "Laptop Loans",
+      description: "Borrow MacBooks for ministry or projects",
+      Icon: RiMacbookLine,
     },
   ];
 
@@ -149,6 +284,64 @@ export default function InventoryLanding() {
           width: 1px;
           background: linear-gradient(180deg, transparent, rgba(99,102,241,0.25), rgba(16,185,129,0.15), transparent);
         }
+        .inv-shell {
+          position: relative;
+          overflow: hidden;
+          min-height: calc(100vh - 64px);
+          display: flex;
+          align-items: center;
+        }
+        .inv-bg-layer {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 0;
+        }
+        .inv-corner-glow {
+          position: absolute;
+          width: 40%;
+          height: 40%;
+        }
+        .inv-corner-glow--start {
+          top: 0;
+          left: 0;
+          background: radial-gradient(ellipse at top left, rgba(99,102,241,0.04) 0%, transparent 70%);
+        }
+        .inv-corner-glow--end {
+          right: 0;
+          bottom: 0;
+          background: radial-gradient(ellipse at bottom right, rgba(16,185,129,0.03) 0%, transparent 70%);
+        }
+        .inv-content {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          width: 100%;
+          flex-direction: column;
+          align-items: center;
+        }
+        .inv-heading-wrap {
+          margin-bottom: 48px;
+          text-align: center;
+        }
+        .inv-heading {
+          margin-bottom: 10px;
+          font-size: 36px;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+        }
+        .inv-subheading {
+          margin: 0;
+          color: var(--text-secondary);
+          font-size: 16px;
+        }
+        .inv-grid {
+          display: grid;
+          width: 100%;
+          max-width: 780px;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 24px;
+        }
         .inv-card {
           display: flex;
           align-items: center;
@@ -160,6 +353,12 @@ export default function InventoryLanding() {
           text-align: left;
           position: relative;
           overflow: hidden;
+        }
+        .inv-card--desktop {
+          flex-direction: column;
+          gap: 20px;
+          padding: 36px 32px;
+          border-radius: 20px;
         }
         .inv-card::before {
           content: "";
@@ -195,15 +394,104 @@ export default function InventoryLanding() {
         .inv-card:hover .inv-arrow {
           transform: translateX(4px);
         }
+        .inv-card-head {
+          display: flex;
+          width: 100%;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .inv-card-copy {
+          width: 100%;
+        }
+        .inv-icon-box {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .inv-icon-box--desktop {
+          width: 72px;
+          height: 72px;
+          border-radius: 18px;
+          font-size: 32px;
+        }
+        .inv-icon-box--mobile {
+          width: 52px;
+          height: 52px;
+          border-radius: 14px;
+          font-size: 24px;
+        }
+        .inv-card-tech .inv-icon-box {
+          background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15));
+          border: 1px solid rgba(99,102,241,0.15);
+          color: var(--accent);
+        }
+        .inv-card-laptop .inv-icon-box {
+          background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.15));
+          border: 1px solid rgba(16,185,129,0.15);
+          color: #10b981;
+        }
+        .inv-card-title {
+          margin-bottom: 6px;
+          color: var(--text-primary);
+          font-size: 20px;
+          font-weight: 700;
+        }
+        .inv-card-desc {
+          color: var(--text-secondary);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        .inv-card-compact {
+          display: none;
+          width: 100%;
+          align-items: center;
+          gap: 16px;
+        }
+        .inv-card-compact-copy {
+          min-width: 0;
+          flex: 1;
+        }
+        .inv-card-compact .inv-card-title {
+          margin-bottom: 3px;
+          font-size: 16px;
+        }
+        .inv-card-compact .inv-card-desc {
+          font-size: 12px;
+          line-height: 1.4;
+        }
+        .inv-card-tech .inv-arrow {
+          color: var(--accent);
+        }
+        .inv-card-laptop .inv-arrow {
+          color: #10b981;
+        }
 
         /* --- Mobile layout --- */
         @media (max-width: 768px) {
+          .inv-shell {
+            min-height: calc(100dvh - var(--shell-navbar-safe-top, 0px) - 60px);
+            align-items: flex-start;
+            padding-top: max(8px, var(--shell-navbar-safe-top, 0px));
+          }
+          .inv-bg-circuit-line {
+            background: rgba(99,102,241,0.02);
+          }
+          .inv-bg-node {
+            background: rgba(99,102,241,0.08);
+          }
+          .inv-corner-glow {
+            opacity: 0.6;
+          }
           .inv-grid {
             grid-template-columns: 1fr !important;
             max-width: 100% !important;
             gap: 12px !important;
           }
-          .inv-card {
+          .inv-content {
+            justify-content: flex-start;
+          }
+          .inv-card--desktop {
             flex-direction: row !important;
             padding: 18px 20px !important;
             border-radius: 16px !important;
@@ -216,17 +504,17 @@ export default function InventoryLanding() {
             font-size: 24px !important;
           }
           .inv-card-title {
-            font-size: 16px !important;
+            font-size: 15px !important;
           }
           .inv-card-desc {
-            font-size: 12px !important;
+            font-size: 11px !important;
           }
           .inv-heading {
-            font-size: 24px !important;
+            font-size: 22px !important;
             margin-bottom: 6px !important;
           }
           .inv-subheading {
-            font-size: 14px !important;
+            font-size: 13px !important;
           }
           .inv-heading-wrap {
             margin-bottom: 28px !important;
@@ -234,40 +522,19 @@ export default function InventoryLanding() {
           .inv-desktop-only {
             display: none !important;
           }
-          .inv-mobile-only {
+          .inv-card-compact {
             display: flex !important;
           }
           .inv-bg-desktop {
             display: none !important;
           }
         }
-        @media (min-width: 769px) {
-          .inv-mobile-only {
-            display: none !important;
-          }
-        }
       `}</style>
-      <div
-        className="inventory-landing"
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          minHeight: "calc(100vh - 64px)",
-          display: "flex",
-          alignItems: "center",
-        }}
-      >
+      <div className="inventory-landing inv-shell">
         {/* Circuit board grid */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            zIndex: 0,
-          }}
-        >
+        <div className="inv-bg-layer">
           {/* Horizontal circuit lines */}
-          {[15, 30, 45, 60, 75, 90].map((pct) => (
+          {circuitRows.map((pct) => (
             <div
               key={`h${pct}`}
               className="inv-bg-circuit-line h"
@@ -275,7 +542,7 @@ export default function InventoryLanding() {
             />
           ))}
           {/* Vertical circuit lines */}
-          {[10, 25, 40, 55, 70, 85].map((pct) => (
+          {circuitColumns.map((pct) => (
             <div
               key={`v${pct}`}
               className="inv-bg-circuit-line v"
@@ -283,22 +550,7 @@ export default function InventoryLanding() {
             />
           ))}
           {/* Intersection nodes */}
-          {[
-            { top: "15%", left: "25%" },
-            { top: "15%", left: "70%" },
-            { top: "30%", left: "10%" },
-            { top: "30%", left: "55%" },
-            { top: "30%", left: "85%" },
-            { top: "45%", left: "25%" },
-            { top: "45%", left: "40%" },
-            { top: "60%", left: "55%" },
-            { top: "60%", left: "85%" },
-            { top: "75%", left: "10%" },
-            { top: "75%", left: "40%" },
-            { top: "75%", left: "70%" },
-            { top: "90%", left: "25%" },
-            { top: "90%", left: "55%" },
-          ].map(({ top, left }, i) => (
+          {circuitNodes.map(({ top, left }, i) => (
             <div
               key={`n${i}`}
               className="inv-bg-node"
@@ -306,93 +558,19 @@ export default function InventoryLanding() {
             />
           ))}
           {/* Animated data traces */}
-          <div
-            className="inv-bg-trace h"
-            style={{
-              top: "30%",
-              left: "10%",
-              width: "45%",
-              animation: "circuitPulse1 6s ease-in-out infinite",
-            }}
-          />
-          <div
-            className="inv-bg-trace h"
-            style={{
-              top: "75%",
-              left: "40%",
-              width: "45%",
-              animation: "circuitPulse2 6s ease-in-out 1s infinite",
-            }}
-          />
-          <div
-            className="inv-bg-trace v"
-            style={{
-              left: "55%",
-              top: "30%",
-              height: "30%",
-              animation: "circuitPulse3 6s ease-in-out 2s infinite",
-            }}
-          />
-          <div
-            className="inv-bg-trace h"
-            style={{
-              top: "45%",
-              left: "25%",
-              width: "30%",
-              animation: "circuitPulse2 8s ease-in-out 3s infinite",
-            }}
-          />
-          <div
-            className="inv-bg-trace v"
-            style={{
-              left: "25%",
-              top: "45%",
-              height: "30%",
-              animation: "circuitPulse1 7s ease-in-out 1.5s infinite",
-            }}
-          />
-          <div
-            className="inv-bg-trace h"
-            style={{
-              top: "60%",
-              left: "55%",
-              width: "30%",
-              animation: "circuitPulse3 9s ease-in-out 0.5s infinite",
-            }}
-          />
+          {circuitTraces.map((trace, index) => (
+            <div
+              key={`trace-${index}`}
+              className={`inv-bg-trace ${trace.axis}`}
+              style={trace.style}
+            />
+          ))}
         </div>
 
         {/* Subtle corner glows */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            pointerEvents: "none",
-            zIndex: 0,
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "40%",
-              height: "40%",
-              background:
-                "radial-gradient(ellipse at top left, rgba(99,102,241,0.04) 0%, transparent 70%)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              bottom: 0,
-              right: 0,
-              width: "40%",
-              height: "40%",
-              background:
-                "radial-gradient(ellipse at bottom right, rgba(16,185,129,0.03) 0%, transparent 70%)",
-            }}
-          />
+        <div className="inv-bg-layer">
+          <div className="inv-corner-glow inv-corner-glow--start" />
+          <div className="inv-corner-glow inv-corner-glow--end" />
         </div>
 
         {/* Floating tech icons (desktop only) */}
@@ -424,328 +602,45 @@ export default function InventoryLanding() {
           </div>
         )}
 
-        <div
-          className="page-container"
-          style={{
-            position: "relative",
-            zIndex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-          }}
-        >
-          <div
-            className="inv-heading-wrap"
-            style={{ textAlign: "center", marginBottom: 48 }}
-          >
-            <h1
-              className="inv-heading"
-              style={{
-                fontSize: 36,
-                fontWeight: 800,
-                marginBottom: 10,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              Inventory
-            </h1>
-            <p
-              className="inv-subheading"
-              style={{
-                color: "var(--text-secondary)",
-                fontSize: 16,
-                margin: 0,
-              }}
-            >
-              What would you like to browse?
-            </p>
+        <div className="page-container inv-content">
+          <div className="inv-heading-wrap">
+            <h1 className="inv-heading">Inventory</h1>
+            <p className="inv-subheading">What would you like to browse?</p>
           </div>
 
-          <div
-            className="inv-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 24,
-              width: "100%",
-              maxWidth: 780,
-            }}
-          >
-            {/* Tech Inventory */}
-            <button
-              className="inv-card inv-card-tech"
-              onClick={() => router.push("/inventory/tech-inventory")}
-              style={{
-                flexDirection: "column",
-                gap: 20,
-                padding: "36px 32px",
-                borderRadius: 20,
-              }}
-            >
-              {/* Desktop layout: icon+arrow top row, text bottom */}
-              <div
-                className="inv-desktop-only"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                }}
+          <div className="inv-grid">
+            {inventoryOptions.map(({ key, href, title, description, Icon }) => (
+              <button
+                key={key}
+                className={`inv-card inv-card-${key} inv-card--desktop`}
+                onClick={() => router.push(href)}
               >
-                <div
-                  className="inv-icon-box"
-                  style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 18,
-                    flexShrink: 0,
-                    background:
-                      "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))",
-                    border: "1px solid rgba(99,102,241,0.15)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 32,
-                    color: "var(--accent)",
-                  }}
-                >
-                  <RiArchiveLine />
-                </div>
-                <span
-                  className="inv-arrow"
-                  style={{
-                    color: "var(--accent)",
-                    fontSize: 22,
-                    flexShrink: 0,
-                  }}
-                >
-                  →
-                </span>
-              </div>
-              <div
-                className="inv-desktop-only"
-                style={{ width: "100%", display: "block" }}
-              >
-                <div
-                  className="inv-card-title"
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 20,
-                    color: "var(--text-primary)",
-                    marginBottom: 6,
-                  }}
-                >
-                  Tech Inventory
-                </div>
-                <div
-                  className="inv-card-desc"
-                  style={{
-                    fontSize: 14,
-                    color: "var(--text-secondary)",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Cables, adapters, cameras &amp; more
-                </div>
-              </div>
-              {/* Mobile layout: icon | text | arrow in a row */}
-              <div
-                className="inv-mobile-only"
-                style={{
-                  display: "none",
-                  alignItems: "center",
-                  gap: 16,
-                  width: "100%",
-                }}
-              >
-                <div
-                  className="inv-icon-box"
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 14,
-                    flexShrink: 0,
-                    background:
-                      "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 24,
-                    color: "var(--accent)",
-                  }}
-                >
-                  <RiArchiveLine />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    className="inv-card-title"
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 16,
-                      color: "var(--text-primary)",
-                      marginBottom: 3,
-                    }}
-                  >
-                    Tech Inventory
+                <div className="inv-desktop-only inv-card-head">
+                  <div className="inv-icon-box inv-icon-box--desktop">
+                    <Icon />
                   </div>
-                  <div
-                    className="inv-card-desc"
-                    style={{
-                      fontSize: 12,
-                      color: "var(--text-secondary)",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    Cables, adapters, cameras &amp; more
+                  <span className="inv-arrow" style={{ fontSize: 22 }}>
+                    →
+                  </span>
+                </div>
+                <div className="inv-desktop-only inv-card-copy">
+                  <div className="inv-card-title">{title}</div>
+                  <div className="inv-card-desc">{description}</div>
+                </div>
+                <div className="inv-card-compact">
+                  <div className="inv-icon-box inv-icon-box--mobile">
+                    <Icon />
                   </div>
-                </div>
-                <span
-                  className="inv-arrow"
-                  style={{
-                    color: "var(--accent)",
-                    fontSize: 18,
-                    flexShrink: 0,
-                  }}
-                >
-                  →
-                </span>
-              </div>
-            </button>
-
-            {/* Laptop Loans */}
-            <button
-              className="inv-card inv-card-laptop"
-              onClick={() => router.push("/inventory/laptop-loans")}
-              style={{
-                flexDirection: "column",
-                gap: 20,
-                padding: "36px 32px",
-                borderRadius: 20,
-              }}
-            >
-              {/* Desktop layout */}
-              <div
-                className="inv-desktop-only"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  width: "100%",
-                }}
-              >
-                <div
-                  className="inv-icon-box"
-                  style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 18,
-                    flexShrink: 0,
-                    background:
-                      "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.15))",
-                    border: "1px solid rgba(16,185,129,0.15)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 32,
-                    color: "#10b981",
-                  }}
-                >
-                  <RiMacbookLine />
-                </div>
-                <span
-                  className="inv-arrow"
-                  style={{ color: "#10b981", fontSize: 22, flexShrink: 0 }}
-                >
-                  →
-                </span>
-              </div>
-              <div
-                className="inv-desktop-only"
-                style={{ width: "100%", display: "block" }}
-              >
-                <div
-                  className="inv-card-title"
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 20,
-                    color: "var(--text-primary)",
-                    marginBottom: 6,
-                  }}
-                >
-                  Laptop Loans
-                </div>
-                <div
-                  className="inv-card-desc"
-                  style={{
-                    fontSize: 14,
-                    color: "var(--text-secondary)",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Borrow MacBooks for ministry or projects
-                </div>
-              </div>
-              {/* Mobile layout */}
-              <div
-                className="inv-mobile-only"
-                style={{
-                  display: "none",
-                  alignItems: "center",
-                  gap: 16,
-                  width: "100%",
-                }}
-              >
-                <div
-                  className="inv-icon-box"
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 14,
-                    flexShrink: 0,
-                    background:
-                      "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.15))",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 24,
-                    color: "#10b981",
-                  }}
-                >
-                  <RiMacbookLine />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    className="inv-card-title"
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 16,
-                      color: "var(--text-primary)",
-                      marginBottom: 3,
-                    }}
-                  >
-                    Laptop Loans
+                  <div className="inv-card-compact-copy">
+                    <div className="inv-card-title">{title}</div>
+                    <div className="inv-card-desc">{description}</div>
                   </div>
-                  <div
-                    className="inv-card-desc"
-                    style={{
-                      fontSize: 12,
-                      color: "var(--text-secondary)",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    Borrow MacBooks for ministry or projects
-                  </div>
+                  <span className="inv-arrow" style={{ fontSize: 18 }}>
+                    →
+                  </span>
                 </div>
-                <span
-                  className="inv-arrow"
-                  style={{ color: "#10b981", fontSize: 18, flexShrink: 0 }}
-                >
-                  →
-                </span>
-              </div>
-            </button>
+              </button>
+            ))}
           </div>
         </div>
       </div>

@@ -25,10 +25,49 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [isCompactShell, setIsCompactShell] = useState(false);
   const [notifPermission, setNotifPermission] = useState("default");
   const [adminPendingCount, setAdminPendingCount] = useState(0);
   const notifRef = useRef(null);
+  const accountRef = useRef(null);
   const prevUnreadRef = useRef(-1);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const mobileQuery = window.matchMedia("(max-width: 768px)");
+
+    const syncCompactShell = () => {
+      const shell = root.dataset.shell;
+      const device = root.dataset.device;
+      setIsCompactShell(
+        shell === "pwa" || device === "mobile" || mobileQuery.matches,
+      );
+    };
+
+    syncCompactShell();
+
+    const observer = new MutationObserver(syncCompactShell);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-shell", "data-device"],
+    });
+
+    if (mobileQuery.addEventListener) {
+      mobileQuery.addEventListener("change", syncCompactShell);
+    } else {
+      mobileQuery.addListener(syncCompactShell);
+    }
+
+    return () => {
+      observer.disconnect();
+      if (mobileQuery.removeEventListener) {
+        mobileQuery.removeEventListener("change", syncCompactShell);
+      } else {
+        mobileQuery.removeListener(syncCompactShell);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -145,6 +184,8 @@ export default function Navbar() {
     const handleClose = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target))
         setShowNotifs(false);
+      if (accountRef.current && !accountRef.current.contains(e.target))
+        setShowAccountMenu(false);
     };
     document.addEventListener("mousedown", handleClose);
     document.addEventListener("touchstart", handleClose, { passive: true });
@@ -205,6 +246,9 @@ export default function Navbar() {
       console.warn("Failed to clear notifications:", err.message);
     }
   };
+
+  const isNavActive = (href) =>
+    pathname === href || pathname.startsWith(`${href}/`);
 
   if (loading) {
     return (
@@ -293,7 +337,7 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`nav-link ${pathname === link.href ? "active" : ""}`}
+                className={`nav-link ${isNavActive(link.href) ? "active" : ""}`}
               >
                 {link.icon} {link.label}
               </Link>
@@ -305,7 +349,10 @@ export default function Navbar() {
               <button
                 aria-label="Notifications"
                 className="notification-btn"
-                onClick={() => setShowNotifs((v) => !v)}
+                onClick={() => {
+                  setShowNotifs((v) => !v);
+                  setShowAccountMenu(false);
+                }}
               >
                 <RiNotification3Line />
                 {unreadCount > 0 && (
@@ -402,24 +449,80 @@ export default function Navbar() {
               )}
             </div>
 
-            <div
-              className="user-menu"
-              onClick={() => router.push("/profile")}
-              style={{ cursor: "pointer" }}
-              title="Edit profile"
-            >
-              <div className="user-avatar">
-                {(user.display_name || user.username)[0].toUpperCase()}
+            {isCompactShell ? (
+              <div className="account-menu-shell" ref={accountRef}>
+                <button
+                  aria-label="Account menu"
+                  className="account-btn"
+                  onClick={() => {
+                    setShowAccountMenu((v) => !v);
+                    setShowNotifs(false);
+                  }}
+                >
+                  <div className="user-avatar">
+                    {(user.display_name || user.username)[0].toUpperCase()}
+                  </div>
+                </button>
+                {showAccountMenu && (
+                  <div className="account-menu-dropdown">
+                    <button
+                      className="account-menu-profile"
+                      onClick={() => {
+                        router.push("/profile");
+                        setShowAccountMenu(false);
+                      }}
+                    >
+                      <div className="user-avatar account-menu-avatar">
+                        {(user.display_name || user.username)[0].toUpperCase()}
+                      </div>
+                      <div className="account-menu-copy">
+                        <strong>{user.display_name || user.username}</strong>
+                        <span>
+                          @{user.username}
+                          {user.role === "admin" ? " · admin" : ""}
+                        </span>
+                      </div>
+                    </button>
+                    <button
+                      className="account-menu-item"
+                      onClick={() => {
+                        router.push("/profile");
+                        setShowAccountMenu(false);
+                      }}
+                    >
+                      Profile
+                    </button>
+                    <button
+                      className="account-menu-item account-menu-item-danger"
+                      onClick={handleLogout}
+                    >
+                      <RiLogoutBoxLine /> Logout
+                    </button>
+                  </div>
+                )}
               </div>
-              <span>{user.display_name || user.username}</span>
-            </div>
-            <button
-              aria-label="Logout"
-              className="logout-btn"
-              onClick={handleLogout}
-            >
-              <RiLogoutBoxLine />
-            </button>
+            ) : (
+              <>
+                <div
+                  className="user-menu"
+                  onClick={() => router.push("/profile")}
+                  style={{ cursor: "pointer" }}
+                  title="Edit profile"
+                >
+                  <div className="user-avatar">
+                    {(user.display_name || user.username)[0].toUpperCase()}
+                  </div>
+                  <span>{user.display_name || user.username}</span>
+                </div>
+                <button
+                  aria-label="Logout"
+                  className="logout-btn"
+                  onClick={handleLogout}
+                >
+                  <RiLogoutBoxLine />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -430,7 +533,7 @@ export default function Navbar() {
           <Link
             key={link.href}
             href={link.href}
-            className={`nav-link ${pathname === link.href ? "active" : ""}`}
+            className={`nav-link ${isNavActive(link.href) ? "active" : ""}`}
             style={{ position: "relative" }}
           >
             {/* pill wraps icon only — active state highlights this, not the full item */}

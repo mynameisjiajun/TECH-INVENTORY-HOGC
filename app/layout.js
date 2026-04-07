@@ -1,58 +1,58 @@
-import { Inter } from 'next/font/google';
-import { headers } from 'next/headers';
-import './globals.css';
-import './styles/web.css';
-import './styles/pwa.css';
-import './styles/mobile.css';
-import { AuthProvider } from '@/lib/context/AuthContext';
-import { CartProvider } from '@/lib/context/CartContext';
-import { ToastProvider } from '@/lib/context/ToastContext';
+import { Inter } from "next/font/google";
+import { headers } from "next/headers";
+import "./globals.css";
+import "./styles/web.css";
+import "./styles/pwa.css";
+import "./styles/mobile.css";
+import { AuthProvider } from "@/lib/context/AuthContext";
+import { CartProvider } from "@/lib/context/CartContext";
+import { ToastProvider } from "@/lib/context/ToastContext";
 
 const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-sans',
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
 });
 
 export const metadata = {
-  title: 'Tech Inventory | Church Tech Ministry',
-  description: 'Equipment inventory and loan management for church tech ministry ICs',
-  manifest: '/manifest.json',
+  title: "Tech Inventory | Church Tech Ministry",
+  description:
+    "Equipment inventory and loan management for church tech ministry ICs",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Tech Inventory',
+    statusBarStyle: "black-translucent",
+    title: "Tech Inventory",
   },
 };
 
 export const viewport = {
-  width: 'device-width',
+  width: "device-width",
   initialScale: 1,
   minimumScale: 1,
-  viewportFit: 'cover',
-  themeColor: '#0a0e1a',
+  viewportFit: "cover",
+  themeColor: "#0a0e1a",
 };
 
 function detectInitialShell(userAgent) {
-  const ua = userAgent || '';
+  const ua = userAgent || "";
   const isIOS =
-    /iPad|iPhone|iPod/.test(ua) ||
-    (/Macintosh/.test(ua) && /Mobile/.test(ua));
+    /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && /Mobile/.test(ua));
   const isMobile =
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(
       ua,
     );
 
   return {
-    device: isMobile ? 'mobile' : 'desktop',
-    platform: isIOS ? 'ios' : 'default',
-    shell: isMobile ? 'mobile-web' : 'desktop-web',
+    device: isMobile ? "mobile" : "desktop",
+    platform: isIOS ? "ios" : "default",
+    shell: isMobile ? "mobile-web" : "desktop-web",
   };
 }
 
 export default async function RootLayout({ children }) {
   const headerStore = await headers();
-  const userAgent = headerStore.get('user-agent') || '';
+  const userAgent = headerStore.get("user-agent") || "";
   const initialShell = detectInitialShell(userAgent);
 
   return (
@@ -72,32 +72,75 @@ export default async function RootLayout({ children }) {
             __html: `
               (function () {
                 var doc = document.documentElement;
-                var media = window.matchMedia("(display-mode: standalone)");
-                var applyShellMode = function () {
-                  var isPwa = media.matches || window.navigator.standalone === true;
-                  var isMobileViewport = window.innerWidth <= 768;
+                var shellMedia = window.matchMedia("(display-mode: standalone)");
+                var mobileMedia = window.matchMedia("(max-width: 768px)");
+                var frame = 0;
+                var getNextState = function () {
+                  var isPwa = shellMedia.matches || window.navigator.standalone === true;
+                  var isMobileViewport = mobileMedia.matches;
                   var ua = window.navigator.userAgent || "";
                   var isIOS =
                     /iPad|iPhone|iPod/.test(ua) ||
                     (window.navigator.platform === "MacIntel" &&
                       window.navigator.maxTouchPoints > 1);
-                  doc.dataset.shell = isPwa
-                    ? "pwa"
-                    : isMobileViewport
-                      ? "mobile-web"
-                      : "desktop-web";
-                  doc.dataset.device = isMobileViewport ? "mobile" : "desktop";
-                  doc.dataset.platform = isIOS ? "ios" : "default";
+                  return {
+                    shell: isPwa
+                      ? "pwa"
+                      : isMobileViewport
+                        ? "mobile-web"
+                        : "desktop-web",
+                    device: isMobileViewport ? "mobile" : "desktop",
+                    platform: isIOS ? "ios" : "default"
+                  };
                 };
 
-                applyShellMode();
-                window.addEventListener("resize", applyShellMode, { passive: true });
-                window.addEventListener("orientationchange", applyShellMode, { passive: true });
+                var applyShellMode = function (force) {
+                  var next = getNextState();
+                  if (
+                    force ||
+                    doc.dataset.shell !== next.shell ||
+                    doc.dataset.device !== next.device ||
+                    doc.dataset.platform !== next.platform
+                  ) {
+                    doc.dataset.shell = next.shell;
+                    doc.dataset.device = next.device;
+                    doc.dataset.platform = next.platform;
+                  }
+                };
 
-                if (media.addEventListener) {
-                  media.addEventListener("change", applyShellMode);
-                } else if (media.addListener) {
-                  media.addListener(applyShellMode);
+                var scheduleShellMode = function (force) {
+                  if (frame) {
+                    cancelAnimationFrame(frame);
+                  }
+                  frame = requestAnimationFrame(function () {
+                    frame = 0;
+                    applyShellMode(force);
+                  });
+                };
+
+                applyShellMode(true);
+                window.addEventListener("pageshow", function () {
+                  scheduleShellMode(false);
+                }, { passive: true });
+
+                if (shellMedia.addEventListener) {
+                  shellMedia.addEventListener("change", function () {
+                    scheduleShellMode(false);
+                  });
+                } else if (shellMedia.addListener) {
+                  shellMedia.addListener(function () {
+                    scheduleShellMode(false);
+                  });
+                }
+
+                if (mobileMedia.addEventListener) {
+                  mobileMedia.addEventListener("change", function () {
+                    scheduleShellMode(false);
+                  });
+                } else if (mobileMedia.addListener) {
+                  mobileMedia.addListener(function () {
+                    scheduleShellMode(false);
+                  });
                 }
               })();
             `,
@@ -107,9 +150,7 @@ export default async function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <AuthProvider>
           <CartProvider>
-            <ToastProvider>
-              {children}
-            </ToastProvider>
+            <ToastProvider>{children}</ToastProvider>
           </CartProvider>
         </AuthProvider>
         <script

@@ -7,16 +7,14 @@ import { supabaseClient } from "@/lib/db/supabaseClient";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import AppShellLoading from "@/components/AppShellLoading";
+import LoanCalendar from "@/components/LoanCalendar";
 import {
   RiArchiveLine,
   RiHandHeartLine,
   RiAlertLine,
   RiTimeLine,
-  RiArrowLeftLine,
-  RiArrowRightLine,
   RiCheckboxCircleLine,
   RiErrorWarningLine,
-  RiCalendarLine,
   RiCloseLine,
   RiDeleteBinLine,
   RiCheckLine,
@@ -388,25 +386,7 @@ export default function DashboardPage() {
     calendarTypeFilter,
   ]);
 
-  if (loading || !user)
-    return <AppShellLoading />;
-
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const mobileDayNames = ["M", "T", "W", "T", "F", "S", "S"];
+  if (loading || !user) return <AppShellLoading />;
 
   const prevMonth = () =>
     setCalendarMonth((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1));
@@ -502,6 +482,32 @@ export default function DashboardPage() {
         l.end_date >= today &&
         l.end_date <= in3DaysStr,
     );
+    const userCalendarLegend = [
+      {
+        label: "My Loans",
+        background: "rgba(16,185,129,0.3)",
+        border: "#10b981",
+      },
+      ...(calendarTypeFilter !== "my"
+        ? [
+            {
+              label: "Others",
+              background: "rgba(59,130,246,0.3)",
+              border: "#3b82f6",
+            },
+          ]
+        : []),
+      {
+        label: "Pending",
+        background: "rgba(245,158,11,0.3)",
+        border: "#f59e0b",
+      },
+      {
+        label: "Overdue",
+        background: "rgba(239,68,68,0.35)",
+        border: "#ef4444",
+      },
+    ];
 
     return (
       <>
@@ -876,306 +882,20 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {/* Loan Calendar (all team loans) */}
-              <div className="gantt-container">
-                <div
-                  className="gantt-header"
-                  style={
-                    isMobile ? { flexDirection: "column", gap: 8 } : undefined
-                  }
-                >
-                  <h3 style={isMobile ? { fontSize: 14 } : undefined}>
-                    <RiCalendarLine style={{ verticalAlign: "middle" }} />{" "}
-                    {isMobile
-                      ? `${monthNames[calendarMonth.getMonth()].slice(0, 3)} ${calendarMonth.getFullYear()}`
-                      : `Loan Calendar — ${monthNames[calendarMonth.getMonth()]} ${calendarMonth.getFullYear()}`}
-                  </h3>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: isMobile ? 4 : 8,
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        background: "rgba(255,255,255,0.05)",
-                        borderRadius: 8,
-                        padding: 2,
-                        gap: 2,
-                      }}
-                    >
-                      {[
-                        { value: "my", label: isMobile ? "Mine" : "My Loans" },
-                        { value: "all", label: "All" },
-                        { value: "tech", label: isMobile ? "📦" : "📦 Tech" },
-                        {
-                          value: "laptop",
-                          label: isMobile ? "💻" : "💻 Laptop",
-                        },
-                      ].map(({ value, label }) => (
-                        <button
-                          key={value}
-                          onClick={() => setCalendarTypeFilter(value)}
-                          style={{
-                            padding: isMobile ? "4px 8px" : "4px 12px",
-                            fontSize: isMobile ? 10 : 11,
-                            fontWeight: 600,
-                            border: "none",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            background:
-                              calendarTypeFilter === value
-                                ? "var(--accent)"
-                                : "transparent",
-                            color:
-                              calendarTypeFilter === value
-                                ? "white"
-                                : "var(--text-secondary)",
-                            transition: "all 0.15s",
-                          }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={prevMonth}
-                    >
-                      <RiArrowLeftLine />
-                    </button>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={goToday}
-                      style={
-                        isMobile
-                          ? { fontSize: 10, padding: "4px 8px" }
-                          : undefined
-                      }
-                    >
-                      Today
-                    </button>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={nextMonth}
-                    >
-                      <RiArrowRightLine />
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ overflowX: isMobile ? "hidden" : "auto" }}>
-                  <div style={{ minWidth: isMobile ? "unset" : 700 }}>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(7, 1fr)",
-                        borderBottom: "1px solid var(--border)",
-                      }}
-                    >
-                      {(isMobile ? mobileDayNames : dayNames).map((d, idx) => (
-                        <div
-                          key={idx}
-                          style={{
-                            padding: isMobile ? "6px 2px" : "8px 4px",
-                            fontSize: isMobile ? 11 : 11,
-                            fontWeight: 600,
-                            color: "var(--text-secondary)",
-                            textAlign: "center",
-                          }}
-                        >
-                          {d}
-                        </div>
-                      ))}
-                    </div>
-                    {calendarData.weeks.map((week, wi) => {
-                      const barsInWeek = calendarData.loanBars.filter(
-                        (b) => b.week === wi,
-                      ).length;
-                      const rowHeight = isMobile
-                        ? Math.max(52, 22 + barsInWeek * 20 + 6)
-                        : Math.max(90, 28 + barsInWeek * 24 + 8);
-                      return (
-                        <div
-                          key={wi}
-                          style={{ position: "relative", minHeight: rowHeight }}
-                        >
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "repeat(7, 1fr)",
-                              borderBottom: "1px solid var(--border)",
-                            }}
-                          >
-                            {week.map((cell, ci) => (
-                              <div
-                                key={ci}
-                                style={{
-                                  padding: isMobile ? "3px 2px" : "6px 8px",
-                                  minHeight: isMobile ? 48 : 80,
-                                  borderRight:
-                                    ci < 6
-                                      ? "1px solid rgba(255,255,255,0.03)"
-                                      : "none",
-                                  background:
-                                    cell && isToday(cell)
-                                      ? "rgba(99,102,241,0.06)"
-                                      : "transparent",
-                                }}
-                              >
-                                {cell && (
-                                  <div
-                                    style={{
-                                      fontSize: isMobile ? 11 : 12,
-                                      fontWeight: isToday(cell) ? 700 : 400,
-                                      color: isToday(cell)
-                                        ? "var(--accent)"
-                                        : "var(--text-muted)",
-                                      textAlign: "right",
-                                    }}
-                                  >
-                                    {isToday(cell) ? (
-                                      <span
-                                        style={{
-                                          background: "var(--accent)",
-                                          color: "white",
-                                          borderRadius: "50%",
-                                          width: isMobile ? 20 : 24,
-                                          height: isMobile ? 20 : 24,
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          justifyContent: "center",
-                                          fontSize: isMobile ? 10 : 12,
-                                        }}
-                                      >
-                                        {cell.day}
-                                      </span>
-                                    ) : (
-                                      cell.day
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                          {calendarData.loanBars
-                            .filter((b) => b.week === wi)
-                            .map((bar, bi) => {
-                              const c = barColor(bar);
-                              const leftPct = (bar.startCol / 7) * 100;
-                              const widthPct =
-                                ((bar.endCol - bar.startCol + 1) / 7) * 100;
-                              return (
-                                <div
-                                  key={`${bar.loanId}-${wi}-${bi}`}
-                                  onClick={() => setSelectedLoan(bar.loan)}
-                                  style={{
-                                    position: "absolute",
-                                    top: isMobile ? 22 + bi * 20 : 28 + bi * 24,
-                                    left: `calc(${leftPct}% + ${isMobile ? 2 : 4}px)`,
-                                    width: `calc(${widthPct}% - ${isMobile ? 4 : 8}px)`,
-                                    height: isMobile ? 17 : 20,
-                                    background: c.bg,
-                                    borderLeft: `${isMobile ? 2 : 3}px solid ${c.border}`,
-                                    borderRadius: isMobile ? 3 : 4,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    padding: isMobile ? "0 3px" : "0 6px",
-                                    fontSize: isMobile ? 8 : 10,
-                                    fontWeight: 600,
-                                    color: c.color,
-                                    overflow: "hidden",
-                                    whiteSpace: "nowrap",
-                                    textOverflow: "ellipsis",
-                                    cursor: "pointer",
-                                    zIndex: 2,
-                                  }}
-                                  title={`${bar.label || "Loan"} — Click for details`}
-                                >
-                                  {bar.isOverdue ? "🚨 " : ""}
-                                  {bar.label || bar.loan.purpose}
-                                </div>
-                              );
-                            })}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 16,
-                    padding: "12px 0",
-                    flexWrap: "wrap",
-                    fontSize: 11,
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  <span
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
-                  >
-                    <span
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 3,
-                        background: "rgba(16,185,129,0.3)",
-                        borderLeft: "3px solid #10b981",
-                      }}
-                    />{" "}
-                    My Loans
-                  </span>
-                  {calendarTypeFilter !== "my" && (
-                    <span
-                      style={{ display: "flex", alignItems: "center", gap: 4 }}
-                    >
-                      <span
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 3,
-                          background: "rgba(59,130,246,0.3)",
-                          borderLeft: "3px solid #3b82f6",
-                        }}
-                      />{" "}
-                      Others
-                    </span>
-                  )}
-                  <span
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
-                  >
-                    <span
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 3,
-                        background: "rgba(245,158,11,0.3)",
-                        borderLeft: "3px solid #f59e0b",
-                      }}
-                    />{" "}
-                    Pending
-                  </span>
-                  <span
-                    style={{ display: "flex", alignItems: "center", gap: 4 }}
-                  >
-                    <span
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 3,
-                        background: "rgba(239,68,68,0.35)",
-                        borderLeft: "3px solid #ef4444",
-                      }}
-                    />{" "}
-                    Overdue
-                  </span>
-                </div>
-              </div>
+              <LoanCalendar
+                isMobile={isMobile}
+                calendarMonth={calendarMonth}
+                typeFilter={calendarTypeFilter}
+                onTypeFilterChange={setCalendarTypeFilter}
+                prevMonth={prevMonth}
+                nextMonth={nextMonth}
+                goToday={goToday}
+                calendarData={calendarData}
+                isToday={isToday}
+                barColor={barColor}
+                onSelectLoan={setSelectedLoan}
+                legendItems={userCalendarLegend}
+              />
             </>
           )}
         </div>
@@ -1831,280 +1551,36 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Google Calendar-style Grid */}
-        <div className="gantt-container">
-          <div
-            className="gantt-header"
-            style={isMobile ? { flexDirection: "column", gap: 8 } : undefined}
-          >
-            <h3 style={isMobile ? { fontSize: 14 } : undefined}>
-              <RiCalendarLine style={{ verticalAlign: "middle" }} />{" "}
-              {isMobile
-                ? `${monthNames[calendarMonth.getMonth()].slice(0, 3)} ${calendarMonth.getFullYear()}`
-                : `Loan Calendar — ${monthNames[calendarMonth.getMonth()]} ${calendarMonth.getFullYear()}`}
-            </h3>
-            <div
-              style={{
-                display: "flex",
-                gap: isMobile ? 4 : 8,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  background: "rgba(255,255,255,0.05)",
-                  borderRadius: 8,
-                  padding: 2,
-                  gap: 2,
-                }}
-              >
-                {[
-                  { value: "my", label: isMobile ? "Mine" : "My Loans" },
-                  { value: "all", label: "All" },
-                  { value: "tech", label: isMobile ? "📦" : "📦 Tech" },
-                  { value: "laptop", label: isMobile ? "💻" : "💻 Laptop" },
-                ].map(({ value, label }) => (
-                  <button
-                    key={value}
-                    onClick={() => setCalendarTypeFilter(value)}
-                    style={{
-                      padding: isMobile ? "4px 8px" : "4px 12px",
-                      fontSize: isMobile ? 10 : 11,
-                      fontWeight: 600,
-                      border: "none",
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      background:
-                        calendarTypeFilter === value
-                          ? "var(--accent)"
-                          : "transparent",
-                      color:
-                        calendarTypeFilter === value
-                          ? "white"
-                          : "var(--text-secondary)",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <button className="btn btn-sm btn-outline" onClick={prevMonth}>
-                <RiArrowLeftLine />
-              </button>
-              <button
-                className="btn btn-sm btn-outline"
-                onClick={goToday}
-                style={
-                  isMobile ? { fontSize: 10, padding: "4px 8px" } : undefined
-                }
-              >
-                Today
-              </button>
-              <button className="btn btn-sm btn-outline" onClick={nextMonth}>
-                <RiArrowRightLine />
-              </button>
-            </div>
-          </div>
-
-          <div style={{ overflowX: isMobile ? "hidden" : "auto" }}>
-            <div style={{ minWidth: isMobile ? "unset" : 700 }}>
-              {/* Day headers */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(7, 1fr)",
-                  borderBottom: "1px solid var(--border)",
-                }}
-              >
-                {(isMobile ? mobileDayNames : dayNames).map((d, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: isMobile ? "6px 2px" : "8px 4px",
-                      fontSize: isMobile ? 11 : 11,
-                      fontWeight: 600,
-                      color: "var(--text-secondary)",
-                      textAlign: "center",
-                    }}
-                  >
-                    {d}
-                  </div>
-                ))}
-              </div>
-
-              {/* Week rows with loan bars */}
-              {calendarData.weeks.map((week, wi) => {
-                const barsInWeek = calendarData.loanBars.filter(
-                  (b) => b.week === wi,
-                ).length;
-                const rowHeight = isMobile
-                  ? Math.max(52, 22 + barsInWeek * 20 + 6)
-                  : Math.max(90, 28 + barsInWeek * 24 + 8);
-                return (
-                  <div
-                    key={wi}
-                    style={{ position: "relative", minHeight: rowHeight }}
-                  >
-                    {/* Date cells */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(7, 1fr)",
-                        borderBottom: "1px solid var(--border)",
-                      }}
-                    >
-                      {week.map((cell, ci) => (
-                        <div
-                          key={ci}
-                          style={{
-                            padding: isMobile ? "3px 2px" : "6px 8px",
-                            minHeight: isMobile ? 48 : 80,
-                            borderRight:
-                              ci < 6
-                                ? "1px solid rgba(255,255,255,0.03)"
-                                : "none",
-                            background:
-                              cell && isToday(cell)
-                                ? "rgba(99,102,241,0.06)"
-                                : "transparent",
-                          }}
-                        >
-                          {cell && (
-                            <div
-                              style={{
-                                fontSize: isMobile ? 11 : 12,
-                                fontWeight: isToday(cell) ? 700 : 400,
-                                color: isToday(cell)
-                                  ? "var(--accent)"
-                                  : "var(--text-muted)",
-                                textAlign: "right",
-                              }}
-                            >
-                              {isToday(cell) ? (
-                                <span
-                                  style={{
-                                    background: "var(--accent)",
-                                    color: "white",
-                                    borderRadius: "50%",
-                                    width: isMobile ? 20 : 24,
-                                    height: isMobile ? 20 : 24,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: isMobile ? 10 : 12,
-                                  }}
-                                >
-                                  {cell.day}
-                                </span>
-                              ) : (
-                                cell.day
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Loan bars overlaid on the week row */}
-                    {calendarData.loanBars
-                      .filter((b) => b.week === wi)
-                      .map((bar, bi) => {
-                        const c = barColor(bar);
-                        const leftPct = (bar.startCol / 7) * 100;
-                        const widthPct =
-                          ((bar.endCol - bar.startCol + 1) / 7) * 100;
-
-                        return (
-                          <div
-                            key={`${bar.loanId}-${wi}-${bi}`}
-                            onClick={() => setSelectedLoan(bar.loan)}
-                            style={{
-                              position: "absolute",
-                              top: isMobile ? 22 + bi * 20 : 28 + bi * 24,
-                              left: `calc(${leftPct}% + ${isMobile ? 2 : 4}px)`,
-                              width: `calc(${widthPct}% - ${isMobile ? 4 : 8}px)`,
-                              height: isMobile ? 17 : 20,
-                              background: c.bg,
-                              borderLeft: `${isMobile ? 2 : 3}px solid ${c.border}`,
-                              borderRadius: isMobile ? 3 : 4,
-                              display: "flex",
-                              alignItems: "center",
-                              padding: isMobile ? "0 3px" : "0 6px",
-                              fontSize: isMobile ? 8 : 10,
-                              fontWeight: 600,
-                              color: c.color,
-                              cursor: "pointer",
-                              overflow: "hidden",
-                              whiteSpace: "nowrap",
-                              textOverflow: "ellipsis",
-                              transition: "opacity 0.15s",
-                              zIndex: 2,
-                            }}
-                            title={`${bar.label} — Click for details`}
-                          >
-                            {bar.isOverdue ? "🚨 " : ""}
-                            {bar.label}
-                          </div>
-                        );
-                      })}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div
-            style={{
-              display: "flex",
-              gap: 16,
-              padding: "12px 0",
-              flexWrap: "wrap",
-              fontSize: 11,
-              color: "var(--text-secondary)",
-            }}
-          >
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 3,
-                  background: "rgba(59,130,246,0.3)",
-                  borderLeft: "3px solid #3b82f6",
-                }}
-              />{" "}
-              Temporary
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 3,
-                  background: "rgba(245,158,11,0.3)",
-                  borderLeft: "3px solid #f59e0b",
-                }}
-              />{" "}
-              Pending
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 3,
-                  background: "rgba(239,68,68,0.35)",
-                  borderLeft: "3px solid #ef4444",
-                }}
-              />{" "}
-              Overdue
-            </span>
-          </div>
-        </div>
+        <LoanCalendar
+          isMobile={isMobile}
+          calendarMonth={calendarMonth}
+          typeFilter={calendarTypeFilter}
+          onTypeFilterChange={setCalendarTypeFilter}
+          prevMonth={prevMonth}
+          nextMonth={nextMonth}
+          goToday={goToday}
+          calendarData={calendarData}
+          isToday={isToday}
+          barColor={barColor}
+          onSelectLoan={setSelectedLoan}
+          legendItems={[
+            {
+              label: "Temporary",
+              background: "rgba(59,130,246,0.3)",
+              border: "#3b82f6",
+            },
+            {
+              label: "Pending",
+              background: "rgba(245,158,11,0.3)",
+              border: "#f59e0b",
+            },
+            {
+              label: "Overdue",
+              background: "rgba(239,68,68,0.35)",
+              border: "#ef4444",
+            },
+          ]}
+        />
       </div>
 
       {/* Loan Detail Modal */}
