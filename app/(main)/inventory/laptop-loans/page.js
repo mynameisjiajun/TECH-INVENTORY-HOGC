@@ -434,20 +434,23 @@ export default function LaptopLoansPage() {
     t.laptops.filter((l) => l.is_perm_loaned),
   );
 
-  if (loading || !user)
+  if (loading)
     return (
-      <div
-        className="loading-spinner"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div className="spinner" />
-      </div>
+      <>
+        <Navbar />
+        <CartPanel />
+        <div className="page-container">
+          <div
+            className="loading-spinner"
+            style={{ minHeight: "calc(100dvh - 180px)" }}
+          >
+            <div className="spinner" />
+          </div>
+        </div>
+      </>
     );
+
+  if (!user) return null;
 
   const showReturningSidebar = startDate && returningSoon.length > 0;
 

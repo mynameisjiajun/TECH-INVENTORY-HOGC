@@ -18,7 +18,7 @@ import {
 import InstallPrompt from "./InstallPrompt";
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const { totalItems, setIsOpen } = useCart();
   const pathname = usePathname();
   const router = useRouter();
@@ -49,7 +49,10 @@ export default function Navbar() {
           ) {
             const newest = data.notifications.find((n) => !n.read);
             if (newest) {
-              if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+              if (
+                "serviceWorker" in navigator &&
+                navigator.serviceWorker.controller
+              ) {
                 navigator.serviceWorker.ready.then((reg) => {
                   reg.showNotification("Tech Inventory", {
                     body: newest.message,
@@ -91,13 +94,22 @@ export default function Navbar() {
             table: "notifications",
             filter: `user_id=eq.${user.id}`,
           },
-          () => { fetchNotifs(); }
+          () => {
+            fetchNotifs();
+          },
         )
         .subscribe((_status, err) => {
-          if (err) console.warn("Notification Realtime unavailable, using polling:", err.message);
+          if (err)
+            console.warn(
+              "Notification Realtime unavailable, using polling:",
+              err.message,
+            );
         });
     } catch (err) {
-      console.warn("Notification Realtime not available on this device:", err.message);
+      console.warn(
+        "Notification Realtime not available on this device:",
+        err.message,
+      );
     }
 
     // Fallback poll every 60s in case Realtime drops
@@ -120,7 +132,9 @@ export default function Navbar() {
         const d1 = r1.ok ? await r1.json() : { count: 0 };
         const d2 = r2.ok ? await r2.json() : { count: 0 };
         setAdminPendingCount((d1.count || 0) + (d2.count || 0));
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
     };
     fetchPending();
     const interval = setInterval(fetchPending, 60000);
@@ -153,7 +167,9 @@ export default function Navbar() {
 
   const markOneRead = async (id) => {
     // Optimistically update locally
-    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
     setUnreadCount((c) => Math.max(0, c - 1));
     fetch("/api/notifications", {
       method: "POST",
@@ -189,6 +205,54 @@ export default function Navbar() {
       console.warn("Failed to clear notifications:", err.message);
     }
   };
+
+  if (loading) {
+    return (
+      <>
+        <nav className="navbar">
+          <div className="navbar-inner">
+            <div className="navbar-brand" style={{ pointerEvents: "none" }}>
+              <RiServerLine className="brand-icon" />
+              Tech Inventory
+            </div>
+            <div
+              style={{
+                width: 112,
+                height: 36,
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid var(--border)",
+                flexShrink: 0,
+              }}
+            />
+          </div>
+        </nav>
+
+        <div className="mobile-nav" aria-hidden="true">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="nav-link"
+              style={{ pointerEvents: "none" }}
+            >
+              <span
+                className="nav-icon-wrap"
+                style={{ background: "rgba(255,255,255,0.05)" }}
+              />
+              <span
+                style={{
+                  width: 34,
+                  height: 8,
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.06)",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
 
   if (!user) return null;
 
@@ -258,7 +322,10 @@ export default function Navbar() {
                     </span>
                     <div style={{ display: "flex", gap: 6 }}>
                       {unreadCount > 0 && (
-                        <button className="btn btn-sm btn-outline" onClick={markAllRead}>
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={markAllRead}
+                        >
                           Mark all read
                         </button>
                       )}
@@ -266,7 +333,10 @@ export default function Navbar() {
                         <button
                           className="btn btn-sm btn-outline"
                           onClick={clearAllNotifs}
-                          style={{ color: "var(--error)", borderColor: "var(--error)" }}
+                          style={{
+                            color: "var(--error)",
+                            borderColor: "var(--error)",
+                          }}
                         >
                           Clear all
                         </button>
@@ -304,29 +374,30 @@ export default function Navbar() {
                       </div>
                     ))
                   )}
-                  {notifPermission !== "granted" && typeof Notification !== "undefined" && (
-                    <button
-                      onClick={async () => {
-                        const perm = await Notification.requestPermission();
-                        setNotifPermission(perm);
-                      }}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        padding: "10px",
-                        background: "rgba(99,102,241,0.1)",
-                        border: "none",
-                        borderTop: "1px solid var(--border)",
-                        color: "var(--accent)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontFamily: "inherit",
-                      }}
-                    >
-                      🔔 Enable Push Notifications
-                    </button>
-                  )}
+                  {notifPermission !== "granted" &&
+                    typeof Notification !== "undefined" && (
+                      <button
+                        onClick={async () => {
+                          const perm = await Notification.requestPermission();
+                          setNotifPermission(perm);
+                        }}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          padding: "10px",
+                          background: "rgba(99,102,241,0.1)",
+                          border: "none",
+                          borderTop: "1px solid var(--border)",
+                          color: "var(--accent)",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        🔔 Enable Push Notifications
+                      </button>
+                    )}
                 </div>
               )}
             </div>
@@ -342,7 +413,11 @@ export default function Navbar() {
               </div>
               <span>{user.display_name || user.username}</span>
             </div>
-            <button aria-label="Logout" className="logout-btn" onClick={handleLogout}>
+            <button
+              aria-label="Logout"
+              className="logout-btn"
+              onClick={handleLogout}
+            >
               <RiLogoutBoxLine />
             </button>
           </div>
@@ -362,13 +437,24 @@ export default function Navbar() {
             <span className="nav-icon-wrap">{link.icon}</span>
             <span>{link.label}</span>
             {link.href === "/admin" && adminPendingCount > 0 && (
-              <span style={{
-                position: "absolute", top: 0, right: 0,
-                background: "#f59e0b", color: "white",
-                minWidth: 16, height: 16, borderRadius: 8,
-                fontSize: 9, display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 700, padding: "0 3px",
-              }}>
+              <span
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  background: "#f59e0b",
+                  color: "white",
+                  minWidth: 16,
+                  height: 16,
+                  borderRadius: 8,
+                  fontSize: 9,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  padding: "0 3px",
+                }}
+              >
                 {adminPendingCount > 99 ? "99+" : adminPendingCount}
               </span>
             )}
@@ -418,7 +504,11 @@ export default function Navbar() {
 
       {/* Cart FAB */}
       {totalItems > 0 && (
-        <button aria-label="Open cart" className="cart-fab" onClick={() => setIsOpen(true)}>
+        <button
+          aria-label="Open cart"
+          className="cart-fab"
+          onClick={() => setIsOpen(true)}
+        >
           <RiShoppingCart2Line />
           <span className="cart-count">{totalItems}</span>
         </button>

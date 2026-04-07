@@ -818,12 +818,22 @@ export default function AdminPage() {
     }
   };
 
-  if (loading || !user)
+  if (loading)
     return (
-      <div className="loading-spinner">
-        <div className="spinner" />
-      </div>
+      <>
+        <Navbar />
+        <div className="page-container">
+          <div
+            className="loading-spinner"
+            style={{ minHeight: "calc(100dvh - 180px)" }}
+          >
+            <div className="spinner" />
+          </div>
+        </div>
+      </>
     );
+
+  if (!user) return null;
 
   const statusBadge = (status) => {
     const map = {
