@@ -50,7 +50,19 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
+  min-height: -webkit-fill-available;
   -webkit-font-smoothing: antialiased;
+  /* iOS PWA: prevent horizontal overflow & text size adjustment */
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Suppress default tap flash on every element */
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  /* Prevent elastic over-scroll on the root */
+  overscroll-behavior: none;
 }
 
 body {
@@ -132,6 +144,7 @@ a:hover {
   z-index: 100;
   background: rgba(10, 14, 26, 0.85);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   padding: 0 24px;
   /* Push content below iPhone status bar when installed as PWA */
@@ -182,12 +195,21 @@ a:hover {
   cursor: pointer;
   border: none;
   background: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .nav-link:hover,
 .nav-link.active {
   color: var(--text-primary);
   background: rgba(99, 102, 241, 0.1);
+}
+
+.nav-link:active {
+  opacity: 0.7;
+  transform: scale(0.96);
 }
 
 .nav-link.active {
@@ -293,6 +315,10 @@ a:hover {
 .card:hover {
   border-color: var(--border-hover);
 }
+.card:active {
+  border-color: var(--border-hover);
+  transform: scale(0.99);
+}
 
 .card-body {
   padding: 24px;
@@ -313,6 +339,11 @@ a:hover {
   transition: var(--transition);
   border: none;
   white-space: nowrap;
+  /* iOS: remove tap delay, hide highlight, prevent text selection */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .btn-primary {
@@ -324,6 +355,10 @@ a:hover {
 .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 20px var(--accent-glow);
+}
+.btn-primary:active {
+  transform: scale(0.97);
+  opacity: 0.9;
 }
 
 .btn-primary:disabled {
@@ -340,6 +375,10 @@ a:hover {
 .btn-success:hover {
   transform: translateY(-1px);
 }
+.btn-success:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
 
 .btn-danger {
   background: linear-gradient(135deg, var(--error), #fb7185);
@@ -348,6 +387,10 @@ a:hover {
 
 .btn-danger:hover {
   transform: translateY(-1px);
+}
+.btn-danger:active {
+  transform: scale(0.97);
+  opacity: 0.9;
 }
 
 .btn-outline {
@@ -361,6 +404,11 @@ a:hover {
   color: var(--accent);
   background: rgba(99, 102, 241, 0.05);
 }
+.btn-outline:active {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--accent);
+  transform: scale(0.97);
+}
 
 .btn-sm {
   padding: 6px 12px;
@@ -368,8 +416,8 @@ a:hover {
 }
 
 .btn-icon {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: var(--radius-sm);
 }
@@ -403,13 +451,32 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 14px;
+  /* 16px minimum: below this iOS Safari auto-zooms the viewport on focus */
+  font-size: 16px;
   font-family: inherit;
   transition: var(--transition);
   outline: none;
   box-sizing: border-box;
   min-width: 0;
   max-width: 100%;
+  /* Prevent iOS from adding inner shadow to inputs */
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+/* Restore compact size on desktop where zoom isn't an issue */
+@media (min-width: 769px) {
+  .input,
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="date"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 14px;
+  }
 }
 
 input[type="date"] {
@@ -467,11 +534,22 @@ select option {
   background: none;
   white-space: nowrap;
   font-family: inherit;
+  /* iOS: 44pt minimum, no tap flash, no delay */
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .tab:hover {
   color: var(--text-primary);
   background: rgba(99, 102, 241, 0.08);
+}
+
+.tab:active {
+  transform: scale(0.95);
+  opacity: 0.8;
 }
 
 .tab.active {
@@ -712,7 +790,7 @@ tr:last-child td {
   top: 0;
   right: 0;
   width: 420px;
-  max-width: 100vw;
+  max-width: 100%;
   height: 100vh;
   height: 100dvh;
   background: var(--bg-secondary);
@@ -721,7 +799,10 @@ tr:last-child td {
   display: flex;
   flex-direction: column;
   transform: translateX(100%);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Native-feeling deceleration curve */
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  /* GPU-composite the panel so it doesn't repaint during slide */
+  will-change: transform;
 }
 
 .cart-panel.open {
@@ -760,6 +841,9 @@ tr:last-child td {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+  /* iOS momentum scroll */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .cart-item {
@@ -794,23 +878,30 @@ tr:last-child td {
 }
 
 .qty-control button {
-  width: 28px;
-  height: 28px;
+  /* 44×44 minimum tap target (Apple HIG) */
+  width: 44px;
+  height: 44px;
   border-radius: 6px;
   background: rgba(99, 102, 241, 0.1);
   border: 1px solid var(--border);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: var(--transition);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .qty-control button:hover {
   background: rgba(99, 102, 241, 0.2);
   border-color: var(--accent);
+}
+.qty-control button:active {
+  background: rgba(99, 102, 241, 0.3);
+  transform: scale(0.92);
 }
 
 .qty-control span {
@@ -977,12 +1068,16 @@ tr:last-child td {
   top: 100%;
   right: 0;
   width: 360px;
+  /* Never exceed the viewport on narrow phones */
+  max-width: calc(100vw - 16px);
   max-height: 400px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   z-index: 300;
 }
 
@@ -1005,6 +1100,9 @@ tr:last-child td {
 
 .notification-item:hover {
   background: rgba(99, 102, 241, 0.05);
+}
+.notification-item:active {
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .notification-item.unread {
@@ -1563,9 +1661,9 @@ body.rickroll-lock {
     margin-bottom: 4px;
   }
 
-  /* Cart full width on mobile */
+  /* Cart full width on mobile — 100% avoids scrollbar-width overflow on iOS */
   .cart-panel {
-    width: 100vw;
+    width: 100%;
   }
 
   /* Search bar stacked */
@@ -1578,7 +1676,8 @@ body.rickroll-lock {
     min-width: 100%;
   }
   .search-input-wrap input {
-    font-size: 13px;
+    /* 16px: prevent iOS zoom on focus */
+    font-size: 16px;
     padding: 8px 12px 8px 36px;
   }
   .search-input-wrap .search-icon {
@@ -1587,7 +1686,8 @@ body.rickroll-lock {
   }
   .filter-select {
     min-width: 100%;
-    font-size: 13px;
+    /* 16px: prevent iOS zoom on focus */
+    font-size: 16px;
     padding: 8px 30px 8px 10px;
   }
 
@@ -1601,7 +1701,8 @@ body.rickroll-lock {
     min-width: 0;
     max-width: 100%;
     width: 100%;
-    font-size: 12px;
+    /* 16px: prevent iOS zoom on focus */
+    font-size: 16px;
   }
 
   /* Tabs smaller */
@@ -1784,7 +1885,8 @@ body.rickroll-lock {
   input[type="number"],
   select,
   textarea {
-    font-size: 13px;
+    /* Keep 16px on mobile — never go below or iOS zooms on focus */
+    font-size: 16px;
     padding: 8px 10px;
   }
   .input-group label {
@@ -1804,11 +1906,14 @@ body.rickroll-lock {
     right: 0;
     background: rgba(10, 14, 26, 0.95);
     backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--border);
     display: flex;
     justify-content: space-around;
-    padding: 6px 0 env(safe-area-inset-bottom, 6px);
+    /* Safe area: clear the iPhone home indicator */
+    padding: 6px 0 max(env(safe-area-inset-bottom), 6px);
     z-index: 100;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .mobile-nav .nav-link {
@@ -1816,10 +1921,21 @@ body.rickroll-lock {
     font-size: 10px;
     gap: 2px;
     padding: 4px 6px;
+    /* Apple HIG: minimum tap target 44×44pt */
+    min-height: 44px;
+    min-width: 44px;
+    justify-content: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-nav .nav-link:active {
+    opacity: 0.6;
+    transform: scale(0.93);
   }
 
   .mobile-nav .nav-link svg {
-    font-size: 16px;
+    font-size: 20px;
   }
 
   /* Auth pages compact */
@@ -1870,9 +1986,10 @@ body.rickroll-lock {
     padding: 12px 16px;
   }
   .cart-delete-btn {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
+    /* Apple HIG: 44×44pt minimum tap target */
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
   }
   .cart-checkout-buttons {
     display: flex;
@@ -2349,7 +2466,9 @@ body.rickroll-lock {
     border-top: none;
     padding: 8px 10px;
     background: var(--bg-secondary);
-    overflow: hidden;
+    /* overflow:clip contains children without creating a scroll context;
+       do NOT use overflow:hidden — it breaks sticky positioning on iOS */
+    overflow: clip;
     box-shadow:
       0 8px 24px rgba(0, 0, 0, 0.4),
       0 1px 0 rgba(99, 102, 241, 0.1);
@@ -2377,7 +2496,8 @@ body.rickroll-lock {
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    font-size: 12px;
+    /* Must stay 16px — iOS Safari zooms the viewport if < 16px */
+    font-size: 16px;
     padding: 6px 8px;
   }
 

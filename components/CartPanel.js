@@ -507,11 +507,10 @@ export default function CartPanel() {
                           <div
                             style={{
                               display: "grid",
-                              gridTemplateColumns:
-                                item.loan_type === "temporary"
-                                  ? "repeat(2, minmax(0, 1fr))"
-                                  : "minmax(0, 1fr)",
-                              gap: 8,
+                              /* Always 1 column — date text at 16px is too wide
+                                 to fit two columns in a narrow cart panel */
+                              gridTemplateColumns: "minmax(0, 1fr)",
+                              gap: 6,
                             }}
                           >
                             <div style={{ minWidth: 0 }}>
@@ -544,7 +543,7 @@ export default function CartPanel() {
                                   width: "100%",
                                   boxSizing: "border-box",
                                   minWidth: 0,
-                                  fontSize: 12,
+                                  fontSize: 16,
                                   padding: "5px 8px",
                                 }}
                               />
@@ -581,7 +580,7 @@ export default function CartPanel() {
                                     width: "100%",
                                     boxSizing: "border-box",
                                     minWidth: 0,
-                                    fontSize: 12,
+                                    fontSize: 16,
                                     padding: "5px 8px",
                                   }}
                                 />

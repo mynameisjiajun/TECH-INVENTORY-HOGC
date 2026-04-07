@@ -228,6 +228,10 @@ export default function LoginPage() {
                 placeholder="Enter your username"
                 required
                 autoFocus
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="username"
+                spellCheck={false}
               />
             </div>
             <div className="input-group">
@@ -238,6 +242,9 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="current-password"
               />
             </div>
             <div
