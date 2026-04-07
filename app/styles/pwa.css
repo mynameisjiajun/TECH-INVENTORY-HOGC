@@ -1,9 +1,9 @@
 html[data-shell="pwa"] {
   --bg-primary: #060914;
-  --bg-secondary: #0d1326;
-  --bg-card: rgba(13, 19, 36, 0.84);
-  --bg-card-hover: rgba(19, 27, 50, 0.92);
-  --bg-glass: rgba(8, 12, 24, 0.74);
+  --bg-secondary: #0d1427;
+  --bg-card: #11192f;
+  --bg-card-hover: #16213a;
+  --bg-glass: #10182c;
   --shell-navbar-safe-top: max(env(safe-area-inset-top, 0px), 16px);
   --shell-mobile-nav-min-height: calc(72px + env(safe-area-inset-bottom, 0px));
   --shell-mobile-nav-padding-bottom: env(safe-area-inset-bottom, 10px);
@@ -26,32 +26,12 @@ html[data-shell="pwa"] body {
   background-image:
     linear-gradient(
       180deg,
-      rgba(114, 102, 255, 0.18) 0%,
-      rgba(114, 102, 255, 0.1) 18%,
-      rgba(45, 58, 112, 0.05) 42%,
-      rgba(6, 9, 20, 0) 72%
+      rgba(255, 255, 255, 0.03) 0%,
+      rgba(6, 9, 20, 0) 18%
     ),
-    radial-gradient(
-      ellipse at 14% 20%,
-      rgba(63, 78, 150, 0.1) 0%,
-      transparent 54%
-    ),
-    radial-gradient(
-      ellipse at 86% 12%,
-      rgba(114, 102, 255, 0.14) 0%,
-      transparent 42%
-    ),
-    radial-gradient(
-      ellipse at 82% 80%,
-      rgba(29, 40, 79, 0.12) 0%,
-      transparent 52%
-    ),
-    linear-gradient(180deg, #0a0f1d 0%, #060914 100%);
+    linear-gradient(180deg, #0b1120 0%, #060914 100%);
   background-size:
     100% 100%,
-    120% 110%,
-    105% 92%,
-    110% 110%,
     100% 100%;
 }
 
@@ -93,6 +73,7 @@ html[data-shell="pwa"] .filter-toolbar {
 html[data-shell="pwa"] .filter-shell {
   padding: 12px;
   border-radius: 14px;
+  background: #10182c;
 }
 
 html[data-shell="pwa"] .filter-toolbar-header {
@@ -282,11 +263,9 @@ html[data-shell="pwa"] .navbar {
   right: 0;
   padding: 0 14px;
   padding-top: var(--shell-navbar-safe-top);
-  background:
-    linear-gradient(180deg, rgba(8, 12, 22, 0.98), rgba(8, 12, 22, 0.92)),
-    rgba(8, 12, 22, 0.96);
-  border-bottom-color: rgba(99, 102, 241, 0.18);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+  background: rgba(8, 12, 22, 0.985);
+  border-bottom-color: rgba(148, 163, 184, 0.12);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 html[data-shell="pwa"] .navbar-links {
@@ -365,7 +344,7 @@ html[data-shell="pwa"] .notification-dropdown {
   width: auto;
   max-height: 72dvh;
   border-radius: 18px;
-  background: rgba(17, 24, 39, 0.98);
+  background: #10182c;
 }
 
 html[data-shell="pwa"] .mobile-nav {
@@ -379,14 +358,11 @@ html[data-shell="pwa"] .mobile-nav {
   min-height: var(--shell-mobile-nav-min-height);
   padding-top: 10px;
   padding-bottom: var(--shell-mobile-nav-padding-bottom);
-  background: rgba(8, 12, 22, 0.99);
-  border-top-color: rgba(99, 102, 241, 0.16);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.22);
+  background: #0b1120;
+  border-top-color: rgba(148, 163, 184, 0.12);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.03);
   z-index: 100;
   -webkit-tap-highlight-color: transparent;
-  will-change: transform;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link {
@@ -422,11 +398,7 @@ html[data-shell="pwa"] .mobile-nav .nav-link.active {
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link.active .nav-icon-wrap {
-  background: linear-gradient(
-    180deg,
-    rgba(129, 140, 248, 0.24),
-    rgba(99, 102, 241, 0.16)
-  );
+  background: rgba(114, 102, 255, 0.16);
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link:active .nav-icon-wrap {
@@ -834,12 +806,10 @@ html[data-shell="pwa"][data-platform="ios"] .page-shell-loading {
 html[data-shell="pwa"][data-platform="ios"] .shell-loading-card {
   min-height: clamp(220px, 34vh, 300px);
   border-radius: 28px;
-  background:
-    linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(15, 23, 42, 0.82)),
-    rgba(17, 24, 39, 0.84);
+  background: #121a30;
   box-shadow:
-    0 18px 44px rgba(0, 0, 0, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 16px 34px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 html[data-shell="pwa"][data-platform="ios"] .navbar::before {
@@ -959,9 +929,7 @@ html[data-shell="pwa"][data-device="mobile"] .dashboard-stat-card .stat-label {
 
 html[data-shell="pwa"][data-platform="ios"] .mobile-nav {
   border-top-color: rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 -12px 32px rgba(0, 0, 0, 0.24),
-    0 -1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.04);
 }
 
 html[data-shell="pwa"][data-platform="ios"] .mobile-nav::before {
@@ -996,22 +964,14 @@ html[data-shell="pwa"][data-platform="ios"]
   .mobile-nav
   .nav-link.active
   .nav-icon-wrap {
-  background: linear-gradient(
-    180deg,
-    rgba(129, 140, 248, 0.28),
-    rgba(99, 102, 241, 0.18)
-  );
+  background: rgba(114, 102, 255, 0.18);
 }
 
 html[data-shell="pwa"][data-platform="ios"] .notification-dropdown,
 html[data-shell="pwa"][data-platform="ios"] .modal,
 html[data-shell="pwa"][data-platform="ios"] .cart-panel {
-  background: rgba(17, 24, 39, 0.94);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: #10182c;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
 }
 
 html[data-shell="pwa"][data-platform="ios"] .notification-dropdown {
@@ -1022,8 +982,6 @@ html[data-shell="pwa"][data-platform="ios"] .notification-dropdown {
 html[data-shell="pwa"][data-platform="ios"] .cart-overlay,
 html[data-shell="pwa"][data-platform="ios"] .modal-overlay {
   background: rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 html[data-shell="pwa"][data-platform="ios"] .cart-panel {
@@ -1068,11 +1026,7 @@ html[data-shell="pwa"][data-platform="ios"] .cart-items {
 
 html[data-shell="pwa"][data-platform="ios"] .cart-footer {
   padding-bottom: var(--shell-sheet-bottom-safe);
-  background: linear-gradient(
-    180deg,
-    rgba(17, 24, 39, 0.92),
-    rgba(17, 24, 39, 0.98)
-  );
+  background: #10182c;
 }
 
 html[data-shell="pwa"][data-platform="ios"] .modal-overlay {

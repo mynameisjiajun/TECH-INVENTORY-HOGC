@@ -174,8 +174,7 @@ export default function InventoryPage() {
     await fetchItems();
   }, [fetchItems, toast]);
 
-  if (loading)
-    return <AppShellLoading />;
+  if (loading) return <AppShellLoading />;
 
   if (!user) return null;
 

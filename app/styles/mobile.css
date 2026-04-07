@@ -24,31 +24,13 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     background-image:
       linear-gradient(
         180deg,
-        rgba(114, 102, 255, 0.12) 0%,
-        rgba(114, 102, 255, 0.06) 24%,
-        rgba(43, 56, 104, 0.04) 48%,
-        rgba(7, 11, 22, 0) 78%
+        rgba(255, 255, 255, 0.03) 0%,
+        rgba(6, 9, 20, 0) 18%
       ),
-      radial-gradient(
-        ellipse at 16% 18%,
-        rgba(66, 80, 156, 0.08) 0%,
-        transparent 58%
-      ),
-      radial-gradient(
-        ellipse at 84% 14%,
-        rgba(114, 102, 255, 0.08) 0%,
-        transparent 58%
-      ),
-      radial-gradient(
-        ellipse at 50% 84%,
-        rgba(32, 45, 89, 0.06) 0%,
-        transparent 66%
-      );
+      linear-gradient(180deg, #0b1120 0%, #060914 100%);
     background-size:
       100% 100%,
-      125% 110%,
-      120% 100%,
-      130% 130%;
+      100% 100%;
   }
 
   html[data-shell="mobile-web"] .page-container {
@@ -88,11 +70,9 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     right: 0;
     padding: 0 14px;
     padding-top: var(--shell-navbar-safe-top);
-    background:
-      linear-gradient(180deg, rgba(8, 12, 22, 0.98), rgba(8, 12, 22, 0.92)),
-      rgba(8, 12, 22, 0.96);
-    border-bottom-color: rgba(99, 102, 241, 0.18);
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+    background: rgba(8, 12, 22, 0.985);
+    border-bottom-color: rgba(148, 163, 184, 0.12);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   html[data-shell="mobile-web"] .navbar-links {
@@ -469,7 +449,7 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     width: auto;
     max-height: 72dvh;
     border-radius: 18px;
-    background: rgba(17, 24, 39, 0.98);
+    background: #10182c;
   }
 
   html[data-shell="mobile-web"] .account-menu-dropdown {
@@ -487,20 +467,14 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     align-items: flex-end;
     padding: 10px 10px calc(12px + env(safe-area-inset-bottom, 0px));
     background: rgba(0, 0, 0, 0.42);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
   }
 
   html[data-shell="mobile-web"] .modal {
     width: min(100%, 640px);
     max-height: 84dvh;
     border-radius: 26px;
-    background: rgba(17, 24, 39, 0.94);
-    backdrop-filter: blur(28px) saturate(160%);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.28),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    background: #10182c;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
   }
 
   html[data-shell="mobile-web"] .modal-header {
@@ -540,14 +514,11 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     min-height: var(--shell-mobile-nav-min-height);
     padding-top: 10px;
     padding-bottom: var(--shell-mobile-nav-padding-bottom);
-    background: rgba(8, 12, 22, 0.99);
-    border-top-color: rgba(99, 102, 241, 0.16);
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.22);
+    background: #0b1120;
+    border-top-color: rgba(148, 163, 184, 0.12);
+    box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.03);
     z-index: 100;
     -webkit-tap-highlight-color: transparent;
-    will-change: transform;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
   }
 
   html[data-shell="mobile-web"] .mobile-nav .nav-link {
@@ -583,11 +554,7 @@ html[data-shell="mobile-web"][data-platform="ios"] {
   }
 
   html[data-shell="mobile-web"] .mobile-nav .nav-link.active .nav-icon-wrap {
-    background: linear-gradient(
-      180deg,
-      rgba(129, 140, 248, 0.24),
-      rgba(99, 102, 241, 0.16)
-    );
+    background: rgba(114, 102, 255, 0.16);
   }
 
   html[data-shell="mobile-web"] .mobile-nav .nav-link:active .nav-icon-wrap {
@@ -630,8 +597,6 @@ html[data-shell="mobile-web"][data-platform="ios"] {
 
   html[data-shell="mobile-web"] .cart-overlay {
     background: rgba(0, 0, 0, 0.42);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
   }
 
   html[data-shell="mobile-web"] .cart-panel {
@@ -645,12 +610,8 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 28px 28px 0 0;
-    background: rgba(17, 24, 39, 0.94);
-    backdrop-filter: blur(28px) saturate(160%);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.28),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    background: #10182c;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
     transform: translateY(100%);
     transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1);
   }
@@ -700,11 +661,7 @@ html[data-shell="mobile-web"][data-platform="ios"] {
 
   html[data-shell="mobile-web"] .cart-footer {
     padding: 12px 16px var(--shell-sheet-bottom-safe);
-    background: linear-gradient(
-      180deg,
-      rgba(17, 24, 39, 0.92),
-      rgba(17, 24, 39, 0.98)
-    );
+    background: #10182c;
   }
 
   html[data-shell="mobile-web"] .cart-delete-btn {
@@ -1004,14 +961,10 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     gap: 10px;
     padding: 12px 14px;
     border-radius: 18px;
-    background:
-      linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.92)),
-      rgba(17, 24, 39, 0.94);
+    background: #11192f;
     box-shadow:
-      0 18px 44px rgba(0, 0, 0, 0.22),
-      0 0 0 1px rgba(99, 102, 241, 0.1);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+      0 14px 28px rgba(0, 0, 0, 0.2),
+      0 0 0 1px rgba(148, 163, 184, 0.08);
   }
 
   html[data-shell="mobile-web"] .install-banner-text strong {
