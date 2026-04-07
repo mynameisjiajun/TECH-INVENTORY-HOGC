@@ -140,7 +140,8 @@ export default function ProfilePage() {
               <label style={{ display: 'block', marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Display Name</label>
               <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)}
                 placeholder="Your display name" required minLength={2}
-                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                autoComplete="name"
+                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: 'block', marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>
@@ -148,7 +149,10 @@ export default function ProfilePage() {
               </label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="your@email.com — for loan reminders"
-                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="email"
+                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
 
             <div style={{ marginBottom: 24, padding: 20, background: 'rgba(56, 189, 248, 0.05)', borderRadius: 12, border: '1px solid rgba(56, 189, 248, 0.15)' }}>
@@ -224,19 +228,22 @@ export default function ProfilePage() {
               <label style={{ display: 'block', marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Current Password</label>
               <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
                 placeholder="Enter current password" required
-                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                autoCapitalize="off" autoCorrect="off" autoComplete="current-password"
+                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 28 }}>
               <label style={{ display: 'block', marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>New Password</label>
               <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
                 placeholder="Enter new password (min. 6 chars)" required minLength={6}
-                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                autoCapitalize="off" autoCorrect="off" autoComplete="new-password"
+                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 28 }}>
               <label style={{ display: 'block', marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>Confirm New Password</label>
               <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
                 placeholder="Confirm new password" required
-                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 15, outline: 'none', boxSizing: 'border-box' }} />
+                autoCapitalize="off" autoCorrect="off" autoComplete="new-password"
+                style={{ width: '100%', padding: '14px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             </div>
             {passwordMsg && <p style={{ color: 'var(--success)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(34,197,94,0.08)', borderRadius: 10 }}>✅ {passwordMsg}</p>}
             {passwordErr && <p style={{ color: 'var(--error)', fontSize: 14, marginBottom: 20, padding: '12px 16px', background: 'rgba(239,68,68,0.08)', borderRadius: 10 }}>❌ {passwordErr}</p>}

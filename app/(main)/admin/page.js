@@ -125,7 +125,9 @@ function SortableTemplateItem({ t, onEdit, onDelete }) {
           </button>
         </div>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingLeft: 34 }}>
+      <div
+        style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingLeft: 34 }}
+      >
         {t.items.map((item) => (
           <span key={item.item_id} className="loan-item-chip">
             {item.item_name} × {item.quantity}
@@ -161,8 +163,16 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [inviteCodeInput, setInviteCodeInput] = useState("");
-  const [reminderTimes, setReminderTimes] = useState({ weekday: "09:00", saturday: "10:00", sunday: "14:00" });
-  const [reminderTimesInput, setReminderTimesInput] = useState({ weekday: "09:00", saturday: "10:00", sunday: "14:00" });
+  const [reminderTimes, setReminderTimes] = useState({
+    weekday: "09:00",
+    saturday: "10:00",
+    sunday: "14:00",
+  });
+  const [reminderTimesInput, setReminderTimesInput] = useState({
+    weekday: "09:00",
+    saturday: "10:00",
+    sunday: "14:00",
+  });
   const [reminderTimesLoading, setReminderTimesLoading] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [templatesFetching, setTemplatesFetching] = useState(false);
@@ -183,7 +193,15 @@ export default function AdminPage() {
   // Laptops tab state
   const [laptopsData, setLaptopsData] = useState([]); // tiers with laptops
   const [laptopsFetching, setLaptopsFetching] = useState(false);
-  const [laptopForm, setLaptopForm] = useState({ name: "", screen_size: "", cpu: "", ram: "", storage: "", condition: "Good", tier_id: "" });
+  const [laptopForm, setLaptopForm] = useState({
+    name: "",
+    screen_size: "",
+    cpu: "",
+    ram: "",
+    storage: "",
+    condition: "Good",
+    tier_id: "",
+  });
   const [editingLaptop, setEditingLaptop] = useState(null);
   const [permLoanModal, setPermLoanModal] = useState(null);
   const [tierInput, setTierInput] = useState("");
@@ -232,13 +250,14 @@ export default function AdminPage() {
       }
 
       let merged = [...techLoans, ...laptopLoansArr].sort(
-        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        (a, b) => new Date(b.created_at) - new Date(a.created_at),
       );
 
       // Client-side filter for overdue: approved + temporary + end_date < today
       if (statusFilter === "overdue") {
         merged = merged.filter(
-          (l) => l.loan_type === "temporary" && l.end_date && l.end_date < today
+          (l) =>
+            l.loan_type === "temporary" && l.end_date && l.end_date < today,
         );
       }
 
@@ -318,7 +337,7 @@ export default function AdminPage() {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const handleDragEnd = async (event) => {
@@ -330,7 +349,7 @@ export default function AdminPage() {
         const newIndex = items.findIndex((t) => t.id === over.id);
 
         const newTemplates = arrayMove(items, oldIndex, newIndex);
-        
+
         // Fire async request to save ordering
         fetch("/api/admin/templates", {
           method: "POST",
@@ -366,7 +385,9 @@ export default function AdminPage() {
         const data = await res.json();
         setLaptopsData(data.tiers || []);
       }
-    } catch { /* silent */ } finally {
+    } catch {
+      /* silent */
+    } finally {
       setLaptopsFetching(false);
     }
   }, []);
@@ -379,7 +400,9 @@ export default function AdminPage() {
         const data = await res.json();
         setCurrentlyOut(data.loans || []);
       }
-    } catch { /* silent */ } finally {
+    } catch {
+      /* silent */
+    } finally {
       setCurrentlyOutFetching(false);
     }
   }, []);
@@ -393,7 +416,9 @@ export default function AdminPage() {
       const d1 = r1.ok ? await r1.json() : {};
       const d2 = r2.ok ? await r2.json() : {};
       setPendingCount((d1.loans?.length || 0) + (d2.loans?.length || 0));
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   }, []);
 
   const handleLaptopLoanAction = async (loanId, action) => {
@@ -410,7 +435,7 @@ export default function AdminPage() {
         fetchPendingCount();
         setAdminNotes((p) => ({ ...p, [loanId]: "" }));
         toast.success(
-          `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : "returned"} successfully`
+          `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : "returned"} successfully`,
         );
       } else {
         const data = await res.json().catch(() => ({}));
@@ -433,9 +458,21 @@ export default function AdminPage() {
         fetchTemplates();
         fetchAllItems();
       }
-      if (activeTab === "laptops") { fetchLaptopsData(); fetchCurrentlyOut(); }
+      if (activeTab === "laptops") {
+        fetchLaptopsData();
+        fetchCurrentlyOut();
+      }
     }
-  }, [user, activeTab, fetchLoans, fetchAuditLogs, fetchUsers, fetchLaptopsData, fetchCurrentlyOut, fetchPendingCount]);
+  }, [
+    user,
+    activeTab,
+    fetchLoans,
+    fetchAuditLogs,
+    fetchUsers,
+    fetchLaptopsData,
+    fetchCurrentlyOut,
+    fetchPendingCount,
+  ]);
 
   useEffect(() => {
     if (activeTab !== "loans") return;
@@ -454,13 +491,22 @@ export default function AdminPage() {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "loan_requests" },
-          () => { fetchLoans(); }
+          () => {
+            fetchLoans();
+          },
         )
         .subscribe((_status, err) => {
-          if (err) console.warn('Realtime unavailable, using polling fallback:', err.message);
+          if (err)
+            console.warn(
+              "Realtime unavailable, using polling fallback:",
+              err.message,
+            );
         });
     } catch (err) {
-      console.warn('Realtime not available on this device, using polling fallback:', err.message);
+      console.warn(
+        "Realtime not available on this device, using polling fallback:",
+        err.message,
+      );
     }
 
     // Fallback poll every 60s in case Realtime drops
@@ -493,17 +539,20 @@ export default function AdminPage() {
           setLoans((prev) =>
             prev.map((l) =>
               l.id === loanId
-                ? { ...l, status: action === "return" ? "returned" : action + "d" }
-                : l
-            )
+                ? {
+                    ...l,
+                    status: action === "return" ? "returned" : action + "d",
+                  }
+                : l,
+            ),
           );
         }
-        
+
         fetchLoans();
         fetchPendingCount();
         setAdminNotes((p) => ({ ...p, [loanId]: "" }));
         toast.success(
-          `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "return" ? "returned" : action + "d"} successfully`
+          `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "return" ? "returned" : action + "d"} successfully`,
         );
       } else {
         const data = await res.json().catch(() => ({}));
@@ -522,29 +571,39 @@ export default function AdminPage() {
     setError("");
     try {
       const selectedIds = Array.from(selectedPendingLoans);
-      const techIds = selectedIds.filter((id) => loans.find((l) => l.id === id)?._source !== "laptop");
-      const laptopIds = selectedIds.filter((id) => loans.find((l) => l.id === id)?._source === "laptop");
+      const techIds = selectedIds.filter(
+        (id) => loans.find((l) => l.id === id)?._source !== "laptop",
+      );
+      const laptopIds = selectedIds.filter(
+        (id) => loans.find((l) => l.id === id)?._source === "laptop",
+      );
 
       const tasks = [];
       if (techIds.length > 0) {
-        tasks.push(fetch("/api/admin", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "bulk_approve", loan_ids: techIds }),
-        }));
+        tasks.push(
+          fetch("/api/admin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "bulk_approve", loan_ids: techIds }),
+          }),
+        );
       }
       for (const lid of laptopIds) {
-        tasks.push(fetch(`/api/laptop-loans/${lid}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "approve" }),
-        }));
+        tasks.push(
+          fetch(`/api/laptop-loans/${lid}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "approve" }),
+          }),
+        );
       }
 
       await Promise.all(tasks);
       setSelectedPendingLoans(new Set());
       fetchLoans();
-      toast.success(`${selectedPendingLoans.size} loan(s) approved successfully`);
+      toast.success(
+        `${selectedPendingLoans.size} loan(s) approved successfully`,
+      );
     } catch {
       toast.error("Network error — bulk approve could not be completed");
     } finally {
@@ -591,7 +650,12 @@ export default function AdminPage() {
 
   const selectAll = () => {
     const ids = loans
-      .filter((l) => l.status === "approved" && l.loan_type === "temporary" && l._source !== "laptop")
+      .filter(
+        (l) =>
+          l.status === "approved" &&
+          l.loan_type === "temporary" &&
+          l._source !== "laptop",
+      )
       .map((l) => l.id);
     setSelectedLoans(new Set(ids));
   };
@@ -621,7 +685,11 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reset_password", user_id: userId, new_password: pw }),
+        body: JSON.stringify({
+          action: "reset_password",
+          user_id: userId,
+          new_password: pw,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -643,7 +711,11 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "change_role", user_id: userId, new_role: newRole }),
+        body: JSON.stringify({
+          action: "change_role",
+          user_id: userId,
+          new_role: newRole,
+        }),
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
@@ -684,7 +756,10 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "set_invite_code", invite_code: inviteCodeInput.trim() }),
+        body: JSON.stringify({
+          action: "set_invite_code",
+          invite_code: inviteCodeInput.trim(),
+        }),
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
@@ -702,7 +777,10 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "set_reminder_times", reminder_times: reminderTimesInput }),
+        body: JSON.stringify({
+          action: "set_reminder_times",
+          reminder_times: reminderTimesInput,
+        }),
       });
       const data = await res.json();
       setUserMsg(data.message || data.error);
@@ -812,7 +890,22 @@ export default function AdminPage() {
           >
             📋 Loans
             {pendingCount > 0 && (
-              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18, height: 18, padding: "0 5px", borderRadius: 10, background: "#f59e0b", color: "white", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minWidth: 18,
+                  height: 18,
+                  padding: "0 5px",
+                  borderRadius: 10,
+                  background: "#f59e0b",
+                  color: "white",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                }}
+              >
                 {pendingCount}
               </span>
             )}
@@ -888,15 +981,72 @@ export default function AdminPage() {
         {activeTab === "loans" && (
           <>
             {/* Unified filter bar */}
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1 }}>Loan Source</span>
-                <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", borderRadius: 8, padding: 2, gap: 2 }}>
-                  {[{ key: "all", label: "All" }, { key: "tech", label: "📦 Tech" }, { key: "laptop", label: "💻 Laptop" }].map(({ key, label }) => (
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 14,
+                padding: "14px 16px",
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "var(--text-muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                  }}
+                >
+                  Loan Source
+                </span>
+                <div
+                  style={{
+                    display: "flex",
+                    background: "rgba(255,255,255,0.05)",
+                    borderRadius: 8,
+                    padding: 2,
+                    gap: 2,
+                  }}
+                >
+                  {[
+                    { key: "all", label: "All" },
+                    { key: "tech", label: "📦 Tech" },
+                    { key: "laptop", label: "💻 Laptop" },
+                  ].map(({ key, label }) => (
                     <button
                       key={key}
-                      onClick={() => { setLoanSource(key); setSelectedLoans(new Set()); setSelectedPendingLoans(new Set()); }}
-                      style={{ padding: "4px 14px", fontSize: 12, fontWeight: 600, border: "none", borderRadius: 6, cursor: "pointer", background: loanSource === key ? "var(--accent)" : "transparent", color: loanSource === key ? "white" : "var(--text-secondary)", transition: "all 0.15s" }}
+                      onClick={() => {
+                        setLoanSource(key);
+                        setSelectedLoans(new Set());
+                        setSelectedPendingLoans(new Set());
+                      }}
+                      style={{
+                        padding: "4px 14px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        border: "none",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        background:
+                          loanSource === key ? "var(--accent)" : "transparent",
+                        color:
+                          loanSource === key
+                            ? "white"
+                            : "var(--text-secondary)",
+                        transition: "all 0.15s",
+                      }}
                     >
                       {label}
                     </button>
@@ -909,7 +1059,16 @@ export default function AdminPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name, department, or item..."
-                  style={{ width: "100%", fontSize: 16, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "rgba(255,255,255,0.04)", color: "var(--text-primary)", outline: "none" }}
+                  style={{
+                    width: "100%",
+                    fontSize: 16,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border)",
+                    background: "rgba(255,255,255,0.04)",
+                    color: "var(--text-primary)",
+                    outline: "none",
+                  }}
                 />
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -926,16 +1085,30 @@ export default function AdminPage() {
                   return (
                     <button
                       key={value}
-                      onClick={() => { setStatusFilter(value); setSelectedLoans(new Set()); }}
+                      onClick={() => {
+                        setStatusFilter(value);
+                        setSelectedLoans(new Set());
+                      }}
                       style={{
-                        padding: "6px 14px", fontSize: 12, fontWeight: 600, borderRadius: 20, cursor: "pointer", transition: "all 0.15s",
+                        padding: "6px 14px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        borderRadius: 20,
+                        cursor: "pointer",
+                        transition: "all 0.15s",
                         border: isActive ? "none" : "1px solid var(--border)",
                         background: isActive
-                          ? isOverdueTab ? "rgba(239,68,68,0.2)" : "var(--accent)"
+                          ? isOverdueTab
+                            ? "rgba(239,68,68,0.2)"
+                            : "var(--accent)"
                           : "rgba(255,255,255,0.03)",
                         color: isActive
-                          ? isOverdueTab ? "#ef4444" : "white"
-                          : isOverdueTab ? "rgba(239,68,68,0.7)" : "var(--text-secondary)",
+                          ? isOverdueTab
+                            ? "#ef4444"
+                            : "white"
+                          : isOverdueTab
+                            ? "rgba(239,68,68,0.7)"
+                            : "var(--text-secondary)",
                       }}
                     >
                       {label}
@@ -958,26 +1131,55 @@ export default function AdminPage() {
                   marginBottom: 16,
                 }}
               >
-                <button className="btn btn-sm btn-outline" onClick={selectAllPending}>Select All</button>
-                <button className="btn btn-sm btn-outline" onClick={() => setSelectedPendingLoans(new Set())}>Clear</button>
-                <span style={{ flex: 1, fontSize: 13, color: "var(--text-secondary)" }}>
+                <button
+                  className="btn btn-sm btn-outline"
+                  onClick={selectAllPending}
+                >
+                  Select All
+                </button>
+                <button
+                  className="btn btn-sm btn-outline"
+                  onClick={() => setSelectedPendingLoans(new Set())}
+                >
+                  Clear
+                </button>
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: 13,
+                    color: "var(--text-secondary)",
+                  }}
+                >
                   {selectedPendingLoans.size} selected
                 </span>
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={handleBulkApprove}
-                  disabled={selectedPendingLoans.size === 0 || bulkApproveLoading}
-                  style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)" }}
+                  disabled={
+                    selectedPendingLoans.size === 0 || bulkApproveLoading
+                  }
+                  style={{
+                    background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                  }}
                 >
-                  {bulkApproveLoading
-                    ? <><span className="btn-spinner" /> Approving…</>
-                    : <><RiCheckLine /> {`Bulk Approve (${selectedPendingLoans.size})`}</>}
+                  {bulkApproveLoading ? (
+                    <>
+                      <span className="btn-spinner" /> Approving…
+                    </>
+                  ) : (
+                    <>
+                      <RiCheckLine />{" "}
+                      {`Bulk Approve (${selectedPendingLoans.size})`}
+                    </>
+                  )}
                 </button>
               </div>
             )}
 
             {statusFilter === "approved" &&
-              loans.some((l) => l.loan_type === "temporary" && l._source !== "laptop") && (
+              loans.some(
+                (l) => l.loan_type === "temporary" && l._source !== "laptop",
+              ) && (
                 <div
                   style={{
                     display: "flex",
@@ -1030,7 +1232,7 @@ export default function AdminPage() {
 
             {fetching ? (
               <div>
-                {[1,2,3,4].map((i) => (
+                {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="skeleton skeleton-row" />
                 ))}
               </div>
@@ -1038,16 +1240,28 @@ export default function AdminPage() {
               <div className="empty-state">
                 <div className="empty-icon">✨</div>
                 <h3>No {statusFilter || ""} requests</h3>
-                <p>{statusFilter === "pending" ? "All caught up!" : "No loan requests found."}</p>
+                <p>
+                  {statusFilter === "pending"
+                    ? "All caught up!"
+                    : "No loan requests found."}
+                </p>
               </div>
             ) : loans.filter((loan) => {
                 if (!searchQuery.trim()) return true;
                 const q = searchQuery.toLowerCase();
-                return (loan.requester_name || loan.requester_username || "").toLowerCase().includes(q) ||
+                return (
+                  (loan.requester_name || loan.requester_username || "")
+                    .toLowerCase()
+                    .includes(q) ||
                   (loan.department || "").toLowerCase().includes(q) ||
                   (loan._source === "laptop"
-                    ? (loan.laptops || []).some((i) => (i.laptops?.name || "").toLowerCase().includes(q))
-                    : (loan.items || []).some((i) => (i.item || "").toLowerCase().includes(q)));
+                    ? (loan.laptops || []).some((i) =>
+                        (i.laptops?.name || "").toLowerCase().includes(q),
+                      )
+                    : (loan.items || []).some((i) =>
+                        (i.item || "").toLowerCase().includes(q),
+                      ))
+                );
               }).length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">🔍</div>
@@ -1055,149 +1269,522 @@ export default function AdminPage() {
                 <p>Try a different name or item.</p>
               </div>
             ) : (
-              loans.filter((loan) => {
-                if (!searchQuery.trim()) return true;
-                const q = searchQuery.toLowerCase();
-                const nameMatch = (loan.requester_name || loan.requester_username || "").toLowerCase().includes(q);
-                const deptMatch = (loan.department || "").toLowerCase().includes(q);
-                const itemMatch = loan._source === "laptop"
-                  ? (loan.laptops || []).some((i) => (i.laptops?.name || "").toLowerCase().includes(q))
-                  : (loan.items || []).some((i) => (i.item || "").toLowerCase().includes(q));
-                return nameMatch || deptMatch || itemMatch;
-              }).map((loan) => {
-                const todayStr = new Date().toISOString().split("T")[0];
-                const isOverdue = loan.status === "approved" && loan.loan_type === "temporary" && loan.end_date && loan.end_date < todayStr;
-                const accentColor = isOverdue ? "#ef4444" : loan.status === "pending" ? "#f59e0b" : loan.status === "approved" ? "#10b981" : loan.status === "rejected" ? "#6b7280" : "#6366f1";
-                const hasFooter = (loan.admin_notes && loan.status !== "pending") || (loan.status === "returned" && loan.return_photo_url) || loan._source !== "laptop";
+              loans
+                .filter((loan) => {
+                  if (!searchQuery.trim()) return true;
+                  const q = searchQuery.toLowerCase();
+                  const nameMatch = (
+                    loan.requester_name ||
+                    loan.requester_username ||
+                    ""
+                  )
+                    .toLowerCase()
+                    .includes(q);
+                  const deptMatch = (loan.department || "")
+                    .toLowerCase()
+                    .includes(q);
+                  const itemMatch =
+                    loan._source === "laptop"
+                      ? (loan.laptops || []).some((i) =>
+                          (i.laptops?.name || "").toLowerCase().includes(q),
+                        )
+                      : (loan.items || []).some((i) =>
+                          (i.item || "").toLowerCase().includes(q),
+                        );
+                  return nameMatch || deptMatch || itemMatch;
+                })
+                .map((loan) => {
+                  const todayStr = new Date().toISOString().split("T")[0];
+                  const isOverdue =
+                    loan.status === "approved" &&
+                    loan.loan_type === "temporary" &&
+                    loan.end_date &&
+                    loan.end_date < todayStr;
+                  const accentColor = isOverdue
+                    ? "#ef4444"
+                    : loan.status === "pending"
+                      ? "#f59e0b"
+                      : loan.status === "approved"
+                        ? "#10b981"
+                        : loan.status === "rejected"
+                          ? "#6b7280"
+                          : "#6366f1";
+                  const hasFooter =
+                    (loan.admin_notes && loan.status !== "pending") ||
+                    (loan.status === "returned" && loan.return_photo_url) ||
+                    loan._source !== "laptop";
 
-                return (
-                  <div key={loan.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderLeft: `4px solid ${accentColor}`, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
-
-                    {/* Header */}
-                    <div className="admin-loan-card-header" style={{ padding: "14px 18px 10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 7, flexWrap: "wrap" }}>
-                          <span className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}>
-                            {loan.loan_type === "permanent" ? "📌 Permanent" : "⏱️ Temporary"}
+                  return (
+                    <div
+                      key={loan.id}
+                      style={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderLeft: `4px solid ${accentColor}`,
+                        borderRadius: 14,
+                        marginBottom: 12,
+                        overflow: "hidden",
+                      }}
+                    >
+                      {/* Header */}
+                      <div
+                        className="admin-loan-card-header"
+                        style={{
+                          padding: "14px 18px 10px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 5,
+                              alignItems: "center",
+                              marginBottom: 7,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <span
+                              className={`badge ${loan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
+                            >
+                              {loan.loan_type === "permanent"
+                                ? "📌 Permanent"
+                                : "⏱️ Temporary"}
+                            </span>
+                            {statusBadge(loan.status)}
+                            {loan._source === "laptop" && (
+                              <span
+                                className="badge"
+                                style={{
+                                  background: "rgba(16,185,129,0.15)",
+                                  color: "#10b981",
+                                  border: "1px solid rgba(16,185,129,0.3)",
+                                }}
+                              >
+                                💻 Laptop
+                              </span>
+                            )}
+                            {isOverdue && (
+                              <span className="badge badge-error">
+                                🚨 Overdue
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>
+                            {loan.requester_name}
+                            <span
+                              style={{
+                                fontWeight: 400,
+                                color: "var(--text-muted)",
+                                marginLeft: 8,
+                                fontSize: 12,
+                              }}
+                            >
+                              @{loan.requester_username}
+                            </span>
+                          </div>
+                        </div>
+                        <div
+                          className="admin-loan-card-header-right"
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-end",
+                            gap: 8,
+                            flexShrink: 0,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "var(--text-muted)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            #{loan.id} · {timeAgo(loan.created_at)}
                           </span>
-                          {statusBadge(loan.status)}
-                          {loan._source === "laptop" && <span className="badge" style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}>💻 Laptop</span>}
-                          {isOverdue && <span className="badge badge-error">🚨 Overdue</span>}
-                        </div>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>
-                          {loan.requester_name}
-                          <span style={{ fontWeight: 400, color: "var(--text-muted)", marginLeft: 8, fontSize: 12 }}>@{loan.requester_username}</span>
+                          {statusFilter === "pending" && (
+                            <div
+                              style={{
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 5,
+                                fontSize: 12,
+                                color: "var(--text-secondary)",
+                                fontWeight: 500,
+                              }}
+                              onClick={() => toggleSelectPending(loan.id)}
+                            >
+                              <div
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: 5,
+                                  border: selectedPendingLoans.has(loan.id)
+                                    ? "none"
+                                    : "1.5px solid var(--border)",
+                                  background: selectedPendingLoans.has(loan.id)
+                                    ? "#10b981"
+                                    : "transparent",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  transition: "all 0.15s",
+                                }}
+                              >
+                                {selectedPendingLoans.has(loan.id) && (
+                                  <RiCheckLine color="white" size={13} />
+                                )}
+                              </div>
+                              Select
+                            </div>
+                          )}
+                          {statusFilter === "approved" &&
+                            loan.loan_type === "temporary" &&
+                            loan._source !== "laptop" && (
+                              <div
+                                style={{
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  fontSize: 12,
+                                  color: "var(--text-secondary)",
+                                  fontWeight: 500,
+                                }}
+                                onClick={() => toggleSelect(loan.id)}
+                              >
+                                <div
+                                  style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: 5,
+                                    border: selectedLoans.has(loan.id)
+                                      ? "none"
+                                      : "1.5px solid var(--border)",
+                                    background: selectedLoans.has(loan.id)
+                                      ? "var(--accent)"
+                                      : "transparent",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    transition: "all 0.15s",
+                                    boxShadow: selectedLoans.has(loan.id)
+                                      ? "0 2px 6px rgba(99,102,241,0.25)"
+                                      : "none",
+                                  }}
+                                >
+                                  {selectedLoans.has(loan.id) && (
+                                    <RiCheckLine color="white" size={13} />
+                                  )}
+                                </div>
+                                Select
+                              </div>
+                            )}
                         </div>
                       </div>
-                      <div className="admin-loan-card-header-right" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>#{loan.id} · {timeAgo(loan.created_at)}</span>
-                        {statusFilter === "pending" && (
-                          <div style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }} onClick={() => toggleSelectPending(loan.id)}>
-                            <div style={{ width: 18, height: 18, borderRadius: 5, border: selectedPendingLoans.has(loan.id) ? "none" : "1.5px solid var(--border)", background: selectedPendingLoans.has(loan.id) ? "#10b981" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
-                              {selectedPendingLoans.has(loan.id) && <RiCheckLine color="white" size={13} />}
-                            </div>
-                            Select
-                          </div>
-                        )}
-                        {statusFilter === "approved" && loan.loan_type === "temporary" && loan._source !== "laptop" && (
-                          <div style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-secondary)", fontWeight: 500 }} onClick={() => toggleSelect(loan.id)}>
-                            <div style={{ width: 18, height: 18, borderRadius: 5, border: selectedLoans.has(loan.id) ? "none" : "1.5px solid var(--border)", background: selectedLoans.has(loan.id) ? "var(--accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s", boxShadow: selectedLoans.has(loan.id) ? "0 2px 6px rgba(99,102,241,0.25)" : "none" }}>
-                              {selectedLoans.has(loan.id) && <RiCheckLine color="white" size={13} />}
-                            </div>
-                            Select
-                          </div>
-                        )}
+
+                      {/* Items */}
+                      <div
+                        style={{
+                          padding: "0 18px 12px",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6,
+                        }}
+                      >
+                        {loan._source === "laptop"
+                          ? (loan.laptops || []).map((item) => (
+                              <span key={item.id} className="loan-item-chip">
+                                💻{" "}
+                                {item.laptops?.name ||
+                                  `Laptop #${item.laptop_id}`}
+                              </span>
+                            ))
+                          : (loan.items || []).map((item) => (
+                              <span key={item.id} className="loan-item-chip">
+                                {item.item} × {item.quantity}
+                              </span>
+                            ))}
                       </div>
-                    </div>
 
-                    {/* Items */}
-                    <div style={{ padding: "0 18px 12px", display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {loan._source === "laptop"
-                        ? (loan.laptops || []).map((item) => <span key={item.id} className="loan-item-chip">💻 {item.laptops?.name || `Laptop #${item.laptop_id}`}</span>)
-                        : (loan.items || []).map((item) => <span key={item.id} className="loan-item-chip">{item.item} × {item.quantity}</span>)
-                      }
-                    </div>
+                      {/* Meta row */}
+                      <div
+                        style={{
+                          padding: "10px 18px",
+                          borderTop: "1px solid var(--border)",
+                          background: "rgba(255,255,255,0.015)",
+                          display: "flex",
+                          gap: 14,
+                          fontSize: 12,
+                          color: "var(--text-muted)",
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                        }}
+                      >
+                        {loan.purpose && <span>📝 {loan.purpose}</span>}
+                        {loan.department && <span>🏢 {loan.department}</span>}
+                        <span>
+                          📅 {loan.start_date}
+                          {loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}
+                        </span>
+                        {loan.status === "approved" &&
+                          loan.loan_type === "temporary" &&
+                          loan.end_date && (
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                color: isOverdue
+                                  ? "#ef4444"
+                                  : "var(--text-secondary)",
+                              }}
+                            >
+                              {formatDueTimer(loan.end_date)}
+                            </span>
+                          )}
+                      </div>
 
-                    {/* Meta row */}
-                    <div style={{ padding: "10px 18px", borderTop: "1px solid var(--border)", background: "rgba(255,255,255,0.015)", display: "flex", gap: 14, fontSize: 12, color: "var(--text-muted)", flexWrap: "wrap", alignItems: "center" }}>
-                      {loan.purpose && <span>📝 {loan.purpose}</span>}
-                      {loan.department && <span>🏢 {loan.department}</span>}
-                      <span>📅 {loan.start_date}{loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}</span>
-                      {loan.status === "approved" && loan.loan_type === "temporary" && loan.end_date && (
-                        <span style={{ fontWeight: 600, color: isOverdue ? "#ef4444" : "var(--text-secondary)" }}>{formatDueTimer(loan.end_date)}</span>
+                      {/* Pending: notes + approve/reject */}
+                      {loan.status === "pending" && (
+                        <div
+                          style={{
+                            padding: "14px 18px",
+                            borderTop: "1px solid var(--border)",
+                          }}
+                        >
+                          <input
+                            type="text"
+                            className="admin-notes-input"
+                            placeholder="Admin notes (optional — sent to requester)"
+                            value={adminNotes[loan.id] || ""}
+                            onChange={(e) =>
+                              setAdminNotes((p) => ({
+                                ...p,
+                                [loan.id]: e.target.value,
+                              }))
+                            }
+                          />
+                          <div
+                            style={{ display: "flex", gap: 8, marginTop: 10 }}
+                          >
+                            <button
+                              disabled={actionLoading === loan.id}
+                              onClick={() =>
+                                loan._source === "laptop"
+                                  ? handleLaptopLoanAction(loan.id, "approve")
+                                  : handleAction(loan.id, "approve")
+                              }
+                              style={{
+                                flex: 1,
+                                padding: "10px 0",
+                                borderRadius: 10,
+                                border: "none",
+                                fontWeight: 700,
+                                fontSize: 13,
+                                cursor:
+                                  actionLoading === loan.id
+                                    ? "not-allowed"
+                                    : "pointer",
+                                background:
+                                  "linear-gradient(135deg, #10b981, #059669)",
+                                color: "white",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 6,
+                                opacity: actionLoading === loan.id ? 0.7 : 1,
+                                boxShadow: "0 2px 8px rgba(16,185,129,0.25)",
+                              }}
+                            >
+                              {actionLoading === loan.id ? (
+                                <span className="btn-spinner" />
+                              ) : (
+                                <RiCheckLine />
+                              )}{" "}
+                              Approve
+                            </button>
+                            <button
+                              disabled={actionLoading === loan.id}
+                              onClick={() =>
+                                loan._source === "laptop"
+                                  ? handleLaptopLoanAction(loan.id, "reject")
+                                  : handleAction(loan.id, "reject")
+                              }
+                              style={{
+                                flex: 1,
+                                padding: "10px 0",
+                                borderRadius: 10,
+                                fontWeight: 700,
+                                fontSize: 13,
+                                cursor:
+                                  actionLoading === loan.id
+                                    ? "not-allowed"
+                                    : "pointer",
+                                background: "rgba(239,68,68,0.08)",
+                                color: "#ef4444",
+                                border: "1.5px solid rgba(239,68,68,0.3)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 6,
+                                opacity: actionLoading === loan.id ? 0.7 : 1,
+                              }}
+                            >
+                              {actionLoading === loan.id ? (
+                                <span className="btn-spinner" />
+                              ) : (
+                                <RiCloseLine />
+                              )}{" "}
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Approved: return button */}
+                      {loan.status === "approved" &&
+                        (loan.loan_type === "temporary" ||
+                          loan._source === "laptop") && (
+                          <div
+                            style={{
+                              padding: "12px 18px",
+                              borderTop: "1px solid var(--border)",
+                            }}
+                          >
+                            <button
+                              disabled={actionLoading === loan.id}
+                              onClick={() =>
+                                loan._source === "laptop"
+                                  ? handleLaptopLoanAction(loan.id, "return")
+                                  : handleAction(loan.id, "return")
+                              }
+                              className="admin-loan-return-btn"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "8px 18px",
+                                borderRadius: 10,
+                                fontWeight: 700,
+                                fontSize: 13,
+                                cursor:
+                                  actionLoading === loan.id
+                                    ? "not-allowed"
+                                    : "pointer",
+                                border: "none",
+                                background: isOverdue
+                                  ? "linear-gradient(135deg, #ef4444, #dc2626)"
+                                  : "linear-gradient(135deg, #10b981, #059669)",
+                                color: "white",
+                                opacity: actionLoading === loan.id ? 0.7 : 1,
+                                boxShadow: isOverdue
+                                  ? "0 2px 8px rgba(239,68,68,0.35)"
+                                  : "0 2px 8px rgba(16,185,129,0.3)",
+                              }}
+                            >
+                              {actionLoading === loan.id ? (
+                                <>
+                                  <span className="btn-spinner" /> Returning…
+                                </>
+                              ) : (
+                                <>
+                                  <RiArrowGoBackLine />{" "}
+                                  {isOverdue
+                                    ? "⚠ Mark as Returned"
+                                    : "Mark as Returned"}
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+
+                      {/* Footer: notes, photo, delete */}
+                      {hasFooter && (
+                        <div
+                          style={{
+                            padding: "10px 18px",
+                            borderTop: "1px solid var(--border)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            flexWrap: "wrap",
+                            background: "rgba(255,255,255,0.01)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 4,
+                              flex: 1,
+                            }}
+                          >
+                            {loan.admin_notes && loan.status !== "pending" && (
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "var(--text-secondary)",
+                                }}
+                              >
+                                <strong>Notes:</strong> {loan.admin_notes}
+                              </div>
+                            )}
+                            {loan.status === "returned" &&
+                              loan.return_photo_url && (
+                                <a
+                                  href={loan.return_photo_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    fontSize: 12,
+                                    color: "var(--accent)",
+                                    textDecoration: "none",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                  }}
+                                >
+                                  <RiCameraLine /> View Proof of Return
+                                </a>
+                              )}
+                          </div>
+                          {loan._source !== "laptop" && (
+                            <button
+                              disabled={actionLoading === loan.id}
+                              style={{
+                                color: "var(--error)",
+                                background: "none",
+                                border: "1px solid rgba(239,68,68,0.25)",
+                                borderRadius: 8,
+                                fontSize: 11,
+                                padding: "5px 10px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Delete loan #${loan.id}?${loan.status === "approved" ? " Stock will be restored." : ""}`,
+                                  )
+                                )
+                                  handleAction(loan.id, "delete");
+                              }}
+                            >
+                              <RiDeleteBinLine /> Delete
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
-
-                    {/* Pending: notes + approve/reject */}
-                    {loan.status === "pending" && (
-                      <div style={{ padding: "14px 18px", borderTop: "1px solid var(--border)" }}>
-                        <input
-                          type="text"
-                          className="admin-notes-input"
-                          placeholder="Admin notes (optional — sent to requester)"
-                          value={adminNotes[loan.id] || ""}
-                          onChange={(e) => setAdminNotes((p) => ({ ...p, [loan.id]: e.target.value }))}
-                        />
-                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                          <button
-                            disabled={actionLoading === loan.id}
-                            onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "approve") : handleAction(loan.id, "approve")}
-                            style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 13, cursor: actionLoading === loan.id ? "not-allowed" : "pointer", background: "linear-gradient(135deg, #10b981, #059669)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: actionLoading === loan.id ? 0.7 : 1, boxShadow: "0 2px 8px rgba(16,185,129,0.25)" }}
-                          >
-                            {actionLoading === loan.id ? <span className="btn-spinner" /> : <RiCheckLine />} Approve
-                          </button>
-                          <button
-                            disabled={actionLoading === loan.id}
-                            onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "reject") : handleAction(loan.id, "reject")}
-                            style={{ flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: actionLoading === loan.id ? "not-allowed" : "pointer", background: "rgba(239,68,68,0.08)", color: "#ef4444", border: "1.5px solid rgba(239,68,68,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: actionLoading === loan.id ? 0.7 : 1 }}
-                          >
-                            {actionLoading === loan.id ? <span className="btn-spinner" /> : <RiCloseLine />} Reject
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Approved: return button */}
-                    {loan.status === "approved" && (loan.loan_type === "temporary" || loan._source === "laptop") && (
-                      <div style={{ padding: "12px 18px", borderTop: "1px solid var(--border)" }}>
-                        <button
-                          disabled={actionLoading === loan.id}
-                          onClick={() => loan._source === "laptop" ? handleLaptopLoanAction(loan.id, "return") : handleAction(loan.id, "return")}
-                          className="admin-loan-return-btn"
-                          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: actionLoading === loan.id ? "not-allowed" : "pointer", border: "none", background: isOverdue ? "linear-gradient(135deg, #ef4444, #dc2626)" : "linear-gradient(135deg, #10b981, #059669)", color: "white", opacity: actionLoading === loan.id ? 0.7 : 1, boxShadow: isOverdue ? "0 2px 8px rgba(239,68,68,0.35)" : "0 2px 8px rgba(16,185,129,0.3)" }}
-                        >
-                          {actionLoading === loan.id ? <><span className="btn-spinner" /> Returning…</> : <><RiArrowGoBackLine /> {isOverdue ? "⚠ Mark as Returned" : "Mark as Returned"}</>}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Footer: notes, photo, delete */}
-                    {hasFooter && (
-                      <div style={{ padding: "10px 18px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", background: "rgba(255,255,255,0.01)" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-                          {loan.admin_notes && loan.status !== "pending" && (
-                            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}><strong>Notes:</strong> {loan.admin_notes}</div>
-                          )}
-                          {loan.status === "returned" && loan.return_photo_url && (
-                            <a href={loan.return_photo_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
-                              <RiCameraLine /> View Proof of Return
-                            </a>
-                          )}
-                        </div>
-                        {loan._source !== "laptop" && (
-                          <button
-                            disabled={actionLoading === loan.id}
-                            style={{ color: "var(--error)", background: "none", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, fontSize: 11, padding: "5px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-                            onClick={() => { if (confirm(`Delete loan #${loan.id}?${loan.status === "approved" ? " Stock will be restored." : ""}`)) handleAction(loan.id, "delete"); }}
-                          >
-                            <RiDeleteBinLine /> Delete
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+                  );
+                })
             )}
           </>
         )}
@@ -1284,9 +1871,17 @@ export default function AdminPage() {
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={handleUpdateInviteCode}
-                  disabled={inviteCodeInput.trim() === inviteCode || inviteCodeLoading}
+                  disabled={
+                    inviteCodeInput.trim() === inviteCode || inviteCodeLoading
+                  }
                 >
-                  {inviteCodeLoading ? <><span className="btn-spinner" /> Saving…</> : "Update"}
+                  {inviteCodeLoading ? (
+                    <>
+                      <span className="btn-spinner" /> Saving…
+                    </>
+                  ) : (
+                    "Update"
+                  )}
                 </button>
               </div>
             </div>
@@ -1301,12 +1896,29 @@ export default function AdminPage() {
                 marginBottom: 20,
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>
-                <RiTimeLine style={{ verticalAlign: "middle", marginRight: 6 }} />
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginBottom: 4,
+                  color: "var(--text-primary)",
+                }}
+              >
+                <RiTimeLine
+                  style={{ verticalAlign: "middle", marginRight: 6 }}
+                />
                 Due-Soon Reminder Times
               </div>
-              <p style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 12 }}>
-                Set the time (SGT) to send due-tomorrow reminders. Overdue alerts fire regardless of this setting. The cron job should run hourly.
+              <p
+                style={{
+                  fontSize: 11,
+                  color: "var(--text-secondary)",
+                  marginBottom: 12,
+                }}
+              >
+                Set the time (SGT) to send due-tomorrow reminders. Overdue
+                alerts fire regardless of this setting. The cron job should run
+                hourly.
               </p>
               <div className="reminder-times-grid" style={{ marginBottom: 12 }}>
                 {[
@@ -1315,14 +1927,24 @@ export default function AdminPage() {
                   { key: "sunday", label: "Sunday" },
                 ].map(({ key, label }) => (
                   <div key={key}>
-                    <label style={{ display: "block", fontSize: 10, color: "var(--text-secondary)", marginBottom: 3 }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: 10,
+                        color: "var(--text-secondary)",
+                        marginBottom: 3,
+                      }}
+                    >
                       {label}
                     </label>
                     <input
                       type="time"
                       value={reminderTimesInput[key]}
                       onChange={(e) =>
-                        setReminderTimesInput((prev) => ({ ...prev, [key]: e.target.value }))
+                        setReminderTimesInput((prev) => ({
+                          ...prev,
+                          [key]: e.target.value,
+                        }))
                       }
                       style={{
                         width: "100%",
@@ -1343,13 +1965,20 @@ export default function AdminPage() {
               <button
                 className="btn btn-sm btn-primary"
                 onClick={handleUpdateReminderTimes}
-                disabled={reminderTimesLoading || (
-                  reminderTimesInput.weekday === reminderTimes.weekday &&
-                  reminderTimesInput.saturday === reminderTimes.saturday &&
-                  reminderTimesInput.sunday === reminderTimes.sunday
-                )}
+                disabled={
+                  reminderTimesLoading ||
+                  (reminderTimesInput.weekday === reminderTimes.weekday &&
+                    reminderTimesInput.saturday === reminderTimes.saturday &&
+                    reminderTimesInput.sunday === reminderTimes.sunday)
+                }
               >
-                {reminderTimesLoading ? <><span className="btn-spinner" /> Saving…</> : "Save Times"}
+                {reminderTimesLoading ? (
+                  <>
+                    <span className="btn-spinner" /> Saving…
+                  </>
+                ) : (
+                  "Save Times"
+                )}
               </button>
             </div>
 
@@ -1391,8 +2020,8 @@ export default function AdminPage() {
                                   u.role === "admin"
                                     ? "linear-gradient(135deg, #f59e0b, #ef4444)"
                                     : u.role === "tech"
-                                    ? "linear-gradient(135deg, #10b981, #059669)"
-                                    : "linear-gradient(135deg, var(--accent), #818cf8)",
+                                      ? "linear-gradient(135deg, #10b981, #059669)"
+                                      : "linear-gradient(135deg, var(--accent), #818cf8)",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -1418,7 +2047,13 @@ export default function AdminPage() {
                         >
                           @{u.username}
                         </td>
-                        <td style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                        <td
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-secondary)",
+                            lineHeight: 1.4,
+                          }}
+                        >
                           {u.email ? (
                             <div>
                               <span title="Email">📧 {u.email}</span>
@@ -1426,43 +2061,62 @@ export default function AdminPage() {
                           ) : null}
                           {u.telegram_chat_id ? (
                             <div>
-                              <span title="Telegram Handle" style={{ color: "#3b82f6" }}>
+                              <span
+                                title="Telegram Handle"
+                                style={{ color: "#3b82f6" }}
+                              >
                                 💬 @{u.telegram_chat_id}
                               </span>
                             </div>
                           ) : null}
                           {!u.email && !u.telegram_chat_id && (
-                            <span style={{ color: "var(--text-muted)" }}>-</span>
+                            <span style={{ color: "var(--text-muted)" }}>
+                              -
+                            </span>
                           )}
                         </td>
                         <td>
                           <select
                             value={u.role}
-                            disabled={u.id === user.id || userActionLoading === `role-${u.id}`}
-                            onChange={(e) => handleChangeRole(u.id, e.target.value)}
+                            disabled={
+                              u.id === user.id ||
+                              userActionLoading === `role-${u.id}`
+                            }
+                            onChange={(e) =>
+                              handleChangeRole(u.id, e.target.value)
+                            }
                             style={{
                               /* paddingRight must accommodate the custom SVG arrow */
-                              padding: "5px 36px 5px 8px",
+                              padding: "5px 28px 5px 8px",
                               /* 16px: prevents iOS zoom on focus */
                               fontSize: 16,
                               fontWeight: 600,
                               borderRadius: 7,
                               border: "1px solid var(--border)",
-                              background:
+                              /* Suppress native arrow so only our arrow shows */
+                              WebkitAppearance: "none",
+                              appearance: "none",
+                              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+                              backgroundRepeat: "no-repeat",
+                              backgroundPosition: "right 8px center",
+                              backgroundColor:
                                 u.role === "admin"
                                   ? "rgba(245,158,11,0.12)"
                                   : u.role === "tech"
-                                  ? "rgba(16,185,129,0.12)"
-                                  : "rgba(99,102,241,0.08)",
+                                    ? "rgba(16,185,129,0.12)"
+                                    : "rgba(99,102,241,0.08)",
                               color:
                                 u.role === "admin"
                                   ? "#f59e0b"
                                   : u.role === "tech"
-                                  ? "#10b981"
-                                  : "var(--text-secondary)",
-                              cursor: u.id === user.id ? "not-allowed" : "pointer",
+                                    ? "#10b981"
+                                    : "var(--text-secondary)",
+                              cursor:
+                                u.id === user.id ? "not-allowed" : "pointer",
                               opacity: u.id === user.id ? 0.5 : 1,
                               fontFamily: "inherit",
+                              touchAction: "manipulation",
+                              minWidth: 88,
                             }}
                           >
                             {/* No emojis — they render broken in styled <select> on iOS */}
@@ -1510,7 +2164,11 @@ export default function AdminPage() {
                               disabled={userActionLoading === `reset-${u.id}`}
                               title="Reset password"
                             >
-                              {userActionLoading === `reset-${u.id}` ? <span className="btn-spinner" /> : <RiLockLine />}
+                              {userActionLoading === `reset-${u.id}` ? (
+                                <span className="btn-spinner" />
+                              ) : (
+                                <RiLockLine />
+                              )}
                             </button>
                           </div>
                         </td>
@@ -1522,7 +2180,11 @@ export default function AdminPage() {
                               disabled={userActionLoading === `delete-${u.id}`}
                               title="Delete user"
                             >
-                              {userActionLoading === `delete-${u.id}` ? <span className="btn-spinner" /> : <RiDeleteBinLine />}
+                              {userActionLoading === `delete-${u.id}` ? (
+                                <span className="btn-spinner" />
+                              ) : (
+                                <RiDeleteBinLine />
+                              )}
                             </button>
                           )}
                         </td>
@@ -1889,12 +2551,21 @@ export default function AdminPage() {
                     if (res.ok) {
                       // Optimistically update the UI
                       if (editingTemplate) {
-                        setTemplates(prev => prev.map(t => t.id === editingTemplate ? { ...t, ...templateForm } : t));
+                        setTemplates((prev) =>
+                          prev.map((t) =>
+                            t.id === editingTemplate
+                              ? { ...t, ...templateForm }
+                              : t,
+                          ),
+                        );
                       } else {
                         // Use a temporary ID for the optimistic new template until fetchTemplates completes
-                        setTemplates(prev => [...prev, { id: "temp-" + Date.now(), ...templateForm }]);
+                        setTemplates((prev) => [
+                          ...prev,
+                          { id: "temp-" + Date.now(), ...templateForm },
+                        ]);
                       }
-                      
+
                       setTemplateForm({
                         name: "",
                         description: "",
@@ -1950,7 +2621,11 @@ export default function AdminPage() {
                   strategy={verticalListSortingStrategy}
                 >
                   <div
-                    style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                    }}
                   >
                     {templates.map((t) => (
                       <SortableTemplateItem
@@ -1967,10 +2642,12 @@ export default function AdminPage() {
                         }}
                         onDelete={async (t) => {
                           if (!confirm(`Delete template "${t.name}"?`)) return;
-                          
+
                           // Optimistically remove the template
-                          setTemplates(prev => prev.filter(x => x.id !== t.id));
-                          
+                          setTemplates((prev) =>
+                            prev.filter((x) => x.id !== t.id),
+                          );
+
                           await fetch("/api/admin/templates", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -1995,68 +2672,162 @@ export default function AdminPage() {
             {/* Perm Loan Modal */}
             {permLoanModal && (
               <div
-                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-                onClick={(e) => e.target === e.currentTarget && setPermLoanModal(null)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(0,0,0,0.6)",
+                  zIndex: 1000,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 16,
+                }}
+                onClick={(e) =>
+                  e.target === e.currentTarget && setPermLoanModal(null)
+                }
               >
-                <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 420 }}>
+                <div
+                  style={{
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 16,
+                    padding: 24,
+                    width: "100%",
+                    maxWidth: 420,
+                  }}
+                >
                   <h3 style={{ margin: "0 0 16px", fontSize: 16 }}>
-                    {permLoanModal.is_perm_loaned ? "Remove Perm Loan" : "Mark as Perm Loaned"}: {permLoanModal.name}
+                    {permLoanModal.is_perm_loaned
+                      ? "Remove Perm Loan"
+                      : "Mark as Perm Loaned"}
+                    : {permLoanModal.name}
                   </h3>
                   {!permLoanModal.is_perm_loaned && (
                     <>
                       <input
                         placeholder="Person's name (optional)"
                         value={permLoanModal.perm_loan_person || ""}
-                        onChange={(e) => setPermLoanModal((p) => ({ ...p, perm_loan_person: e.target.value }))}
-                        style={{ width: "100%", padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
+                        onChange={(e) =>
+                          setPermLoanModal((p) => ({
+                            ...p,
+                            perm_loan_person: e.target.value,
+                          }))
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px",
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 8,
+                          color: "var(--text-primary)",
+                          fontSize: 13,
+                          marginBottom: 8,
+                          boxSizing: "border-box",
+                        }}
                       />
                       <input
                         placeholder="Reason / ministry (optional)"
                         value={permLoanModal.perm_loan_reason || ""}
-                        onChange={(e) => setPermLoanModal((p) => ({ ...p, perm_loan_reason: e.target.value }))}
-                        style={{ width: "100%", padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13, marginBottom: 16, boxSizing: "border-box" }}
+                        onChange={(e) =>
+                          setPermLoanModal((p) => ({
+                            ...p,
+                            perm_loan_reason: e.target.value,
+                          }))
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px",
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 8,
+                          color: "var(--text-primary)",
+                          fontSize: 13,
+                          marginBottom: 16,
+                          boxSizing: "border-box",
+                        }}
                       />
                     </>
                   )}
                   {permLoanModal.is_perm_loaned && (
-                    <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "var(--text-secondary)",
+                        marginBottom: 16,
+                      }}
+                    >
                       This will mark the laptop as available again.
                     </p>
                   )}
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button className="btn btn-sm btn-outline" onClick={() => setPermLoanModal(null)}>Cancel</button>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={() => setPermLoanModal(null)}
+                    >
+                      Cancel
+                    </button>
                     <button
                       className="btn btn-sm btn-primary"
-                      disabled={laptopActionLoading === `perm-${permLoanModal.id}`}
-                      style={{ background: permLoanModal.is_perm_loaned ? "linear-gradient(135deg, #10b981, #059669)" : "linear-gradient(135deg, #f59e0b, #d97706)" }}
+                      disabled={
+                        laptopActionLoading === `perm-${permLoanModal.id}`
+                      }
+                      style={{
+                        background: permLoanModal.is_perm_loaned
+                          ? "linear-gradient(135deg, #10b981, #059669)"
+                          : "linear-gradient(135deg, #f59e0b, #d97706)",
+                      }}
                       onClick={async () => {
                         setLaptopActionLoading(`perm-${permLoanModal.id}`);
                         const newPermState = !permLoanModal.is_perm_loaned;
                         try {
-                          const res = await fetch(`/api/laptops/${permLoanModal.id}`, {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              is_perm_loaned: newPermState,
-                              perm_loan_person: newPermState ? (permLoanModal.perm_loan_person || null) : null,
-                              perm_loan_reason: newPermState ? (permLoanModal.perm_loan_reason || null) : null,
-                            }),
-                          });
+                          const res = await fetch(
+                            `/api/laptops/${permLoanModal.id}`,
+                            {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                is_perm_loaned: newPermState,
+                                perm_loan_person: newPermState
+                                  ? permLoanModal.perm_loan_person || null
+                                  : null,
+                                perm_loan_reason: newPermState
+                                  ? permLoanModal.perm_loan_reason || null
+                                  : null,
+                              }),
+                            },
+                          );
                           if (res.ok) {
-                            toast.success(newPermState ? "Marked as permanently loaned" : "Perm loan removed");
+                            toast.success(
+                              newPermState
+                                ? "Marked as permanently loaned"
+                                : "Perm loan removed",
+                            );
                             setPermLoanModal(null);
                             fetchLaptopsData();
                           } else {
                             const d = await res.json().catch(() => ({}));
                             toast.error(d.error || "Failed to update");
                           }
-                        } catch { toast.error("Network error"); }
-                        finally { setLaptopActionLoading(null); }
+                        } catch {
+                          toast.error("Network error");
+                        } finally {
+                          setLaptopActionLoading(null);
+                        }
                       }}
                     >
-                      {laptopActionLoading === `perm-${permLoanModal.id}`
-                        ? <span className="btn-spinner" />
-                        : (permLoanModal.is_perm_loaned ? "Remove Perm Loan" : "Confirm Perm Loan")}
+                      {laptopActionLoading === `perm-${permLoanModal.id}` ? (
+                        <span className="btn-spinner" />
+                      ) : permLoanModal.is_perm_loaned ? (
+                        "Remove Perm Loan"
+                      ) : (
+                        "Confirm Perm Loan"
+                      )}
                     </button>
                   </div>
                 </div>
@@ -2064,57 +2835,222 @@ export default function AdminPage() {
             )}
 
             {/* Currently Out */}
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: 20, marginBottom: 24 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>💻 Currently Out</h3>
-                <button className="btn btn-sm btn-outline" onClick={fetchCurrentlyOut}>Refresh</button>
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 14,
+                padding: 20,
+                marginBottom: 24,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 16,
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+                  💻 Currently Out
+                </h3>
+                <button
+                  className="btn btn-sm btn-outline"
+                  onClick={fetchCurrentlyOut}
+                >
+                  Refresh
+                </button>
               </div>
               {currentlyOutFetching ? (
-                <div className="loading-spinner"><div className="spinner" /></div>
+                <div className="loading-spinner">
+                  <div className="spinner" />
+                </div>
               ) : currentlyOut.length === 0 ? (
-                <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>All laptops are currently in.</p>
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "var(--text-muted)",
+                    margin: 0,
+                  }}
+                >
+                  All laptops are currently in.
+                </p>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 0, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 0,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    border: "1px solid var(--border)",
+                  }}
+                >
                   {(() => {
                     const today = new Date().toISOString().split("T")[0];
-                    const in3Days = new Date(); in3Days.setDate(in3Days.getDate() + 3);
+                    const in3Days = new Date();
+                    in3Days.setDate(in3Days.getDate() + 3);
                     const in3DaysStr = in3Days.toISOString().split("T")[0];
                     return currentlyOut.map((loan, i) => {
-                      const laptopNames = (loan.laptops || []).map((item) => item.laptops?.name || `Laptop #${item.laptop_id}`).join(", ");
-                      const isOverdue = loan.loan_type === "temporary" && loan.end_date && loan.end_date < today;
-                      const isDueSoon = !isOverdue && loan.loan_type === "temporary" && loan.end_date && loan.end_date >= today && loan.end_date <= in3DaysStr;
+                      const laptopNames = (loan.laptops || [])
+                        .map(
+                          (item) =>
+                            item.laptops?.name || `Laptop #${item.laptop_id}`,
+                        )
+                        .join(", ");
+                      const isOverdue =
+                        loan.loan_type === "temporary" &&
+                        loan.end_date &&
+                        loan.end_date < today;
+                      const isDueSoon =
+                        !isOverdue &&
+                        loan.loan_type === "temporary" &&
+                        loan.end_date &&
+                        loan.end_date >= today &&
+                        loan.end_date <= in3DaysStr;
                       const isPerm = loan.loan_type === "permanent";
                       return (
-                        <div key={loan.id} style={{
-                          padding: "12px 14px",
-                          borderBottom: i < currentlyOut.length - 1 ? "1px solid var(--border)" : "none",
-                          background: isOverdue ? "rgba(239,68,68,0.05)" : isDueSoon ? "rgba(245,158,11,0.04)" : "transparent",
-                        }}>
-                          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                        <div
+                          key={loan.id}
+                          style={{
+                            padding: "12px 14px",
+                            borderBottom:
+                              i < currentlyOut.length - 1
+                                ? "1px solid var(--border)"
+                                : "none",
+                            background: isOverdue
+                              ? "rgba(239,68,68,0.05)"
+                              : isDueSoon
+                                ? "rgba(245,158,11,0.04)"
+                                : "transparent",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-start",
+                              justifyContent: "space-between",
+                              gap: 8,
+                            }}
+                          >
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{laptopNames || "—"}</div>
-                              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  marginBottom: 2,
+                                }}
+                              >
+                                {laptopNames || "—"}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "var(--text-secondary)",
+                                }}
+                              >
                                 {loan.requester_name || "—"}
-                                {loan.department ? <span style={{ color: "var(--text-muted)" }}> · {loan.department}</span> : null}
+                                {loan.department ? (
+                                  <span style={{ color: "var(--text-muted)" }}>
+                                    {" "}
+                                    · {loan.department}
+                                  </span>
+                                ) : null}
                               </div>
                               {loan.purpose && (
-                                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: "var(--text-muted)",
+                                    marginTop: 2,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
                                   {loan.purpose}
                                 </div>
                               )}
                             </div>
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "flex-end",
+                                gap: 4,
+                                flexShrink: 0,
+                              }}
+                            >
                               {isOverdue ? (
-                                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>⚠ Overdue</span>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: "3px 8px",
+                                    borderRadius: 20,
+                                    background: "rgba(239,68,68,0.15)",
+                                    color: "#ef4444",
+                                    border: "1px solid rgba(239,68,68,0.3)",
+                                  }}
+                                >
+                                  ⚠ Overdue
+                                </span>
                               ) : isDueSoon ? (
-                                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}>⏰ Due Soon</span>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: "3px 8px",
+                                    borderRadius: 20,
+                                    background: "rgba(245,158,11,0.15)",
+                                    color: "#f59e0b",
+                                    border: "1px solid rgba(245,158,11,0.3)",
+                                  }}
+                                >
+                                  ⏰ Due Soon
+                                </span>
                               ) : isPerm ? (
-                                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(139,92,246,0.12)", color: "#8b5cf6", border: "1px solid rgba(139,92,246,0.25)" }}>Permanent</span>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: "3px 8px",
+                                    borderRadius: 20,
+                                    background: "rgba(139,92,246,0.12)",
+                                    color: "#8b5cf6",
+                                    border: "1px solid rgba(139,92,246,0.25)",
+                                  }}
+                                >
+                                  Permanent
+                                </span>
                               ) : (
-                                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: "rgba(16,185,129,0.12)", color: "#10b981", border: "1px solid rgba(16,185,129,0.25)" }}>Out</span>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: "3px 8px",
+                                    borderRadius: 20,
+                                    background: "rgba(16,185,129,0.12)",
+                                    color: "#10b981",
+                                    border: "1px solid rgba(16,185,129,0.25)",
+                                  }}
+                                >
+                                  Out
+                                </span>
                               )}
-                              <span style={{ fontSize: 11, color: isOverdue ? "#ef4444" : "var(--text-muted)", fontWeight: isOverdue ? 700 : 400 }}>
-                                {isPerm ? "No return date" : loan.end_date || "—"}
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: isOverdue
+                                    ? "#ef4444"
+                                    : "var(--text-muted)",
+                                  fontWeight: isOverdue ? 700 : 400,
+                                }}
+                              >
+                                {isPerm
+                                  ? "No return date"
+                                  : loan.end_date || "—"}
                               </span>
                             </div>
                           </div>
@@ -2127,17 +3063,48 @@ export default function AdminPage() {
             </div>
 
             {/* Tier Management */}
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 20,
+              }}
+            >
               <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>Tiers</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
                 {laptopsData.map((tier) => (
-                  <div key={tier.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    key={tier.id}
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
                     {editingTier?.id === tier.id ? (
                       <>
                         <input
                           value={editingTier.name}
-                          onChange={(e) => setEditingTier((p) => ({ ...p, name: e.target.value }))}
-                          style={{ flex: 1, padding: "6px 10px", background: "var(--bg-secondary)", border: "1px solid var(--accent)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                          onChange={(e) =>
+                            setEditingTier((p) => ({
+                              ...p,
+                              name: e.target.value,
+                            }))
+                          }
+                          style={{
+                            flex: 1,
+                            padding: "6px 10px",
+                            background: "var(--bg-secondary)",
+                            border: "1px solid var(--accent)",
+                            borderRadius: 8,
+                            color: "var(--text-primary)",
+                            fontSize: 13,
+                          }}
                         />
                         <button
                           className="btn btn-sm btn-primary"
@@ -2145,46 +3112,111 @@ export default function AdminPage() {
                           onClick={async () => {
                             setLaptopActionLoading(`tier-${tier.id}`);
                             try {
-                              const res = await fetch(`/api/laptops/tiers/${tier.id}`, {
-                                method: "PUT",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ name: editingTier.name }),
-                              });
-                              if (res.ok) { toast.success("Tier renamed"); setEditingTier(null); fetchLaptopsData(); }
-                              else { const d = await res.json().catch(() => ({})); toast.error(d.error || "Failed"); }
-                            } catch { toast.error("Network error"); }
-                            finally { setLaptopActionLoading(null); }
+                              const res = await fetch(
+                                `/api/laptops/tiers/${tier.id}`,
+                                {
+                                  method: "PUT",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    name: editingTier.name,
+                                  }),
+                                },
+                              );
+                              if (res.ok) {
+                                toast.success("Tier renamed");
+                                setEditingTier(null);
+                                fetchLaptopsData();
+                              } else {
+                                const d = await res.json().catch(() => ({}));
+                                toast.error(d.error || "Failed");
+                              }
+                            } catch {
+                              toast.error("Network error");
+                            } finally {
+                              setLaptopActionLoading(null);
+                            }
                           }}
                         >
-                          {laptopActionLoading === `tier-${tier.id}` ? <span className="btn-spinner" /> : "Save"}
+                          {laptopActionLoading === `tier-${tier.id}` ? (
+                            <span className="btn-spinner" />
+                          ) : (
+                            "Save"
+                          )}
                         </button>
-                        <button className="btn btn-sm btn-outline" onClick={() => setEditingTier(null)}>Cancel</button>
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() => setEditingTier(null)}
+                        >
+                          Cancel
+                        </button>
                       </>
                     ) : (
                       <>
-                        <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{tier.name}</span>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{tier.laptops?.length || 0} laptops</span>
-                        <button className="btn btn-sm btn-outline" onClick={() => setEditingTier({ id: tier.id, name: tier.name })}>Rename</button>
+                        <span
+                          style={{ flex: 1, fontSize: 13, fontWeight: 500 }}
+                        >
+                          {tier.name}
+                        </span>
+                        <span
+                          style={{ fontSize: 11, color: "var(--text-muted)" }}
+                        >
+                          {tier.laptops?.length || 0} laptops
+                        </span>
+                        <button
+                          className="btn btn-sm btn-outline"
+                          onClick={() =>
+                            setEditingTier({ id: tier.id, name: tier.name })
+                          }
+                        >
+                          Rename
+                        </button>
                         <button
                           className="btn btn-sm"
-                          style={{ color: "var(--error)", background: "none", border: "1px solid rgba(239,68,68,0.3)", fontSize: 11 }}
+                          style={{
+                            color: "var(--error)",
+                            background: "none",
+                            border: "1px solid rgba(239,68,68,0.3)",
+                            fontSize: 11,
+                          }}
                           onClick={async () => {
-                            if (!confirm(`Delete tier "${tier.name}"? Laptops will become untiered.`)) return;
+                            if (
+                              !confirm(
+                                `Delete tier "${tier.name}"? Laptops will become untiered.`,
+                              )
+                            )
+                              return;
                             setLaptopActionLoading(`tier-del-${tier.id}`);
                             try {
-                              const res = await fetch(`/api/laptops/tiers/${tier.id}`, { method: "DELETE" });
-                              if (res.ok) { toast.success("Tier deleted"); fetchLaptopsData(); }
-                              else { const d = await res.json().catch(() => ({})); toast.error(d.error || "Failed"); }
-                            } catch { toast.error("Network error"); }
-                            finally { setLaptopActionLoading(null); }
+                              const res = await fetch(
+                                `/api/laptops/tiers/${tier.id}`,
+                                { method: "DELETE" },
+                              );
+                              if (res.ok) {
+                                toast.success("Tier deleted");
+                                fetchLaptopsData();
+                              } else {
+                                const d = await res.json().catch(() => ({}));
+                                toast.error(d.error || "Failed");
+                              }
+                            } catch {
+                              toast.error("Network error");
+                            } finally {
+                              setLaptopActionLoading(null);
+                            }
                           }}
-                        ><RiDeleteBinLine /></button>
+                        >
+                          <RiDeleteBinLine />
+                        </button>
                       </>
                     )}
                   </div>
                 ))}
                 {laptopsData.length === 0 && (
-                  <p style={{ fontSize: 13, color: "var(--text-muted)" }}>No tiers yet. Add one below.</p>
+                  <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                    No tiers yet. Add one below.
+                  </p>
                 )}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -2192,11 +3224,21 @@ export default function AdminPage() {
                   value={tierInput}
                   onChange={(e) => setTierInput(e.target.value)}
                   placeholder="New tier name (e.g. MacBook Pro)"
-                  style={{ flex: 1, padding: "7px 10px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                  style={{
+                    flex: 1,
+                    padding: "7px 10px",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-primary)",
+                    fontSize: 13,
+                  }}
                 />
                 <button
                   className="btn btn-sm btn-primary"
-                  disabled={!tierInput.trim() || laptopActionLoading === "tier-new"}
+                  disabled={
+                    !tierInput.trim() || laptopActionLoading === "tier-new"
+                  }
                   onClick={async () => {
                     setLaptopActionLoading("tier-new");
                     try {
@@ -2205,10 +3247,19 @@ export default function AdminPage() {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ name: tierInput.trim() }),
                       });
-                      if (res.ok) { toast.success("Tier created"); setTierInput(""); fetchLaptopsData(); }
-                      else { const d = await res.json().catch(() => ({})); toast.error(d.error || "Failed"); }
-                    } catch { toast.error("Network error"); }
-                    finally { setLaptopActionLoading(null); }
+                      if (res.ok) {
+                        toast.success("Tier created");
+                        setTierInput("");
+                        fetchLaptopsData();
+                      } else {
+                        const d = await res.json().catch(() => ({}));
+                        toast.error(d.error || "Failed");
+                      }
+                    } catch {
+                      toast.error("Network error");
+                    } finally {
+                      setLaptopActionLoading(null);
+                    }
                   }}
                 >
                   <RiAddLine /> Add Tier
@@ -2217,53 +3268,138 @@ export default function AdminPage() {
             </div>
 
             {/* Add / Edit Laptop Form */}
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, marginBottom: 24 }}>
-              <h3 style={{ margin: "0 0 16px", fontSize: 15 }}>{editingLaptop ? "Edit Laptop" : "Add Laptop"}</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: 20,
+                marginBottom: 24,
+              }}
+            >
+              <h3 style={{ margin: "0 0 16px", fontSize: 15 }}>
+                {editingLaptop ? "Edit Laptop" : "Add Laptop"}
+              </h3>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                  marginBottom: 10,
+                }}
+              >
                 <input
                   placeholder='Name (e.g. MacBook Pro 16")'
                   value={laptopForm.name}
-                  onChange={(e) => setLaptopForm((p) => ({ ...p, name: e.target.value }))}
-                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                  onChange={(e) =>
+                    setLaptopForm((p) => ({ ...p, name: e.target.value }))
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-primary)",
+                    fontSize: 13,
+                  }}
                 />
                 <select
                   value={laptopForm.tier_id}
-                  onChange={(e) => setLaptopForm((p) => ({ ...p, tier_id: e.target.value }))}
-                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                  onChange={(e) =>
+                    setLaptopForm((p) => ({ ...p, tier_id: e.target.value }))
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-primary)",
+                    fontSize: 13,
+                  }}
                 >
                   <option value="">No tier</option>
                   {laptopsData.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
                   ))}
                 </select>
                 <input
                   placeholder="Screen size (e.g. 14-inch)"
                   value={laptopForm.screen_size}
-                  onChange={(e) => setLaptopForm((p) => ({ ...p, screen_size: e.target.value }))}
-                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                  onChange={(e) =>
+                    setLaptopForm((p) => ({
+                      ...p,
+                      screen_size: e.target.value,
+                    }))
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-primary)",
+                    fontSize: 13,
+                  }}
                 />
                 <input
                   placeholder="CPU (e.g. M3 Pro)"
                   value={laptopForm.cpu}
-                  onChange={(e) => setLaptopForm((p) => ({ ...p, cpu: e.target.value }))}
-                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                  onChange={(e) =>
+                    setLaptopForm((p) => ({ ...p, cpu: e.target.value }))
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-primary)",
+                    fontSize: 13,
+                  }}
                 />
                 <input
                   placeholder="RAM (e.g. 16GB)"
                   value={laptopForm.ram}
-                  onChange={(e) => setLaptopForm((p) => ({ ...p, ram: e.target.value }))}
-                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                  onChange={(e) =>
+                    setLaptopForm((p) => ({ ...p, ram: e.target.value }))
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-primary)",
+                    fontSize: 13,
+                  }}
                 />
                 <input
                   placeholder="Storage (e.g. 512GB SSD)"
                   value={laptopForm.storage}
-                  onChange={(e) => setLaptopForm((p) => ({ ...p, storage: e.target.value }))}
-                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                  onChange={(e) =>
+                    setLaptopForm((p) => ({ ...p, storage: e.target.value }))
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-primary)",
+                    fontSize: 13,
+                  }}
                 />
                 <select
                   value={laptopForm.condition}
-                  onChange={(e) => setLaptopForm((p) => ({ ...p, condition: e.target.value }))}
-                  style={{ padding: "8px 12px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-primary)", fontSize: 13 }}
+                  onChange={(e) =>
+                    setLaptopForm((p) => ({ ...p, condition: e.target.value }))
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    color: "var(--text-primary)",
+                    fontSize: 13,
+                  }}
                 >
                   <option value="Excellent">Excellent</option>
                   <option value="Good">Good</option>
@@ -2273,28 +3409,49 @@ export default function AdminPage() {
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   className="btn btn-sm btn-primary"
-                  disabled={!laptopForm.name.trim() || laptopActionLoading === "laptop-save"}
+                  disabled={
+                    !laptopForm.name.trim() ||
+                    laptopActionLoading === "laptop-save"
+                  }
                   onClick={async () => {
                     setLaptopActionLoading("laptop-save");
                     try {
-                      const url = editingLaptop ? `/api/laptops/${editingLaptop}` : "/api/laptops";
+                      const url = editingLaptop
+                        ? `/api/laptops/${editingLaptop}`
+                        : "/api/laptops";
                       const method = editingLaptop ? "PUT" : "POST";
                       const res = await fetch(url, {
                         method,
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ...laptopForm, tier_id: laptopForm.tier_id || null }),
+                        body: JSON.stringify({
+                          ...laptopForm,
+                          tier_id: laptopForm.tier_id || null,
+                        }),
                       });
                       if (res.ok) {
-                        toast.success(editingLaptop ? "Laptop updated" : "Laptop added");
-                        setLaptopForm({ name: "", screen_size: "", cpu: "", ram: "", storage: "", condition: "Good", tier_id: "" });
+                        toast.success(
+                          editingLaptop ? "Laptop updated" : "Laptop added",
+                        );
+                        setLaptopForm({
+                          name: "",
+                          screen_size: "",
+                          cpu: "",
+                          ram: "",
+                          storage: "",
+                          condition: "Good",
+                          tier_id: "",
+                        });
                         setEditingLaptop(null);
                         fetchLaptopsData();
                       } else {
                         const d = await res.json().catch(() => ({}));
                         toast.error(d.error || "Failed to save");
                       }
-                    } catch { toast.error("Network error"); }
-                    finally { setLaptopActionLoading(null); }
+                    } catch {
+                      toast.error("Network error");
+                    } finally {
+                      setLaptopActionLoading(null);
+                    }
                   }}
                 >
                   <RiAddLine /> {editingLaptop ? "Save Changes" : "Add Laptop"}
@@ -2304,7 +3461,15 @@ export default function AdminPage() {
                     className="btn btn-sm btn-outline"
                     onClick={() => {
                       setEditingLaptop(null);
-                      setLaptopForm({ name: "", screen_size: "", cpu: "", ram: "", storage: "", condition: "Good", tier_id: "" });
+                      setLaptopForm({
+                        name: "",
+                        screen_size: "",
+                        cpu: "",
+                        ram: "",
+                        storage: "",
+                        condition: "Good",
+                        tier_id: "",
+                      });
                     }}
                   >
                     Cancel
@@ -2315,7 +3480,11 @@ export default function AdminPage() {
 
             {/* Laptops List by Tier */}
             {laptopsFetching ? (
-              <div>{[1, 2, 3].map((i) => <div key={i} className="skeleton skeleton-row" />)}</div>
+              <div>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="skeleton skeleton-row" />
+                ))}
+              </div>
             ) : laptopsData.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">💻</div>
@@ -2325,52 +3494,148 @@ export default function AdminPage() {
             ) : (
               laptopsData.map((tier) => (
                 <div key={tier.id} style={{ marginBottom: 24 }}>
-                  <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
-                    {tier.name} <span style={{ fontWeight: 400, fontSize: 12 }}>({tier.laptops?.length || 0})</span>
+                  <h3
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "var(--text-secondary)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      marginBottom: 10,
+                    }}
+                  >
+                    {tier.name}{" "}
+                    <span style={{ fontWeight: 400, fontSize: 12 }}>
+                      ({tier.laptops?.length || 0})
+                    </span>
                   </h3>
-                  {(!tier.laptops || tier.laptops.length === 0) ? (
-                    <p style={{ fontSize: 13, color: "var(--text-muted)", padding: "8px 0" }}>No laptops in this tier</p>
+                  {!tier.laptops || tier.laptops.length === 0 ? (
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "var(--text-muted)",
+                        padding: "8px 0",
+                      }}
+                    >
+                      No laptops in this tier
+                    </p>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
                       {tier.laptops.map((laptop) => (
-                        <div key={laptop.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+                        <div
+                          key={laptop.id}
+                          style={{
+                            background: "var(--bg-card)",
+                            border: "1px solid var(--border)",
+                            borderRadius: 12,
+                            padding: 14,
+                            display: "flex",
+                            gap: 12,
+                            alignItems: "flex-start",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           <div style={{ flex: 1, minWidth: 180 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                            <div
+                              style={{
+                                fontWeight: 600,
+                                fontSize: 14,
+                                marginBottom: 4,
+                              }}
+                            >
                               {laptop.name}
                               {laptop.is_perm_loaned && (
-                                <span className="badge" style={{ marginLeft: 8, background: "rgba(239,68,68,0.15)", color: "#f87171", fontSize: 10 }}>📌 Perm Loaned</span>
+                                <span
+                                  className="badge"
+                                  style={{
+                                    marginLeft: 8,
+                                    background: "rgba(239,68,68,0.15)",
+                                    color: "#f87171",
+                                    fontSize: 10,
+                                  }}
+                                >
+                                  📌 Perm Loaned
+                                </span>
                               )}
                             </div>
-                            <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
-                              {laptop.screen_size && <span>{laptop.screen_size}</span>}
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "var(--text-secondary)",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "4px 12px",
+                              }}
+                            >
+                              {laptop.screen_size && (
+                                <span>{laptop.screen_size}</span>
+                              )}
                               {laptop.cpu && <span>{laptop.cpu}</span>}
                               {laptop.ram && <span>{laptop.ram}</span>}
                               {laptop.storage && <span>{laptop.storage}</span>}
                               {laptop.condition && (
-                                <span style={{ color: laptop.condition === "Excellent" ? "#10b981" : laptop.condition === "Good" ? "#6366f1" : "#f59e0b" }}>
+                                <span
+                                  style={{
+                                    color:
+                                      laptop.condition === "Excellent"
+                                        ? "#10b981"
+                                        : laptop.condition === "Good"
+                                          ? "#6366f1"
+                                          : "#f59e0b",
+                                  }}
+                                >
                                   {laptop.condition}
                                 </span>
                               )}
                             </div>
-                            {laptop.is_perm_loaned && laptop.perm_loan_person && (
-                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                                → {laptop.perm_loan_person}{laptop.perm_loan_reason ? ` · ${laptop.perm_loan_reason}` : ""}
-                              </div>
-                            )}
+                            {laptop.is_perm_loaned &&
+                              laptop.perm_loan_person && (
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: "var(--text-muted)",
+                                    marginTop: 4,
+                                  }}
+                                >
+                                  → {laptop.perm_loan_person}
+                                  {laptop.perm_loan_reason
+                                    ? ` · ${laptop.perm_loan_reason}`
+                                    : ""}
+                                </div>
+                              )}
                           </div>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 6,
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                            }}
+                          >
                             <button
                               className="btn btn-sm btn-outline"
                               style={{ fontSize: 11 }}
-                              onClick={() => setPermLoanModal({
-                                id: laptop.id,
-                                name: laptop.name,
-                                is_perm_loaned: laptop.is_perm_loaned,
-                                perm_loan_person: laptop.perm_loan_person || "",
-                                perm_loan_reason: laptop.perm_loan_reason || "",
-                              })}
+                              onClick={() =>
+                                setPermLoanModal({
+                                  id: laptop.id,
+                                  name: laptop.name,
+                                  is_perm_loaned: laptop.is_perm_loaned,
+                                  perm_loan_person:
+                                    laptop.perm_loan_person || "",
+                                  perm_loan_reason:
+                                    laptop.perm_loan_reason || "",
+                                })
+                              }
                             >
-                              {laptop.is_perm_loaned ? "↩ Unmark Perm" : "📌 Perm Loan"}
+                              {laptop.is_perm_loaned
+                                ? "↩ Unmark Perm"
+                                : "📌 Perm Loan"}
                             </button>
                             <button
                               className="btn btn-sm btn-outline"
@@ -2384,7 +3649,9 @@ export default function AdminPage() {
                                   ram: laptop.ram || "",
                                   storage: laptop.storage || "",
                                   condition: laptop.condition || "Good",
-                                  tier_id: laptop.tier_id ? String(laptop.tier_id) : "",
+                                  tier_id: laptop.tier_id
+                                    ? String(laptop.tier_id)
+                                    : "",
                                 });
                                 window.scrollTo({ top: 0, behavior: "smooth" });
                               }}
@@ -2393,17 +3660,42 @@ export default function AdminPage() {
                             </button>
                             <button
                               className="btn btn-sm"
-                              style={{ color: "var(--error)", background: "none", border: "1px solid rgba(239,68,68,0.3)", fontSize: 11 }}
-                              disabled={laptopActionLoading === `del-${laptop.id}`}
+                              style={{
+                                color: "var(--error)",
+                                background: "none",
+                                border: "1px solid rgba(239,68,68,0.3)",
+                                fontSize: 11,
+                              }}
+                              disabled={
+                                laptopActionLoading === `del-${laptop.id}`
+                              }
                               onClick={async () => {
-                                if (!confirm(`Delete laptop "${laptop.name}"? This cannot be undone.`)) return;
+                                if (
+                                  !confirm(
+                                    `Delete laptop "${laptop.name}"? This cannot be undone.`,
+                                  )
+                                )
+                                  return;
                                 setLaptopActionLoading(`del-${laptop.id}`);
                                 try {
-                                  const res = await fetch(`/api/laptops/${laptop.id}`, { method: "DELETE" });
-                                  if (res.ok) { toast.success("Laptop deleted"); fetchLaptopsData(); }
-                                  else { const d = await res.json().catch(() => ({})); toast.error(d.error || "Failed"); }
-                                } catch { toast.error("Network error"); }
-                                finally { setLaptopActionLoading(null); }
+                                  const res = await fetch(
+                                    `/api/laptops/${laptop.id}`,
+                                    { method: "DELETE" },
+                                  );
+                                  if (res.ok) {
+                                    toast.success("Laptop deleted");
+                                    fetchLaptopsData();
+                                  } else {
+                                    const d = await res
+                                      .json()
+                                      .catch(() => ({}));
+                                    toast.error(d.error || "Failed");
+                                  }
+                                } catch {
+                                  toast.error("Network error");
+                                } finally {
+                                  setLaptopActionLoading(null);
+                                }
                               }}
                             >
                               <RiDeleteBinLine />

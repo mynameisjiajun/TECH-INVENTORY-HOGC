@@ -83,6 +83,9 @@ export default function RegisterPage() {
               placeholder="Enter the secret invite code"
               required
               autoFocus
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="off"
             />
           </div>
           <div className="input-group">
@@ -93,6 +96,7 @@ export default function RegisterPage() {
               onChange={update("display_name")}
               placeholder="Your name (e.g., Jia Jun)"
               required
+              autoComplete="name"
             />
           </div>
           <div className="input-group">
@@ -103,6 +107,9 @@ export default function RegisterPage() {
               onChange={update("email")}
               placeholder="your.email@example.com"
               required
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="email"
             />
             <span
               style={{
@@ -122,6 +129,9 @@ export default function RegisterPage() {
               value={formData.telegram_handle}
               onChange={update("telegram_handle")}
               placeholder="@your_username (Optional)"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
             />
             <span
               style={{
@@ -142,6 +152,10 @@ export default function RegisterPage() {
               onChange={update("username")}
               placeholder="Choose a username"
               required
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="username"
+              spellCheck={false}
             />
           </div>
           <div className="input-group">
@@ -152,6 +166,9 @@ export default function RegisterPage() {
               onChange={update("password")}
               placeholder="Choose a password (min 6 chars)"
               required
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="new-password"
             />
           </div>
           <div className="input-group">
@@ -162,6 +179,9 @@ export default function RegisterPage() {
               onChange={update("confirm_password")}
               placeholder="Confirm your password"
               required
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="new-password"
             />
           </div>
           <button
