@@ -535,7 +535,7 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     justify-content: space-around;
     min-height: var(--shell-mobile-nav-min-height);
     padding-top: 10px;
-    padding-bottom: var(--shell-mobile-nav-padding-bottom);
+    padding-bottom: max(var(--shell-mobile-nav-padding-bottom), env(safe-area-inset-bottom, 0px));
     background: #0b1120;
     border-top-color: rgba(148, 163, 184, 0.12);
     box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.03);
@@ -544,6 +544,28 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     /* GPU layer prevents iOS repaint from moving the nav during scroll */
     transform: translateZ(0);
     will-change: transform;
+  }
+
+  /* Extend background below nav to cover any safe-area gaps */
+  html[data-shell="mobile-web"] .mobile-nav::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: #0b1120;
+    pointer-events: none;
+  }
+
+  html[data-shell="mobile-web"] .badge {
+    font-size: 10px !important;
+    padding: 2px 8px !important;
+    gap: 3px !important;
+  }
+
+  html[data-shell="mobile-web"] .badge svg {
+    font-size: 10px !important;
   }
 
   html[data-shell="mobile-web"] .mobile-nav .nav-link {

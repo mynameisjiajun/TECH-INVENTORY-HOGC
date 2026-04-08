@@ -2,7 +2,8 @@ import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
-import { applyDeltasToCells, appendRows } from "@/lib/services/sheets";
+import { appendRows } from "@/lib/services/sheets";
+import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { sendLoanStatusEmail } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
@@ -12,32 +13,12 @@ const SHEETS_ENABLED = !!(
   process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
   process.env.GOOGLE_PRIVATE_KEY
 );
-const CURRENT_COL = "G";
 const ACTIVE_LOANS_DASHBOARD_LIMIT = 200;
 const TECH_LOAN_ADMIN_FIELDS =
   "id, user_id, loan_type, purpose, department, location, start_date, end_date, status, admin_notes, created_at, updated_at";
 const TECH_LOAN_ITEM_FIELDS =
   "id, loan_request_id, item_id, sheet_row, item_name, quantity";
 const TECH_LOAN_LIST_SELECT = `${TECH_LOAN_ADMIN_FIELDS}, users (display_name, username)`;
-
-/**
- * Apply stock quantity deltas to the Google Sheets "Storage Spare" tab.
- * Uses sheet_row (stable) instead of item_id (may change on cold start).
- * @param {Array<{sheetRow: number, delta: number}>} changes
- */
-async function syncStockToSheets(changes) {
-  if (!SHEETS_ENABLED || changes.length === 0) return;
-  try {
-    const sheetChanges = changes
-      .filter((c) => c.sheetRow)
-      .map((c) => ({ cell: `${CURRENT_COL}${c.sheetRow}`, delta: c.delta }));
-
-    if (sheetChanges.length === 0) return;
-    await applyDeltasToCells("Storage Spare", sheetChanges);
-  } catch (err) {
-    console.error("Google Sheets stock write-back failed:", err.message);
-  }
-}
 
 /**
  * Append newly deployed items to the DEPLOYED sheet.
@@ -188,7 +169,7 @@ export async function POST(request) {
       const sheetChanges = [...sheetChangesMap.entries()].map(
         ([sheetRow, delta]) => ({ sheetRow, delta }),
       );
-      await syncStockToSheets(sheetChanges);
+      await syncAuthoritativeStockToSheets(db, sheetChanges);
 
       // Fire-and-forget Telegram notifications
       for (const loan of approvedLoans) {
@@ -340,7 +321,7 @@ export async function POST(request) {
       const sheetChanges = [...sheetChangesMap.entries()].map(
         ([sheetRow, delta]) => ({ sheetRow, delta }),
       );
-      await syncStockToSheets(sheetChanges);
+      await syncAuthoritativeStockToSheets(db, sheetChanges);
       if (deployedRows.length > 0) await syncDeployedToSheets(deployedRows);
 
       // Fire-and-forget Telegram notifications
@@ -476,7 +457,7 @@ export async function POST(request) {
       });
 
       // Sync to Google Sheets
-      await syncStockToSheets(approveChanges);
+      await syncAuthoritativeStockToSheets(db, approveChanges);
       if (deployedRows.length > 0) await syncDeployedToSheets(deployedRows);
 
       // Notifications
@@ -663,7 +644,7 @@ export async function POST(request) {
         details: `Items returned to stock. ${admin_notes || ""}`,
       });
 
-      await syncStockToSheets(returnChanges);
+      await syncAuthoritativeStockToSheets(db, returnChanges);
       sendTelegramMessage(
         loan.user_id,
         `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`,
@@ -727,7 +708,8 @@ export async function POST(request) {
       // ON DELETE CASCADE removes loan_items automatically
       await supabase.from("loan_requests").delete().eq("id", loan_id);
 
-      if (restoreChanges.length > 0) await syncStockToSheets(restoreChanges);
+      if (restoreChanges.length > 0)
+        await syncAuthoritativeStockToSheets(db, restoreChanges);
       invalidateAll();
 
       return NextResponse.json({ message: "Loan deleted" });
@@ -744,7 +726,13 @@ export async function POST(request) {
 }
 
 // GET: dashboard stats + active loans + due date warnings
-export async function GET() {
+export async function GET(request) {
+  const requestStartedAt = Date.now();
+  const timings = [];
+  const mark = (name, startedAt) => {
+    timings.push({ name, duration: Date.now() - startedAt });
+  };
+
   const user = await getCurrentUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -755,11 +743,17 @@ export async function GET() {
     );
   }
 
+  const profileRequested =
+    new URL(request.url).searchParams.get("profile") === "true";
+
+  const syncStartedAt = Date.now();
   startSyncIfNeeded();
   await waitForSync();
   const db = getDb();
+  mark("sync", syncStartedAt);
 
   // Inventory stats from SQLite
+  const inventoryStatsStartedAt = Date.now();
   const totalItems =
     db.prepare("SELECT SUM(quantity_spare) as total FROM storage_items").get()
       .total || 0;
@@ -774,8 +768,10 @@ export async function GET() {
       "SELECT COUNT(*) as count FROM storage_items WHERE current <= 2 AND quantity_spare > 0",
     )
     .get().count;
+  mark("inventory_stats", inventoryStatsStartedAt);
 
   // Loan stats from Supabase (authoritative — not derived from ephemeral SQLite)
+  const countQueriesStartedAt = Date.now();
   const [
     { count: pendingRequests },
     { count: laptopPending },
@@ -794,6 +790,7 @@ export async function GET() {
       .select("id", { count: "exact", head: true })
       .eq("status", "approved"),
   ]);
+  mark("loan_counts", countQueriesStartedAt);
 
   // totalLoaned calculated later from approved loan_items (accurate across cold starts)
   const stats = {
@@ -808,6 +805,7 @@ export async function GET() {
   };
 
   // Active loans from Supabase — tech + laptop in parallel
+  const activeLoansStartedAt = Date.now();
   const [{ data: activeLoans }, { data: activeLaptopLoans }] =
     await Promise.all([
       supabase
@@ -825,6 +823,7 @@ export async function GET() {
         .order("start_date", { ascending: true })
         .limit(ACTIVE_LOANS_DASHBOARD_LIMIT),
     ]);
+  mark("active_loans", activeLoansStartedAt);
 
   const formattedLoans = (activeLoans || []).map((lr) => ({
     ...lr,
@@ -835,25 +834,97 @@ export async function GET() {
     items: [],
   }));
 
-  if (formattedLoans.length > 0) {
-    const loanIds = formattedLoans.map((l) => l.id);
-    const { data: allItems } = await supabase
-      .from("loan_items")
-      .select("loan_request_id, item_name, quantity")
-      .in("loan_request_id", loanIds);
+  const thirtyDaysAgo = new Date(
+    Date.now() - 30 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const dueCountsStartedAt = Date.now();
+  const analyticsStartedAt = Date.now();
 
+  const [
+    { data: techLoanItems },
+    dueCountResults,
+    { data: recentLoansRaw },
+    { data: allLoanItems },
+    { data: recentActivityRaw },
+  ] = await Promise.all([
+    formattedLoans.length > 0
+      ? supabase
+          .from("loan_items")
+          .select("loan_request_id, item_name, quantity")
+          .in(
+            "loan_request_id",
+            formattedLoans.map((loan) => loan.id),
+          )
+      : Promise.resolve({ data: [] }),
+    Promise.all([
+      supabase
+        .from("loan_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "approved")
+        .eq("loan_type", "temporary")
+        .not("end_date", "is", null)
+        .lt("end_date", new Date(Date.now()).toLocaleDateString("en-CA")),
+      supabase
+        .from("loan_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "approved")
+        .eq("loan_type", "temporary")
+        .eq(
+          "end_date",
+          new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString(
+            "en-CA",
+          ),
+        ),
+      supabase
+        .from("laptop_loan_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "approved")
+        .eq("loan_type", "temporary")
+        .not("end_date", "is", null)
+        .lt("end_date", new Date(Date.now()).toLocaleDateString("en-CA")),
+      supabase
+        .from("laptop_loan_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "approved")
+        .eq("loan_type", "temporary")
+        .eq(
+          "end_date",
+          new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString(
+            "en-CA",
+          ),
+        ),
+    ]),
+    supabase
+      .from("loan_requests")
+      .select("created_at")
+      .gte("created_at", thirtyDaysAgo),
+    supabase.from("loan_items").select("item_name, quantity"),
+    supabase
+      .from("activity_feed")
+      .select(
+        "id, user_id, action, description, link, created_at, users (display_name)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
+
+  mark("due_counts", dueCountsStartedAt);
+  mark("analytics", analyticsStartedAt);
+
+  if (formattedLoans.length > 0) {
     const itemsByLoan = new Map();
-    for (const item of allItems || []) {
-      if (!itemsByLoan.has(item.loan_request_id))
+    for (const item of techLoanItems || []) {
+      if (!itemsByLoan.has(item.loan_request_id)) {
         itemsByLoan.set(item.loan_request_id, []);
+      }
       itemsByLoan
         .get(item.loan_request_id)
         .push({ ...item, item: item.item_name });
     }
-    for (const loan of formattedLoans)
+    for (const loan of formattedLoans) {
       loan.items = itemsByLoan.get(loan.id) || [];
+    }
 
-    // Compute totalLoaned in O(N + M): sum pre-mapped items from approved loans only.
     stats.totalLoaned = formattedLoans.reduce((sum, loan) => {
       if (loan.status !== "approved") return sum;
       const loanQty = loan.items.reduce(
@@ -883,61 +954,12 @@ export async function GET() {
     (a, b) => new Date(a.start_date) - new Date(b.start_date),
   );
 
-  // Due date warnings
-  const now = new Date();
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).toLocaleDateString("en-CA");
-  const tomorrow = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 1,
-  ).toLocaleDateString("en-CA");
-
   const [
     { count: overdueLoans },
     { count: dueSoonLoans },
     { count: overdueLaptopLoans },
     { count: dueSoonLaptopLoans },
-  ] = await Promise.all([
-    supabase
-      .from("loan_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "approved")
-      .eq("loan_type", "temporary")
-      .not("end_date", "is", null)
-      .lt("end_date", today),
-    supabase
-      .from("loan_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "approved")
-      .eq("loan_type", "temporary")
-      .eq("end_date", tomorrow),
-    supabase
-      .from("laptop_loan_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "approved")
-      .eq("loan_type", "temporary")
-      .not("end_date", "is", null)
-      .lt("end_date", today),
-    supabase
-      .from("laptop_loan_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "approved")
-      .eq("loan_type", "temporary")
-      .eq("end_date", tomorrow),
-  ]);
-
-  // Chart data
-  const thirtyDaysAgo = new Date(
-    Date.now() - 30 * 24 * 60 * 60 * 1000,
-  ).toISOString();
-  const { data: recentLoansRaw } = await supabase
-    .from("loan_requests")
-    .select("created_at")
-    .gte("created_at", thirtyDaysAgo);
+  ] = dueCountResults;
 
   // Group by day
   const dayMap = new Map();
@@ -953,10 +975,6 @@ export async function GET() {
     loans: count,
   }));
 
-  // Top 5 borrowed items from Supabase loan_items (using item_name)
-  const { data: allLoanItems } = await supabase
-    .from("loan_items")
-    .select("item_name, quantity");
   const itemTotals = new Map();
   for (const li of allLoanItems || []) {
     itemTotals.set(
@@ -975,34 +993,38 @@ export async function GET() {
     { name: "Perm Deployed", value: stats.deployedItems },
   ].filter((d) => d.value > 0);
 
-  // Recent activity from Supabase
-  const { data: recentActivityRaw } = await supabase
-    .from("activity_feed")
-    .select(
-      "id, user_id, action, description, link, created_at, users (display_name)",
-    )
-    .order("created_at", { ascending: false })
-    .limit(20);
-
   const recentActivity = (recentActivityRaw || []).map((af) => ({
     ...af,
     display_name: af.users?.display_name || null,
     users: undefined,
   }));
 
-  return NextResponse.json(
-    {
-      stats,
-      activeLoans: mergedActiveLoans,
-      overdueCount: (overdueLoans || 0) + (overdueLaptopLoans || 0),
-      dueSoonCount: (dueSoonLoans || 0) + (dueSoonLaptopLoans || 0),
-      charts: { loansTrend, topItems, inventoryDistribution },
-      recentActivity,
+  mark("response_build", requestStartedAt);
+
+  const serverTiming = timings
+    .map((entry) => `${entry.name};dur=${entry.duration}`)
+    .join(", ");
+
+  const responseBody = {
+    stats,
+    activeLoans: mergedActiveLoans,
+    overdueCount: (overdueLoans || 0) + (overdueLaptopLoans || 0),
+    dueSoonCount: (dueSoonLoans || 0) + (dueSoonLaptopLoans || 0),
+    charts: { loansTrend, topItems, inventoryDistribution },
+    recentActivity,
+  };
+
+  if (profileRequested) {
+    responseBody.profile = {
+      totalMs: Date.now() - requestStartedAt,
+      segments: timings,
+    };
+  }
+
+  return NextResponse.json(responseBody, {
+    headers: {
+      "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60",
+      "Server-Timing": serverTiming,
     },
-    {
-      headers: {
-        "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60",
-      },
-    },
-  );
+  });
 }

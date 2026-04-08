@@ -1,30 +1,9 @@
 import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
-import { applyDeltasToCells } from "@/lib/services/sheets";
+import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
-
-const SHEETS_ENABLED = !!(
-  process.env.GOOGLE_SHEETS_ID &&
-  process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-  process.env.GOOGLE_PRIVATE_KEY
-);
-const CURRENT_COL = "G";
-
-async function syncStockToSheets(changes) {
-  if (!SHEETS_ENABLED || changes.length === 0) return;
-  try {
-    const sheetChanges = changes
-      .filter((c) => c.sheetRow)
-      .map((c) => ({ cell: `${CURRENT_COL}${c.sheetRow}`, delta: c.delta }));
-
-    if (sheetChanges.length === 0) return;
-    await applyDeltasToCells("Storage Spare", sheetChanges);
-  } catch (err) {
-    console.error("Google Sheets stock write-back failed:", err.message);
-  }
-}
 
 // PUT: Modify an existing loan request
 export async function PUT(request, { params }) {
@@ -253,7 +232,7 @@ export async function PUT(request, { params }) {
     if (insertItemsError) throw insertItemsError;
 
     if (restoreChanges.length > 0) {
-      await syncStockToSheets(restoreChanges);
+      await syncAuthoritativeStockToSheets(db, restoreChanges);
     }
 
     // Notify admins

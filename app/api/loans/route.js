@@ -12,12 +12,12 @@ const VALID_LOAN_VIEWS = new Set(["my", "all", "active"]);
 const VALID_LOAN_STATUSES = new Set([
   "pending",
   "approved",
+  "overdue",
   "rejected",
   "returned",
 ]);
 const DEFAULT_LOAN_PAGE_SIZE = 200;
 const MAX_LOAN_PAGE_SIZE = 200;
-const MAX_SEARCH_SCAN = 400;
 const TECH_LOAN_SELECT = `
       id,
       user_id,
@@ -33,6 +33,37 @@ const TECH_LOAN_SELECT = `
       updated_at,
       users (display_name, username)
     `;
+
+function sanitizeSearchTerm(value) {
+  return value.replace(/[,%()]/g, " ").trim();
+}
+
+async function getMatchingTechLoanIds(searchTerm) {
+  if (!searchTerm) return [];
+
+  const { data, error } = await supabase
+    .from("loan_items")
+    .select("loan_request_id")
+    .ilike("item_name", `%${searchTerm}%`);
+
+  if (error) throw new Error(error.message || "Failed to search loan items");
+
+  return [...new Set((data || []).map((item) => item.loan_request_id))];
+}
+
+async function getMatchingUserIds(searchTerm) {
+  if (!searchTerm) return [];
+
+  const orPattern = `*${searchTerm}*`;
+  const { data, error } = await supabase
+    .from("users")
+    .select("id")
+    .or(`display_name.ilike.${orPattern},username.ilike.${orPattern}`);
+
+  if (error) throw new Error(error.message || "Failed to search users");
+
+  return [...new Set((data || []).map((entry) => entry.id))];
+}
 
 function parseBoundedInt(value, fallback, max) {
   const parsed = Number.parseInt(value || "", 10);
@@ -72,12 +103,24 @@ export async function GET(request) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
+  const isOverdueFilter = status === "overdue";
+  const sanitizedSearch = sanitizeSearchTerm(search);
+
   // Lightweight count path — admin only, no payload
   if (countOnly && user.role === "admin") {
     let cq = supabase
       .from("loan_requests")
       .select("id", { count: "exact", head: true });
-    if (status) cq = cq.eq("status", status);
+    if (isOverdueFilter) {
+      const today = new Date().toISOString().split("T")[0];
+      cq = cq
+        .eq("status", "approved")
+        .eq("loan_type", "temporary")
+        .not("end_date", "is", null)
+        .lt("end_date", today);
+    } else if (status) {
+      cq = cq.eq("status", status);
+    }
     const { count } = await cq;
     return NextResponse.json({ count: count || 0 });
   }
@@ -94,16 +137,44 @@ export async function GET(request) {
   } else if (view !== "all" || user.role !== "admin") {
     query = query.eq("user_id", user.id);
   }
-  if (status && view !== "active") query = query.eq("status", status);
+  if (isOverdueFilter) {
+    const today = new Date().toISOString().split("T")[0];
+    query = query
+      .eq("status", "approved")
+      .eq("loan_type", "temporary")
+      .not("end_date", "is", null)
+      .lt("end_date", today);
+  } else if (status && view !== "active") {
+    query = query.eq("status", status);
+  }
   if (dateFrom) query = query.gte("start_date", dateFrom);
   if (dateTo) query = query.lte("start_date", dateTo);
 
-  const searchScanLimit = Math.max(limit * page, DEFAULT_LOAN_PAGE_SIZE);
-  if (search) {
-    query = query.limit(Math.min(searchScanLimit, MAX_SEARCH_SCAN));
-  } else {
-    query = query.range(offset, offset + limit - 1);
+  if (sanitizedSearch) {
+    const [matchingLoanIds, matchingUserIds] = await Promise.all([
+      getMatchingTechLoanIds(sanitizedSearch),
+      getMatchingUserIds(sanitizedSearch),
+    ]);
+
+    const orPattern = `*${sanitizedSearch}*`;
+    const searchClauses = [
+      `purpose.ilike.${orPattern}`,
+      `department.ilike.${orPattern}`,
+      `location.ilike.${orPattern}`,
+    ];
+
+    if (matchingLoanIds.length > 0) {
+      searchClauses.push(`id.in.(${matchingLoanIds.join(",")})`);
+    }
+
+    if ((view === "all" || view === "active") && matchingUserIds.length > 0) {
+      searchClauses.push(`user_id.in.(${matchingUserIds.join(",")})`);
+    }
+
+    query = query.or(searchClauses.join(","));
   }
+
+  query = query.range(offset, offset + limit - 1);
 
   const { data: loanRows, count } = await query;
   let loans = (loanRows || []).map((lr) => ({
@@ -136,38 +207,6 @@ export async function GET(request) {
     }
   }
 
-  // Filter by search
-  if (search) {
-    const s = search.toLowerCase();
-    loans = loans.filter(
-      (loan) =>
-        loan.purpose?.toLowerCase().includes(s) ||
-        loan.items.some((item) => item.item?.toLowerCase().includes(s)),
-    );
-    const filteredCount = loans.length;
-    loans = loans.slice(offset, offset + limit);
-
-    return NextResponse.json(
-      {
-        loans,
-        pagination: {
-          page,
-          limit,
-          total: filteredCount,
-          hasMore: offset + loans.length < filteredCount,
-          searchCapped:
-            (loanRows?.length || 0) >=
-            Math.min(searchScanLimit, MAX_SEARCH_SCAN),
-        },
-      },
-      {
-        headers: {
-          "Cache-Control": "private, s-maxage=5, stale-while-revalidate=15",
-        },
-      },
-    );
-  }
-
   return NextResponse.json(
     {
       loans,
@@ -176,7 +215,6 @@ export async function GET(request) {
         limit,
         total: count || 0,
         hasMore: offset + loans.length < (count || 0),
-        searchCapped: false,
       },
     },
     {

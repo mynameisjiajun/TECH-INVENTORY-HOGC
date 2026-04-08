@@ -10,6 +10,20 @@ import { NextResponse } from "next/server";
 
 const CRON_SECRET = process.env.CRON_SECRET?.trim();
 
+function getCronSecretFromRequest(request) {
+  const headerSecret = request.headers.get("x-cron-secret");
+  if (headerSecret) {
+    return headerSecret;
+  }
+
+  const authorization = request.headers.get("authorization") || "";
+  if (authorization.startsWith("Bearer ")) {
+    return authorization.slice("Bearer ".length).trim();
+  }
+
+  return "";
+}
+
 /**
  * GET /api/cron/reminders
  * Called by cron-job.org (or any scheduler) once per day.
@@ -25,7 +39,7 @@ export async function GET(request) {
     );
   }
 
-  const secret = request.headers.get("x-cron-secret");
+  const secret = getCronSecretFromRequest(request);
   if (!secret || secret !== CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

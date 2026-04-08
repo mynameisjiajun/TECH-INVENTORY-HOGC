@@ -506,7 +506,7 @@ html[data-shell="pwa"] .mobile-nav {
   justify-content: space-around;
   min-height: var(--shell-mobile-nav-min-height);
   padding-top: 10px;
-  padding-bottom: var(--shell-mobile-nav-padding-bottom);
+  padding-bottom: max(var(--shell-mobile-nav-padding-bottom), env(safe-area-inset-bottom, 0px));
   background: #0b1120;
   border-top-color: rgba(148, 163, 184, 0.12);
   box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.03);
@@ -515,6 +515,18 @@ html[data-shell="pwa"] .mobile-nav {
   /* GPU layer prevents iOS repaint from moving the nav during scroll */
   transform: translateZ(0);
   will-change: transform;
+}
+
+/* Sentinel that fills any gap below the nav (e.g. home indicator area) */
+html[data-shell="pwa"] .mobile-nav::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: #0b1120;
+  pointer-events: none;
 }
 
 html[data-shell="pwa"] .mobile-nav .nav-link {
@@ -810,14 +822,24 @@ html[data-shell="pwa"] .laptop-sidebar-notify {
   border-radius: 6px !important;
 }
 
+html[data-shell="pwa"] .badge {
+  font-size: 10px !important;
+  padding: 2px 8px !important;
+  gap: 3px !important;
+}
+
+html[data-shell="pwa"] .badge svg {
+  font-size: 10px !important;
+}
+
 html[data-shell="pwa"] .admin-loan-card {
   border-radius: 12px !important;
-  margin-bottom: 10px !important;
+  margin-bottom: 8px !important;
 }
 
 html[data-shell="pwa"] .admin-loan-card-header {
-  padding: 10px 12px 8px !important;
-  gap: 10px !important;
+  padding: 9px 12px 7px !important;
+  gap: 8px !important;
 }
 
 html[data-shell="pwa"][data-device="mobile"] .admin-loan-card-header {
@@ -1016,12 +1038,19 @@ html[data-shell="pwa"][data-platform="ios"] .navbar-right {
 }
 
 html[data-shell="pwa"][data-platform="ios"] .navbar-brand {
-  max-width: 44px;
-  gap: 0;
+  max-width: calc(100vw - 160px);
+  gap: 7px;
   justify-self: start;
 }
 
-html[data-shell="pwa"][data-platform="ios"] .navbar-brand-text,
+html[data-shell="pwa"][data-platform="ios"] .navbar-brand-text {
+  display: inline-block;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 html[data-shell="pwa"][data-platform="ios"] .user-menu span {
   display: none;
 }
