@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
+import { sendLoanStatusEmail } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { NextResponse } from "next/server";
 
 const VALID_LOAN_VIEWS = new Set(["my", "all", "active"]);
@@ -14,8 +16,9 @@ const VALID_LOAN_STATUSES = new Set([
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_LOAN_PAGE_SIZE = 200;
 const MAX_LOAN_PAGE_SIZE = 200;
+const AUTO_APPROVE_ADMIN_NOTE = "Auto-approved by global setting";
 const LAPTOP_LOAN_SELECT =
-  "id, user_id, loan_type, purpose, department, start_date, end_date, status, admin_notes, created_at, updated_at, users(display_name, username)";
+  "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users(display_name, username)";
 
 function sanitizeSearchTerm(value) {
   return value.replace(/[,%()]/g, " ").trim();
@@ -153,8 +156,8 @@ export async function GET(request) {
     .order("created_at", { ascending: false });
 
   if (view === "active") {
-    // All approved + pending loans for calendar display (any authenticated user)
-    query = query.in("status", ["approved", "pending"]);
+    // Team calendar visibility should only expose approved loans.
+    query = query.eq("status", "approved");
   } else {
     if (view !== "all" || user.role !== "admin") {
       query = query.eq("user_id", user.id);
@@ -183,6 +186,7 @@ export async function GET(request) {
     const orPattern = `*${sanitizedSearch}*`;
     const searchClauses = [
       `purpose.ilike.${orPattern}`,
+      `remarks.ilike.${orPattern}`,
       `department.ilike.${orPattern}`,
     ];
 
@@ -209,8 +213,8 @@ export async function GET(request) {
 
   const loans = (loanRows || []).map((lr) => ({
     ...lr,
-    requester_name: user ? lr.users?.display_name || null : null,
-    requester_username: user ? lr.users?.username || null : null,
+    requester_name: lr.users?.display_name || null,
+    requester_username: lr.users?.username || null,
     users: undefined,
     laptops: [],
     _source: "laptop",
@@ -251,13 +255,17 @@ export async function POST(request) {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { loan_groups, purpose, department } = await request.json();
+  const { loan_groups, purpose, remarks, department } = await request.json();
   // loan_groups = [{ loan_type, start_date, end_date, laptop_ids: [] }]
 
   if (!Array.isArray(loan_groups) || loan_groups.length === 0)
     return NextResponse.json({ error: "No laptops selected" }, { status: 400 });
   if (!purpose?.trim())
     return NextResponse.json({ error: "Purpose is required" }, { status: 400 });
+
+  const trimmedPurpose = purpose.trim();
+  const trimmedRemarks = remarks?.trim() || null;
+  const autoApproveLoans = await isAppSettingEnabled("auto_approve_loans");
 
   const hasPermanent = loan_groups.some((g) => g.loan_type === "permanent");
   if (hasPermanent && !["admin", "tech"].includes(user.role)) {
@@ -377,6 +385,7 @@ export async function POST(request) {
     .in("status", ["approved", "pending"]);
 
   const createdLoans = [];
+  const permanentLaptopIdsToAssign = [];
 
   for (const group of normalizedGroups) {
     const { loan_type, start_date, end_date, laptop_ids } = group;
@@ -409,9 +418,11 @@ export async function POST(request) {
         loan_type,
         start_date,
         end_date: loan_type === "temporary" ? end_date : null,
-        purpose: purpose.trim(),
+        purpose: trimmedPurpose,
+        remarks: trimmedRemarks,
         department: department?.trim() || null,
-        status: "pending",
+        status: autoApproveLoans ? "approved" : "pending",
+        admin_notes: autoApproveLoans ? AUTO_APPROVE_ADMIN_NOTE : null,
       })
       .select()
       .single();
@@ -429,43 +440,125 @@ export async function POST(request) {
       return NextResponse.json({ error: itemsErr.message }, { status: 500 });
     }
 
+    if (autoApproveLoans && loan_type === "permanent") {
+      permanentLaptopIdsToAssign.push(...laptop_ids);
+    }
+
     createdLoans.push(loan);
   }
 
-  // Notify admins
-  const { data: admins } = await supabase
-    .from("users")
-    .select("id, mute_telegram")
-    .eq("role", "admin");
-  const laptopCount = allRequestedLaptopIds.length;
+  if (autoApproveLoans && permanentLaptopIdsToAssign.length > 0) {
+    const { error: approvePermanentError } = await supabase
+      .from("laptops")
+      .update({
+        is_perm_loaned: true,
+        perm_loan_person: user.display_name || user.username || null,
+        perm_loan_reason: trimmedPurpose,
+      })
+      .in("id", permanentLaptopIdsToAssign);
 
-  if (admins?.length) {
-    await supabase.from("notifications").insert(
-      admins.map((a) => ({
-        user_id: a.id,
-        message: `${user.display_name} submitted ${createdLoans.length} laptop loan request(s) for ${laptopCount} laptop(s).`,
-        link: "/admin",
-      })),
-    );
-    for (const admin of admins) {
-      if (!admin.mute_telegram) {
-        sendTelegramMessage(
-          admin.id,
-          `💻 <b>New Laptop Loan Request</b>\n<b>${user.display_name}</b> requested ${laptopCount} laptop(s).\nPurpose: ${purpose.trim()}`,
-        ).catch(() => {});
-      }
+    if (approvePermanentError) {
+      await supabase
+        .from("laptop_loan_requests")
+        .delete()
+        .in(
+          "id",
+          createdLoans.map((loan) => loan.id),
+        );
+      return NextResponse.json(
+        {
+          error:
+            approvePermanentError.message ||
+            "Failed to assign permanent laptop state",
+        },
+        { status: 500 },
+      );
     }
   }
 
-  // Notify user
-  await supabase.from("notifications").insert({
-    user_id: user.id,
-    message: `Your laptop loan request has been submitted and is pending approval.`,
-    link: "/loans",
-  });
+  const laptopCount = allRequestedLaptopIds.length;
+  const remarksLine = trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : "";
+
+  if (autoApproveLoans) {
+    await supabase.from("notifications").insert({
+      user_id: user.id,
+      message: `Your laptop loan request${createdLoans.length > 1 ? "s were" : " was"} auto-approved.`,
+      link: "/loans",
+    });
+
+    await supabase.from("activity_feed").insert({
+      user_id: user.id,
+      action: "auto_approve",
+      description: `Laptop loan request${createdLoans.length > 1 ? "s" : ""} auto-approved by global setting`,
+      link: "/loans",
+    });
+
+    const { data: userRecord } = await supabase
+      .from("users")
+      .select("email, display_name, mute_emails, mute_telegram")
+      .eq("id", user.id)
+      .single();
+
+    const itemsForEmail = allRequestedLaptopIds.map((laptopId) => ({
+      item: laptopMap.get(String(laptopId))?.name || `Laptop ${laptopId}`,
+      quantity: 1,
+    }));
+
+    if (userRecord?.email && !userRecord?.mute_emails) {
+      sendLoanStatusEmail({
+        to: userRecord.email,
+        displayName: userRecord.display_name || user.display_name,
+        loanId: createdLoans[0]?.id,
+        status: "approved",
+        adminNotes: AUTO_APPROVE_ADMIN_NOTE,
+        items: itemsForEmail,
+      }).catch(() => {});
+    }
+
+    if (!userRecord?.mute_telegram) {
+      sendTelegramMessage(
+        user.id,
+        `✅ <b>Laptop Loan Auto-Approved</b>\nYour laptop request${createdLoans.length > 1 ? "s are" : " is"} approved and active now.${remarksLine}`,
+      ).catch(() => {});
+    }
+  } else {
+    // Notify admins
+    const { data: admins } = await supabase
+      .from("users")
+      .select("id, mute_telegram")
+      .eq("role", "admin");
+
+    if (admins?.length) {
+      await supabase.from("notifications").insert(
+        admins.map((a) => ({
+          user_id: a.id,
+          message: `${user.display_name} submitted ${createdLoans.length} laptop loan request(s) for ${laptopCount} laptop(s).`,
+          link: "/admin",
+        })),
+      );
+      for (const admin of admins) {
+        if (!admin.mute_telegram) {
+          sendTelegramMessage(
+            admin.id,
+            `💻 <b>New Laptop Loan Request</b>\n<b>${user.display_name}</b> requested ${laptopCount} laptop(s).\nPurpose: ${trimmedPurpose}${remarksLine}`,
+          ).catch(() => {});
+        }
+      }
+    }
+
+    // Notify user
+    await supabase.from("notifications").insert({
+      user_id: user.id,
+      message: `Your laptop loan request has been submitted and is pending approval.`,
+      link: "/loans",
+    });
+  }
 
   return NextResponse.json({
-    message: "Laptop loan request submitted!",
+    auto_approved: autoApproveLoans,
+    message: autoApproveLoans
+      ? "Laptop loan request auto-approved!"
+      : "Laptop loan request submitted!",
     loans: createdLoans,
   });
 }

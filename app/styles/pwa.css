@@ -183,6 +183,118 @@ html[data-shell="pwa"] .loans-page .filter-date-input {
   padding: 5px 8px;
 }
 
+html[data-shell="pwa"] .gantt-container {
+  padding: 12px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+html[data-shell="pwa"] .gantt-header {
+  gap: 10px;
+  align-items: stretch;
+}
+
+html[data-shell="pwa"] .gantt-title {
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+html[data-shell="pwa"] .gantt-toolbar {
+  width: 100%;
+  display: grid !important;
+  grid-template-columns: 1fr;
+  gap: 8px !important;
+}
+
+html[data-shell="pwa"] .gantt-filter-group {
+  width: 100%;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px !important;
+  padding: 4px !important;
+}
+
+html[data-shell="pwa"] .gantt-filter-btn {
+  min-height: 30px;
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+html[data-shell="pwa"] .gantt-nav-group {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+html[data-shell="pwa"] .gantt-nav-group .btn {
+  width: 100%;
+  min-height: 34px;
+  justify-content: center;
+}
+
+html[data-shell="pwa"] .gantt-today-btn {
+  font-size: 10px !important;
+}
+
+html[data-shell="pwa"] .gantt-scroll-area {
+  overflow-x: hidden !important;
+}
+
+html[data-shell="pwa"] .gantt-grid-shell {
+  min-width: 0 !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal {
+  width: min(100%, 420px) !important;
+  max-height: min(86dvh, 640px);
+  padding: 18px !important;
+  max-width: 420px !important;
+  border-radius: 14px !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal-overlay {
+  padding: 12px !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal-header {
+  margin-bottom: 14px !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal-title {
+  font-size: 15px !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal-close {
+  font-size: 18px !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal-summary {
+  align-items: flex-start !important;
+  flex-wrap: wrap;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+  padding: 12px !important;
+  border-radius: 10px !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal-summary > div:last-child {
+  margin-left: 0 !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal-avatar {
+  width: 38px !important;
+  height: 38px !important;
+  font-size: 15px !important;
+}
+
+html[data-shell="pwa"] .dashboard-loan-modal-grid {
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
 html[data-shell="pwa"] .inventory-tech-page .page-header {
   margin-bottom: 16px;
 }
@@ -528,7 +640,11 @@ html[data-shell="pwa"] .notification-dropdown {
   left: 12px;
   right: 12px;
   width: auto;
-  max-height: 72dvh;
+  /* Stop above the bottom nav + 8px gap */
+  max-height: calc(
+    100dvh - var(--shell-notification-mobile-top) -
+      var(--shell-mobile-nav-min-height) - 16px
+  );
   border-radius: 18px;
   background: #10182c;
 }
@@ -724,41 +840,6 @@ html[data-shell="pwa"] .loan-bundle-header {
 
 html[data-shell="pwa"] .loan-bundle-card {
   margin-bottom: 6px !important;
-}
-
-html[data-shell="pwa"] .dashboard-loan-modal-overlay {
-  padding: 12px !important;
-}
-
-html[data-shell="pwa"] .dashboard-loan-modal {
-  max-width: 420px !important;
-  padding: 18px !important;
-  border-radius: 14px !important;
-}
-
-html[data-shell="pwa"] .dashboard-loan-modal-header {
-  margin-bottom: 14px !important;
-}
-
-html[data-shell="pwa"] .dashboard-loan-modal-title {
-  font-size: 15px !important;
-}
-
-html[data-shell="pwa"] .dashboard-loan-modal-close {
-  font-size: 18px !important;
-}
-
-html[data-shell="pwa"] .dashboard-loan-modal-summary {
-  gap: 10px !important;
-  margin-bottom: 14px !important;
-  padding: 12px !important;
-  border-radius: 10px !important;
-}
-
-html[data-shell="pwa"] .dashboard-loan-modal-avatar {
-  width: 38px !important;
-  height: 38px !important;
-  font-size: 15px !important;
 }
 
 html[data-shell="pwa"] .dashboard-loan-modal-name {
@@ -1023,6 +1104,25 @@ html[data-shell="pwa"] .cart-header {
 
 html[data-shell="pwa"] .laptop-sticky-bar {
   top: var(--shell-sticky-top-mobile);
+  /* Override the media-query overflow:clip so native date pickers render fully */
+  overflow: visible;
+}
+
+html[data-shell="pwa"] .laptop-date-grid {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+html[data-shell="pwa"] .laptop-date-grid.single-col {
+  grid-template-columns: 1fr;
+}
+
+html[data-shell="pwa"] .laptop-date-grid input[type="date"] {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font-size: 16px;
+  padding: 8px 10px;
 }
 
 html[data-shell="pwa"] .install-banner {

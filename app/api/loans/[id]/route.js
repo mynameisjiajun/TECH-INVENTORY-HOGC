@@ -164,6 +164,7 @@ export async function PUT(request, { params }) {
     const {
       loan_type,
       purpose,
+      remarks,
       department,
       start_date,
       end_date,
@@ -234,7 +235,7 @@ export async function PUT(request, { params }) {
     const { data: existingLoan, error: existingLoanError } = await supabase
       .from("loan_requests")
       .select(
-        "id, user_id, loan_type, purpose, department, location, start_date, end_date, status, admin_notes, updated_at",
+        "id, user_id, loan_type, purpose, remarks, department, location, start_date, end_date, status, admin_notes, updated_at",
       )
       .eq("id", loanId)
       .single();
@@ -289,6 +290,7 @@ export async function PUT(request, { params }) {
     const requestSnapshot = {
       loan_type: existingLoan.loan_type,
       purpose: existingLoan.purpose,
+      remarks: existingLoan.remarks,
       department: existingLoan.department,
       location: existingLoan.location,
       start_date: existingLoan.start_date,
@@ -354,6 +356,7 @@ export async function PUT(request, { params }) {
       .update({
         loan_type,
         purpose: purpose.trim(),
+        remarks: remarks?.trim() || null,
         department: department || "",
         location: location || "",
         start_date,

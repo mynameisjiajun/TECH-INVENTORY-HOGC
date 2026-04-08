@@ -34,16 +34,62 @@ const FILTER_OPTIONS = [
   },
 ];
 
-function getCalendarRowMetrics(isMobile, barCount) {
+const MOBILE_MAX_VISIBLE_LANES = 3;
+const DESKTOP_MAX_VISIBLE_LANES = 4;
+
+function getMaxVisibleLanes(isMobile) {
+  return isMobile ? MOBILE_MAX_VISIBLE_LANES : DESKTOP_MAX_VISIBLE_LANES;
+}
+
+function getCalendarRowMetrics(isMobile, visibleLaneCount, hasOverflow) {
   const topOffset = isMobile ? 24 : 28;
   const barGap = isMobile ? 22 : 24;
   const barHeight = isMobile ? 18 : 20;
+  const overflowHeight = hasOverflow ? (isMobile ? 18 : 20) : 0;
+  const stackedBarHeight =
+    visibleLaneCount > 0 ? (visibleLaneCount - 1) * barGap + barHeight : 0;
   const rowHeight = Math.max(
     isMobile ? 72 : 90,
-    topOffset + Math.max(0, barCount - 1) * barGap + barHeight + 10,
+    topOffset + stackedBarHeight + (hasOverflow ? overflowHeight + 12 : 10),
   );
 
   return { topOffset, barGap, barHeight, rowHeight };
+}
+
+function assignWeekBarLanes(weekBars) {
+  const laneEndColumns = [];
+
+  return [...weekBars]
+    .sort((left, right) => {
+      if (left.startCol !== right.startCol) {
+        return left.startCol - right.startCol;
+      }
+      if (left.endCol !== right.endCol) {
+        return left.endCol - right.endCol;
+      }
+      if (left.isOwn !== right.isOwn) {
+        return left.isOwn ? -1 : 1;
+      }
+      if (left.isOverdue !== right.isOverdue) {
+        return left.isOverdue ? -1 : 1;
+      }
+      return String(left.label || left.loan?.purpose || "").localeCompare(
+        String(right.label || right.loan?.purpose || ""),
+      );
+    })
+    .map((bar) => {
+      let laneIndex = laneEndColumns.findIndex(
+        (endColumn) => bar.startCol > endColumn,
+      );
+
+      if (laneIndex === -1) {
+        laneIndex = laneEndColumns.length;
+      }
+
+      laneEndColumns[laneIndex] = bar.endCol;
+
+      return { ...bar, laneIndex };
+    });
 }
 
 export default function LoanCalendar({
@@ -67,13 +113,17 @@ export default function LoanCalendar({
         className="gantt-header"
         style={isMobile ? { flexDirection: "column", gap: 8 } : undefined}
       >
-        <h3 style={isMobile ? { fontSize: 14 } : undefined}>
+        <h3
+          className="gantt-title"
+          style={isMobile ? { fontSize: 14 } : undefined}
+        >
           <RiCalendarLine style={{ verticalAlign: "middle" }} />{" "}
           {isMobile
             ? `${MONTH_NAMES[calendarMonth.getMonth()].slice(0, 3)} ${calendarMonth.getFullYear()}`
             : `Loan Calendar — ${MONTH_NAMES[calendarMonth.getMonth()]} ${calendarMonth.getFullYear()}`}
         </h3>
         <div
+          className="gantt-toolbar"
           style={{
             display: "flex",
             gap: isMobile ? 4 : 8,
@@ -82,6 +132,7 @@ export default function LoanCalendar({
           }}
         >
           <div
+            className="gantt-filter-group"
             style={{
               display: "flex",
               background: "rgba(255,255,255,0.05)",
@@ -93,6 +144,7 @@ export default function LoanCalendar({
             {filterOptions.map(({ value, getLabel }) => (
               <button
                 key={value}
+                className="gantt-filter-btn"
                 onClick={() => onTypeFilterChange(value)}
                 style={{
                   padding: isMobile ? "4px 8px" : "4px 12px",
@@ -112,24 +164,34 @@ export default function LoanCalendar({
               </button>
             ))}
           </div>
-          <button className="btn btn-sm btn-outline" onClick={prevMonth}>
-            <RiArrowLeftLine />
-          </button>
-          <button
-            className="btn btn-sm btn-outline"
-            onClick={goToday}
-            style={isMobile ? { fontSize: 10, padding: "4px 8px" } : undefined}
-          >
-            Today
-          </button>
-          <button className="btn btn-sm btn-outline" onClick={nextMonth}>
-            <RiArrowRightLine />
-          </button>
+          <div className="gantt-nav-group">
+            <button className="btn btn-sm btn-outline" onClick={prevMonth}>
+              <RiArrowLeftLine />
+            </button>
+            <button
+              className="btn btn-sm btn-outline gantt-today-btn"
+              onClick={goToday}
+              style={
+                isMobile ? { fontSize: 10, padding: "4px 8px" } : undefined
+              }
+            >
+              Today
+            </button>
+            <button className="btn btn-sm btn-outline" onClick={nextMonth}>
+              <RiArrowRightLine />
+            </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ overflowX: isMobile ? "hidden" : "auto" }}>
-        <div style={{ minWidth: isMobile ? "unset" : 700 }}>
+      <div
+        className="gantt-scroll-area"
+        style={{ overflowX: isMobile ? "hidden" : "auto" }}
+      >
+        <div
+          className="gantt-grid-shell"
+          style={{ minWidth: isMobile ? "unset" : 700 }}
+        >
           <div
             style={{
               display: "grid",
@@ -154,11 +216,36 @@ export default function LoanCalendar({
           </div>
 
           {calendarData.weeks.map((week, weekIndex) => {
-            const weekBars = calendarData.loanBars.filter(
-              (bar) => bar.week === weekIndex,
+            const weekBars = assignWeekBarLanes(
+              calendarData.loanBars.filter((bar) => bar.week === weekIndex),
+            );
+            const maxVisibleLanes = getMaxVisibleLanes(isMobile);
+            const hiddenBars = weekBars.filter(
+              (bar) => bar.laneIndex >= maxVisibleLanes,
+            );
+            const visibleBars = weekBars.filter(
+              (bar) => bar.laneIndex < maxVisibleLanes,
+            );
+            const visibleLaneCount = Math.min(
+              maxVisibleLanes,
+              weekBars.reduce(
+                (highestLane, bar) => Math.max(highestLane, bar.laneIndex + 1),
+                0,
+              ),
             );
             const { topOffset, barGap, barHeight, rowHeight } =
-              getCalendarRowMetrics(isMobile, weekBars.length);
+              getCalendarRowMetrics(
+                isMobile,
+                visibleLaneCount,
+                hiddenBars.length > 0,
+              );
+            const hiddenSummary = hiddenBars
+              .map(
+                (bar) =>
+                  bar.label || bar.loan?.purpose || `Loan #${bar.loanId}`,
+              )
+              .slice(0, 8)
+              .join("\n");
 
             return (
               <div
@@ -224,7 +311,7 @@ export default function LoanCalendar({
                   ))}
                 </div>
 
-                {weekBars.map((bar, barIndex) => {
+                {visibleBars.map((bar, barIndex) => {
                   const colors = barColor(bar);
                   const leftPct = (bar.startCol / 7) * 100;
                   const widthPct = ((bar.endCol - bar.startCol + 1) / 7) * 100;
@@ -239,7 +326,7 @@ export default function LoanCalendar({
                       onClick={() => onSelectLoan(bar.loan)}
                       style={{
                         position: "absolute",
-                        top: topOffset + barIndex * barGap,
+                        top: topOffset + bar.laneIndex * barGap,
                         left: `calc(${leftPct}% + ${isMobile ? 2 : 4}px)`,
                         width: `calc(${widthPct}% - ${isMobile ? 4 : 8}px)`,
                         height: barHeight,
@@ -265,6 +352,33 @@ export default function LoanCalendar({
                     </div>
                   );
                 })}
+
+                {hiddenBars.length > 0 && (
+                  <div
+                    title={hiddenSummary || `${hiddenBars.length} more loans`}
+                    style={{
+                      position: "absolute",
+                      top: topOffset + visibleLaneCount * barGap,
+                      left: isMobile ? 4 : 8,
+                      right: isMobile ? 4 : 8,
+                      height: isMobile ? 16 : 18,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 999,
+                      border: "1px dashed rgba(148,163,184,0.35)",
+                      background: "rgba(15,23,42,0.55)",
+                      color: "var(--text-muted)",
+                      fontSize: isMobile ? 9 : 10,
+                      fontWeight: 600,
+                      letterSpacing: 0.2,
+                      zIndex: 1,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    +{hiddenBars.length} more
+                  </div>
+                )}
               </div>
             );
           })}

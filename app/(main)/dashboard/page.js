@@ -19,11 +19,14 @@ import {
   RiDeleteBinLine,
   RiCheckLine,
   RiArrowGoBackLine,
+  RiEyeOffLine,
 } from "react-icons/ri";
 import {} from // recharts is loaded dynamically below — no static import
 "recharts";
 
 const COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"];
+const ACTIVE_CALENDAR_PAGE_LIMIT = 200;
+const MAX_ACTIVE_CALENDAR_PAGES = 20;
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -99,20 +102,44 @@ export default function DashboardPage() {
   }, []);
 
   // Normal user: fetch all active loans (team visibility) — tech + laptop
+  const fetchAllLoanPages = useCallback(async (basePath) => {
+    const allLoans = [];
+
+    for (let page = 1; page <= MAX_ACTIVE_CALENDAR_PAGES; page += 1) {
+      const separator = basePath.includes("?") ? "&" : "?";
+      const res = await fetch(
+        `${basePath}${separator}page=${page}&limit=${ACTIVE_CALENDAR_PAGE_LIMIT}`,
+        { cache: "no-store" },
+      );
+
+      if (!res.ok) {
+        throw new Error(`Failed to load active loans (${res.status})`);
+      }
+
+      const data = await res.json();
+      const pageLoans = data.loans || [];
+      allLoans.push(...pageLoans);
+
+      if (!data.pagination?.hasMore || pageLoans.length === 0) {
+        break;
+      }
+    }
+
+    return allLoans;
+  }, []);
+
   const fetchAllActiveLoans = useCallback(async () => {
     try {
-      const [techRes, laptopRes] = await Promise.all([
-        fetch("/api/loans?view=active", { cache: "no-store" }),
-        fetch("/api/laptop-loans?view=active", { cache: "no-store" }),
+      const [techLoanRows, laptopLoanRows] = await Promise.all([
+        fetchAllLoanPages("/api/loans?view=active"),
+        fetchAllLoanPages("/api/laptop-loans?view=active"),
       ]);
-      const techData = techRes.ok ? await techRes.json() : { loans: [] };
-      const laptopData = laptopRes.ok ? await laptopRes.json() : { loans: [] };
 
-      const techLoans = (techData.loans || []).map((l) => ({
+      const techLoans = techLoanRows.map((l) => ({
         ...l,
         _loanKind: "tech",
       }));
-      const laptopLoans = (laptopData.loans || []).map((l) => ({
+      const laptopLoans = laptopLoanRows.map((l) => ({
         ...l,
         _loanKind: "laptop",
         items: (l.laptops || []).map((item) => ({
@@ -123,10 +150,10 @@ export default function DashboardPage() {
       }));
 
       setAllActiveLoans([...techLoans, ...laptopLoans]);
-    } catch {
-      /* silent */
+    } catch (err) {
+      console.warn("Failed to load all active loans for calendar:", err);
     }
-  }, []);
+  }, [fetchAllLoanPages]);
 
   // Normal user: fetch own loans (tech + laptop merged)
   const fetchMyLoans = useCallback(async () => {
@@ -316,13 +343,7 @@ export default function DashboardPage() {
           if (calendarTypeFilter === "my") return isOwn;
           if (calendarTypeFilter === "tech") return l._loanKind !== "laptop";
           if (calendarTypeFilter === "laptop") return l._loanKind === "laptop";
-          // "all": own loans (all statuses) + others' approved non-overdue only
-          if (isOwn) return true;
-          const isOverdue =
-            l.status === "approved" &&
-            l.end_date &&
-            new Date(l.end_date) < new Date();
-          return l.status === "approved" && !isOverdue;
+          return true;
         });
 
     const year = calendarMonth.getFullYear();
@@ -385,11 +406,10 @@ export default function DashboardPage() {
           week: w,
           startCol: segStart,
           endCol: segEnd,
-          label: user
-            ? loan.requester_name
-            : loan._loanKind === "laptop"
-              ? "Laptop"
-              : "Booked",
+          label:
+            loan.requester_name ||
+            loan.requester_username ||
+            (loan._loanKind === "laptop" ? "Laptop" : "Booked"),
           type: loan.loan_type,
           status: loan.status,
           isOverdue,
@@ -574,28 +594,66 @@ export default function DashboardPage() {
           </div>
 
           <div
-            className="glass-card"
             style={{
               marginBottom: 24,
-              padding: 20,
-              border: "1px solid var(--border)",
-              background: "rgba(255,255,255,0.03)",
+              padding: "16px 20px",
+              borderRadius: 14,
+              border: "1px solid rgba(99,102,241,0.25)",
+              background:
+                "linear-gradient(135deg, rgba(99,102,241,0.07) 0%, rgba(139,92,246,0.04) 100%)",
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
             }}
           >
-            <strong style={{ display: "block", marginBottom: 8 }}>
-              Guest view
-            </strong>
-            <p
+            <div
               style={{
-                margin: 0,
-                color: "var(--text-secondary)",
-                lineHeight: 1.6,
+                flexShrink: 0,
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                background: "rgba(99,102,241,0.12)",
+                border: "1px solid rgba(99,102,241,0.2)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--accent)",
+                fontSize: 18,
               }}
             >
-              This calendar only shows reservation windows and availability.
-              Borrower identity, private notes, and request tracking stay locked
-              until you sign in.
-            </p>
+              <RiEyeOffLine />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: 14,
+                  marginBottom: 2,
+                  color: "var(--text-primary)",
+                }}
+              >
+                Guest view
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  color: "var(--text-secondary)",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                }}
+              >
+                Borrower names and reservation windows are visible here. Notes,
+                account tracking, and request management stay locked until you
+                sign in.
+              </p>
+            </div>
+            <button
+              className="btn btn-outline"
+              style={{ flexShrink: 0, fontSize: 13, padding: "7px 16px" }}
+              onClick={() => router.push("/login")}
+            >
+              Sign In
+            </button>
           </div>
 
           <LoanCalendar
@@ -609,10 +667,234 @@ export default function DashboardPage() {
             calendarData={calendarData}
             isToday={isToday}
             barColor={barColor}
-            onSelectLoan={() => {}}
+            onSelectLoan={setSelectedLoan}
             legendItems={guestCalendarLegend}
             filterOptions={guestFilterOptions}
           />
+
+          {selectedLoan && (
+            <div
+              className="dashboard-loan-modal-overlay"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.6)",
+                backdropFilter: "blur(4px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 1000,
+                padding: 20,
+              }}
+              onClick={() => setSelectedLoan(null)}
+            >
+              <div
+                className="dashboard-loan-modal"
+                style={{
+                  background: "var(--bg-card)",
+                  borderRadius: 16,
+                  border: "1px solid var(--border)",
+                  maxWidth: 480,
+                  width: "100%",
+                  padding: 28,
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  className="dashboard-loan-modal-header"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 20,
+                  }}
+                >
+                  <h3
+                    className="dashboard-loan-modal-title"
+                    style={{ margin: 0, fontSize: 18 }}
+                  >
+                    📋 Loan Details
+                  </h3>
+                  <button
+                    className="dashboard-loan-modal-close"
+                    onClick={() => setSelectedLoan(null)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                      fontSize: 20,
+                    }}
+                  >
+                    <RiCloseLine />
+                  </button>
+                </div>
+                <div
+                  className="dashboard-loan-modal-summary"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    marginBottom: 20,
+                    padding: 16,
+                    background: "rgba(99,102,241,0.05)",
+                    borderRadius: 12,
+                  }}
+                >
+                  <div
+                    className="dashboard-loan-modal-avatar"
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: "50%",
+                      background:
+                        "linear-gradient(135deg, var(--accent), #818cf8)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: "white",
+                    }}
+                  >
+                    {(selectedLoan.requester_name ||
+                      selectedLoan.requester_username ||
+                      "?")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <div
+                      className="dashboard-loan-modal-name"
+                      style={{ fontWeight: 600, fontSize: 16 }}
+                    >
+                      {selectedLoan.requester_name || "Unknown requester"}
+                    </div>
+                    <div
+                      className="dashboard-loan-modal-username"
+                      style={{ fontSize: 12, color: "var(--text-muted)" }}
+                    >
+                      {selectedLoan.requester_username
+                        ? `@${selectedLoan.requester_username}`
+                        : "Guest-visible booking"}
+                    </div>
+                  </div>
+                  <div style={{ marginLeft: "auto" }}>
+                    <span
+                      className={`badge ${selectedLoan.loan_type === "permanent" ? "badge-permanent" : "badge-temporary"}`}
+                      style={{ fontSize: 11 }}
+                    >
+                      {selectedLoan.loan_type === "permanent"
+                        ? "📌 Permanent"
+                        : "⏱️ Temporary"}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <div
+                    className="dashboard-loan-modal-kicker"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "var(--text-secondary)",
+                      marginBottom: 8,
+                      textTransform: "uppercase",
+                      letterSpacing: 1,
+                    }}
+                  >
+                    Items Borrowed
+                  </div>
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                  >
+                    {(selectedLoan.items || []).map((item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          padding: "8px 12px",
+                          background: "rgba(255,255,255,0.03)",
+                          borderRadius: 8,
+                          border: "1px solid var(--border)",
+                        }}
+                      >
+                        <span style={{ fontWeight: 500 }}>{item.item}</span>
+                        <span
+                          style={{ color: "var(--accent)", fontWeight: 600 }}
+                        >
+                          × {item.quantity}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div
+                  className="dashboard-loan-modal-grid"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 12,
+                    fontSize: 13,
+                  }}
+                >
+                  <div>
+                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                      Purpose
+                    </span>
+                    <div style={{ fontWeight: 500, marginTop: 2 }}>
+                      {selectedLoan.purpose || "—"}
+                    </div>
+                  </div>
+                  {selectedLoan.department && (
+                    <div>
+                      <span
+                        style={{ color: "var(--text-muted)", fontSize: 11 }}
+                      >
+                        Department
+                      </span>
+                      <div style={{ fontWeight: 500, marginTop: 2 }}>
+                        {selectedLoan.department}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                      Start Date
+                    </span>
+                    <div style={{ fontWeight: 500, marginTop: 2 }}>
+                      {selectedLoan.start_date}
+                    </div>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                      End Date
+                    </span>
+                    <div style={{ fontWeight: 500, marginTop: 2 }}>
+                      {selectedLoan.end_date || "Ongoing"}
+                    </div>
+                  </div>
+                </div>
+                {selectedLoan.status === "approved" &&
+                  selectedLoan.end_date &&
+                  new Date(selectedLoan.end_date) < new Date() && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: 12,
+                        background: "rgba(239,68,68,0.1)",
+                        border: "1px solid rgba(239,68,68,0.3)",
+                        borderRadius: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      <span style={{ color: "var(--error)", fontWeight: 700 }}>
+                        🚨 This loan is OVERDUE!
+                      </span>
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
         </div>
       </>
     );
@@ -1024,6 +1306,7 @@ export default function DashboardPage() {
                               }}
                             >
                               {loan.purpose && <span>📝 {loan.purpose}</span>}
+                              {loan.remarks && <span>💬 {loan.remarks}</span>}
                               {loan.department && (
                                 <span>🏢 {loan.department}</span>
                               )}
@@ -1213,6 +1496,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div
+                className="dashboard-loan-modal-grid"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
@@ -1222,12 +1506,22 @@ export default function DashboardPage() {
               >
                 <div>
                   <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                    Purpose
+                    Purpose / Header
                   </span>
                   <div style={{ fontWeight: 500, marginTop: 2 }}>
                     {selectedLoan.purpose || "—"}
                   </div>
                 </div>
+                {selectedLoan.remarks && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                      Remarks
+                    </span>
+                    <div style={{ fontWeight: 500, marginTop: 2 }}>
+                      {selectedLoan.remarks}
+                    </div>
+                  </div>
+                )}
                 {selectedLoan.department && (
                   <div>
                     <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
@@ -1914,6 +2208,7 @@ export default function DashboardPage() {
             </div>
 
             <div
+              className="dashboard-loan-modal-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
@@ -1923,12 +2218,22 @@ export default function DashboardPage() {
             >
               <div>
                 <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                  Purpose
+                  Purpose / Header
                 </span>
                 <div style={{ fontWeight: 500, marginTop: 2 }}>
                   {selectedLoan.purpose}
                 </div>
               </div>
+              {selectedLoan.remarks && (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                    Remarks
+                  </span>
+                  <div style={{ fontWeight: 500, marginTop: 2 }}>
+                    {selectedLoan.remarks}
+                  </div>
+                </div>
+              )}
               {selectedLoan.department && (
                 <div>
                   <span style={{ color: "var(--text-muted)", fontSize: 11 }}>

@@ -497,7 +497,7 @@ export default function InventoryPage() {
                     <tr>
                       <th>Item</th>
                       {showStorageTypeColumn && <th>Type</th>}
-                      {user.role === "admin" && (
+                      {user?.role === "admin" && (
                         <>
                           <th>Brand</th>
                           <th>Model</th>
@@ -507,7 +507,7 @@ export default function InventoryPage() {
                       <th>Available</th>
                       <th>Loaned</th>
                       <th>Location</th>
-                      {user.role === "admin" && <th>Status</th>}
+                      {user?.role === "admin" && <th>Status</th>}
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -522,7 +522,7 @@ export default function InventoryPage() {
                               <TypeBadge type={item.type} />
                             </td>
                           )}
-                          {user.role === "admin" && (
+                          {user?.role === "admin" && (
                             <>
                               <td>{item.brand}</td>
                               <td>{item.model}</td>
@@ -561,7 +561,7 @@ export default function InventoryPage() {
                           >
                             {item.location}
                           </td>
-                          {user.role === "admin" && (
+                          {user?.role === "admin" && (
                             <td>
                               {item.status && (
                                 <span className="badge badge-success">

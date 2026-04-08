@@ -42,6 +42,7 @@ export default function CartPanel() {
     telegram_handle: "",
     email: "",
     purpose: "",
+    remarks: "",
     department: "",
     start_date: "",
     end_date: "",
@@ -77,6 +78,7 @@ export default function CartPanel() {
         telegram_handle: "",
         email: "",
         purpose: modifyingLoan.purpose || "",
+        remarks: modifyingLoan.remarks || "",
         department: modifyingLoan.department || "",
         start_date: modifyingLoan.start_date || "",
         end_date: modifyingLoan.end_date || "",
@@ -147,6 +149,7 @@ export default function CartPanel() {
             telegram_handle: formData.telegram_handle || null,
             email: formData.email || null,
             purpose: formData.purpose,
+            remarks: formData.remarks || null,
             department: formData.department,
             start_date: techItems.length > 0 ? formData.start_date : null,
             end_date: techItems.length > 0 ? formData.end_date : null,
@@ -170,15 +173,17 @@ export default function CartPanel() {
         setShowForm(false);
         setSubmitted(true);
         toast.success(
-          data.linked_user_id
-            ? "Request linked to your account and sent for approval."
-            : "Guest request submitted for review.",
+          data.message ||
+            (data.linked_user_id
+              ? "Request linked to your account and sent for approval."
+              : "Guest request submitted for review."),
         );
         return;
       }
 
       const errors = [];
       const results = [];
+      const autoApprovedResults = [];
 
       // Modifying an existing laptop loan
       if (modifyingLoan?._loanKind === "laptop") {
@@ -192,6 +197,7 @@ export default function CartPanel() {
             start_date: firstItem?.start_date || "",
             end_date: firstItem?.end_date || null,
             purpose: formData.purpose,
+            remarks: formData.remarks || null,
             department: formData.department,
           }),
         });
@@ -206,7 +212,10 @@ export default function CartPanel() {
         }
         if (!res.ok)
           errors.push(data.error || "Laptop loan modification failed");
-        else results.push("laptop");
+        else {
+          results.push("laptop");
+          if (data.auto_approved) autoApprovedResults.push("laptop");
+        }
       } else {
         // Submit tech loan
         if (techItems.length > 0) {
@@ -222,6 +231,7 @@ export default function CartPanel() {
             body: JSON.stringify({
               loan_type: techLoanType,
               purpose: formData.purpose,
+              remarks: formData.remarks || null,
               department: formData.department,
               start_date: formData.start_date,
               end_date: techLoanType === "temporary" ? formData.end_date : null,
@@ -242,7 +252,10 @@ export default function CartPanel() {
             return;
           }
           if (!res.ok) errors.push(data.error || "Tech loan failed");
-          else results.push("tech");
+          else {
+            results.push("tech");
+            if (data.auto_approved) autoApprovedResults.push("tech");
+          }
         }
 
         // Submit laptop loans (new)
@@ -260,6 +273,7 @@ export default function CartPanel() {
             body: JSON.stringify({
               loan_groups,
               purpose: formData.purpose,
+              remarks: formData.remarks || null,
               department: formData.department,
             }),
           });
@@ -273,7 +287,10 @@ export default function CartPanel() {
             return;
           }
           if (!res.ok) errors.push(data.error || "Laptop loan failed");
-          else results.push("laptop");
+          else {
+            results.push("laptop");
+            if (data.auto_approved) autoApprovedResults.push("laptop");
+          }
         }
       }
 
@@ -287,7 +304,16 @@ export default function CartPanel() {
       clearCart();
       setShowForm(false);
       setSubmitted(true);
-      toast.success("Request submitted! We'll notify you when it's reviewed.");
+      const allAutoApproved =
+        results.length > 0 && autoApprovedResults.length === results.length;
+      const someAutoApproved = autoApprovedResults.length > 0;
+      toast.success(
+        allAutoApproved
+          ? "Request auto-approved and active now."
+          : someAutoApproved
+            ? "Request submitted. Some loans were auto-approved immediately."
+            : "Request submitted! We'll notify you when it's reviewed.",
+      );
     } catch (err) {
       setError(err.message);
       toast.error(err.message || "Submission failed. Please try again.");
@@ -1067,14 +1093,26 @@ export default function CartPanel() {
               )}
 
               <div className="input-group">
-                <label>Purpose *</label>
-                <textarea
+                <label>Purpose / Header *</label>
+                <input
+                  type="text"
                   value={formData.purpose}
                   onChange={(e) =>
                     setFormData((p) => ({ ...p, purpose: e.target.value }))
                   }
-                  placeholder="Why do you need these items?"
+                  placeholder="Short title for this request"
                   required
+                />
+              </div>
+
+              <div className="input-group">
+                <label>Remarks</label>
+                <textarea
+                  value={formData.remarks}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, remarks: e.target.value }))
+                  }
+                  placeholder="Optional extra context, setup notes, or anything admins should know"
                 />
               </div>
 

@@ -251,6 +251,11 @@ function AdminPageContent() {
   const [error, setError] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [inviteCodeInput, setInviteCodeInput] = useState("");
+  const [autoApproveLoans, setAutoApproveLoans] = useState(false);
+  const [autoApproveLoading, setAutoApproveLoading] = useState(false);
+  const [autoApproveGuestRequests, setAutoApproveGuestRequests] =
+    useState(false);
+  const [autoApproveGuestLoading, setAutoApproveGuestLoading] = useState(false);
   const [reminderTimes, setReminderTimes] = useState({
     weekday: "09:00",
     saturday: "10:00",
@@ -287,6 +292,8 @@ function AdminPageContent() {
         .toLowerCase()
         .includes(q);
       const deptMatch = (loan.department || "").toLowerCase().includes(q);
+      const purposeMatch = (loan.purpose || "").toLowerCase().includes(q);
+      const remarksMatch = (loan.remarks || "").toLowerCase().includes(q);
       const itemMatch =
         loan._source === "laptop"
           ? (loan.laptops || []).some((i) =>
@@ -295,7 +302,9 @@ function AdminPageContent() {
           : (loan.items || []).some((i) =>
               (i.item || "").toLowerCase().includes(q),
             );
-      return nameMatch || deptMatch || itemMatch;
+      return (
+        nameMatch || deptMatch || purposeMatch || remarksMatch || itemMatch
+      );
     });
   }, [loans, searchQuery]);
 
@@ -479,6 +488,8 @@ function AdminPageContent() {
           setReminderTimes(data.reminder_times);
           setReminderTimesInput(data.reminder_times);
         }
+        setAutoApproveLoans(Boolean(data.auto_approve_loans));
+        setAutoApproveGuestRequests(Boolean(data.auto_approve_guest_requests));
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || `Failed to load users (${res.status})`);
@@ -1045,6 +1056,72 @@ function AdminPageContent() {
     }
   };
 
+  const handleToggleAutoApproveLoans = async () => {
+    const nextEnabled = !autoApproveLoans;
+    setAutoApproveLoading(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_auto_approve_loans",
+          enabled: nextEnabled,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data.error || `Failed to update setting (${res.status})`,
+        );
+      }
+
+      setAutoApproveLoans(nextEnabled);
+      toast.success(
+        nextEnabled
+          ? "New loan requests will now auto-approve immediately"
+          : "New loan requests now require admin approval again",
+      );
+    } catch (err) {
+      toast.error(err.message || "Could not update auto-approve setting");
+    } finally {
+      setAutoApproveLoading(false);
+    }
+  };
+
+  const handleToggleAutoApproveGuestRequests = async () => {
+    const nextEnabled = !autoApproveGuestRequests;
+    setAutoApproveGuestLoading(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_auto_approve_guest_requests",
+          enabled: nextEnabled,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          data.error || `Failed to update setting (${res.status})`,
+        );
+      }
+
+      setAutoApproveGuestRequests(nextEnabled);
+      toast.success(
+        nextEnabled
+          ? "Unmatched guest requests will now auto-approve in the guest queue"
+          : "Unmatched guest requests now require review again",
+      );
+    } catch (err) {
+      toast.error(err.message || "Could not update guest auto-approve setting");
+    } finally {
+      setAutoApproveGuestLoading(false);
+    }
+  };
+
   if (loading) return <AppShellLoading />;
 
   if (!user) return null;
@@ -1271,7 +1348,7 @@ function AdminPageContent() {
                   spellCheck={false}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by name, department, or item…"
+                  placeholder="Search by name, purpose, remarks, department, or item…"
                   style={{
                     width: "100%",
                   }}
@@ -1697,6 +1774,7 @@ function AdminPageContent() {
                       }}
                     >
                       {loan.purpose && <span>📝 {loan.purpose}</span>}
+                      {loan.remarks && <span>💬 {loan.remarks}</span>}
                       {loan.department && <span>🏢 {loan.department}</span>}
                       <span>
                         📅 {loan.start_date}
@@ -2178,6 +2256,178 @@ function AdminPageContent() {
                   "Save Times"
                 )}
               </button>
+            </div>
+
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  marginBottom: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      marginBottom: 4,
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    <RiShieldUserLine
+                      style={{ verticalAlign: "middle", marginRight: 6 }}
+                    />
+                    Global Auto-Approve
+                  </div>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-secondary)",
+                      margin: 0,
+                      lineHeight: 1.5,
+                      maxWidth: 520,
+                    }}
+                  >
+                    When enabled, new tech and laptop loan requests are approved
+                    immediately without waiting in the admin queue. Use the
+                    separate guest toggle below for unmatched guest checkout
+                    requests.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoApproveLoans}
+                  aria-label="Toggle global auto approve for new loans"
+                  className="btn btn-sm"
+                  onClick={handleToggleAutoApproveLoans}
+                  disabled={autoApproveLoading}
+                  style={{
+                    minWidth: 136,
+                    justifyContent: "center",
+                    background: autoApproveLoans
+                      ? "rgba(16,185,129,0.14)"
+                      : "rgba(148,163,184,0.12)",
+                    color: autoApproveLoans
+                      ? "var(--success)"
+                      : "var(--text-secondary)",
+                    border: `1px solid ${
+                      autoApproveLoans
+                        ? "rgba(16,185,129,0.35)"
+                        : "rgba(148,163,184,0.25)"
+                    }`,
+                    fontWeight: 700,
+                  }}
+                >
+                  {autoApproveLoading ? (
+                    <>
+                      <span className="btn-spinner" /> Saving…
+                    </>
+                  ) : autoApproveLoans ? (
+                    "ON"
+                  ) : (
+                    "OFF"
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  marginBottom: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      marginBottom: 4,
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    <RiShieldUserLine
+                      style={{ verticalAlign: "middle", marginRight: 6 }}
+                    />
+                    Guest Queue Auto-Approve
+                  </div>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-secondary)",
+                      margin: 0,
+                      lineHeight: 1.5,
+                      maxWidth: 520,
+                    }}
+                  >
+                    When enabled, unmatched guest checkout requests are stored
+                    in the guest request queue as approved immediately instead
+                    of pending review. This is separate from the real loan
+                    auto-approve toggle above.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoApproveGuestRequests}
+                  aria-label="Toggle guest queue auto approve"
+                  className="btn btn-sm"
+                  onClick={handleToggleAutoApproveGuestRequests}
+                  disabled={autoApproveGuestLoading}
+                  style={{
+                    minWidth: 136,
+                    justifyContent: "center",
+                    background: autoApproveGuestRequests
+                      ? "rgba(16,185,129,0.14)"
+                      : "rgba(148,163,184,0.12)",
+                    color: autoApproveGuestRequests
+                      ? "var(--success)"
+                      : "var(--text-secondary)",
+                    border: `1px solid ${
+                      autoApproveGuestRequests
+                        ? "rgba(16,185,129,0.35)"
+                        : "rgba(148,163,184,0.25)"
+                    }`,
+                    fontWeight: 700,
+                  }}
+                >
+                  {autoApproveGuestLoading ? (
+                    <>
+                      <span className="btn-spinner" /> Saving…
+                    </>
+                  ) : autoApproveGuestRequests ? (
+                    "ON"
+                  ) : (
+                    "OFF"
+                  )}
+                </button>
+              </div>
             </div>
 
             {usersFetching ? (
@@ -3238,6 +3488,20 @@ function AdminPageContent() {
                                   }}
                                 >
                                   {loan.purpose}
+                                </div>
+                              )}
+                              {loan.remarks && (
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: "var(--text-muted)",
+                                    marginTop: 2,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {loan.remarks}
                                 </div>
                               )}
                             </div>

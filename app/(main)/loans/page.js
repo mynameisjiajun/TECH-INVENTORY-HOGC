@@ -25,6 +25,10 @@ import {
   RiMacbookLine,
   RiArchiveLine,
   RiBookmarkLine,
+  RiLockLine,
+  RiCheckboxCircleLine,
+  RiNotification3Line,
+  RiFileListLine,
 } from "react-icons/ri";
 
 const LOAN_STATUS_FILTERS = [
@@ -448,39 +452,114 @@ export default function LoansPage() {
           </div>
 
           <div
-            className="glass-card"
             style={{
-              maxWidth: 720,
-              margin: "24px auto 0",
-              padding: 28,
-              border: "1px solid var(--border)",
-              background: "rgba(255,255,255,0.03)",
+              maxWidth: 600,
+              margin: "40px auto 0",
+              padding: "36px 32px",
+              borderRadius: 20,
+              border: "1px solid rgba(99,102,241,0.2)",
+              background:
+                "linear-gradient(145deg, rgba(99,102,241,0.06) 0%, rgba(139,92,246,0.04) 100%)",
+              textAlign: "center",
             }}
           >
-            <h2 style={{ marginTop: 0, marginBottom: 10 }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 16,
+                background: "rgba(99,102,241,0.12)",
+                border: "1px solid rgba(99,102,241,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 20px",
+                fontSize: 24,
+                color: "var(--accent)",
+              }}
+            >
+              <RiLockLine />
+            </div>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 8,
+                fontSize: 20,
+                fontWeight: 700,
+              }}
+            >
               Log in to unlock My Loans
             </h2>
-            <p style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
-              Signed-in users can track approval status, receive Telegram and
-              email reminders, upload return proof, and manage every active
-              request in one place.
+            <p
+              style={{
+                color: "var(--text-secondary)",
+                lineHeight: 1.6,
+                margin: "0 auto 24px",
+                maxWidth: 420,
+                fontSize: 14,
+              }}
+            >
+              Track approvals, get reminders, upload return proof, and manage
+              every active request — all in one place.
             </p>
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: 12,
-                marginTop: 18,
-                marginBottom: 22,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                marginBottom: 28,
+                textAlign: "left",
               }}
             >
-              <div className="loan-item-chip">Approval and return tracking</div>
-              <div className="loan-item-chip">Telegram availability alerts</div>
-              <div className="loan-item-chip">
-                Return reminders and overdue notices
-              </div>
+              {[
+                {
+                  icon: <RiCheckboxCircleLine />,
+                  text: "Approval and return tracking",
+                },
+                {
+                  icon: <RiNotification3Line />,
+                  text: "Telegram and email reminders",
+                },
+                {
+                  icon: <RiFileListLine />,
+                  text: "Overdue notices and return proof upload",
+                },
+              ].map(({ icon, text }) => (
+                <div
+                  key={text}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid var(--border)",
+                    fontSize: 13,
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: "var(--accent)",
+                      fontSize: 16,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {icon}
+                  </span>
+                  {text}
+                </div>
+              ))}
             </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 className="btn btn-primary"
                 onClick={() => router.push("/login")}
@@ -587,10 +666,13 @@ export default function LoansPage() {
       const query = search.toLowerCase();
       const matchesId = String(loan.id).includes(query);
       const matchesPurpose = loan.purpose?.toLowerCase().includes(query);
+      const matchesRemarks = loan.remarks?.toLowerCase().includes(query);
       const matchesItem = loan.items.some((item) =>
         item.item?.toLowerCase().includes(query),
       );
-      if (!matchesId && !matchesPurpose && !matchesItem) return false;
+      if (!matchesId && !matchesPurpose && !matchesRemarks && !matchesItem) {
+        return false;
+      }
     }
 
     if (dateFrom && loan.start_date < dateFrom) return false;
@@ -734,6 +816,22 @@ export default function LoansPage() {
             {loan.end_date ? ` → ${loan.end_date}` : " → Ongoing"}
           </span>
         </div>
+
+        {loan.remarks && (
+          <div
+            className="loan-card-note"
+            style={{
+              marginTop: 8,
+              padding: 10,
+              background: "rgba(148,163,184,0.08)",
+              borderRadius: 8,
+              fontSize: 12,
+              color: "var(--text-secondary)",
+            }}
+          >
+            <strong>Remarks:</strong> {loan.remarks}
+          </div>
+        )}
 
         {loan.admin_notes && (
           <div
@@ -993,7 +1091,7 @@ export default function LoansPage() {
               spellCheck={false}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by purpose, item, or request ID…"
+              placeholder="Search by purpose, remarks, item, or request ID…"
             />
           </div>
           <div className="loans-status-filter-select">

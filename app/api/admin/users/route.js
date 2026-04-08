@@ -3,6 +3,7 @@ import { getCurrentUser, hashPassword } from "@/lib/utils/auth";
 import {
   getAppSettings,
   invalidateAppSettingsCache,
+  parseAppSettingBoolean,
 } from "@/lib/utils/appSettings";
 import { NextResponse } from "next/server";
 
@@ -67,6 +68,8 @@ export async function GET(request) {
       "reminder_weekday",
       "reminder_saturday",
       "reminder_sunday",
+      "auto_approve_loans",
+      "auto_approve_guest_requests",
     ]),
   ]);
 
@@ -84,6 +87,10 @@ export async function GET(request) {
       saturday: settingsMap.reminder_saturday || "10:00",
       sunday: settingsMap.reminder_sunday || "14:00",
     },
+    auto_approve_loans: parseAppSettingBoolean(settingsMap.auto_approve_loans),
+    auto_approve_guest_requests: parseAppSettingBoolean(
+      settingsMap.auto_approve_guest_requests,
+    ),
   });
 }
 
@@ -106,6 +113,7 @@ export async function POST(request) {
     display_name,
     invite_code,
     reminder_times,
+    enabled,
   } = body;
 
   if (action === "reset_password") {
@@ -423,6 +431,87 @@ export async function POST(request) {
     invalidateAppSettingsCache();
 
     return NextResponse.json({ message: "Reminder times updated" });
+  }
+
+  if (action === "set_auto_approve_loans") {
+    if (typeof enabled !== "boolean") {
+      return NextResponse.json(
+        { error: "Enabled flag is required" },
+        { status: 400 },
+      );
+    }
+
+    const { error: autoApproveError } = await supabase
+      .from("app_settings")
+      .upsert({
+        key: "auto_approve_loans",
+        value: enabled ? "true" : "false",
+      });
+
+    if (autoApproveError) {
+      return NextResponse.json(
+        {
+          error:
+            autoApproveError.message || "Failed to update auto-approve setting",
+        },
+        { status: 500 },
+      );
+    }
+
+    await supabase.from("audit_log").insert({
+      user_id: user.id,
+      action: "set_auto_approve_loans",
+      target_type: "settings",
+      target_id: 0,
+      details: `${enabled ? "Enabled" : "Disabled"} global auto-approval for new loan requests`,
+    });
+
+    invalidateAppSettingsCache();
+
+    return NextResponse.json({
+      message: `Auto-approve ${enabled ? "enabled" : "disabled"}`,
+    });
+  }
+
+  if (action === "set_auto_approve_guest_requests") {
+    if (typeof enabled !== "boolean") {
+      return NextResponse.json(
+        { error: "Enabled flag is required" },
+        { status: 400 },
+      );
+    }
+
+    const { error: guestAutoApproveError } = await supabase
+      .from("app_settings")
+      .upsert({
+        key: "auto_approve_guest_requests",
+        value: enabled ? "true" : "false",
+      });
+
+    if (guestAutoApproveError) {
+      return NextResponse.json(
+        {
+          error:
+            guestAutoApproveError.message ||
+            "Failed to update guest auto-approve setting",
+        },
+        { status: 500 },
+      );
+    }
+
+    await supabase.from("audit_log").insert({
+      user_id: user.id,
+      action: "set_auto_approve_guest_requests",
+      target_type: "settings",
+      target_id: 0,
+      details: `${enabled ? "Enabled" : "Disabled"} guest guest-request auto-approval`,
+    });
+
+    invalidateAppSettingsCache();
+
+    return NextResponse.json({
+      message: `Guest auto-approve ${enabled ? "enabled" : "disabled"}`,
+    });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

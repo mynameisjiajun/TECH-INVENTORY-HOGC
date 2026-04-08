@@ -1,6 +1,8 @@
 import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { autoApproveTechLoan } from "@/lib/services/techLoanAutoApproval";
+import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { checkRateLimit } from "@/lib/utils/rateLimit";
 import { getRequestClientIdentifier } from "@/lib/utils/request";
 import { normalizeTelegramHandle } from "@/lib/utils/telegramHandle";
@@ -194,12 +196,15 @@ async function findMatchedUser(normalizedTelegram) {
 }
 
 async function createMatchedTechLoan({
+  db,
   matchedUser,
   purpose,
+  remarks,
   department,
   startDate,
   endDate,
   resolvedTechItems,
+  autoApprove,
 }) {
   if (!resolvedTechItems.length) return null;
 
@@ -213,11 +218,13 @@ async function createMatchedTechLoan({
       user_id: matchedUser.id,
       loan_type: "temporary",
       purpose,
+      remarks,
       department,
       location: "",
       start_date: startDate,
       end_date: endDate,
-      status: "pending",
+      status: autoApprove ? "approved" : "pending",
+      admin_notes: autoApprove ? "Auto-approved by global setting" : null,
     })
     .select("id")
     .single();
@@ -239,14 +246,33 @@ async function createMatchedTechLoan({
     throw itemsError;
   }
 
+  if (autoApprove) {
+    try {
+      await autoApproveTechLoan({
+        db,
+        loanId: newLoan.id,
+        loanType: "temporary",
+        purpose,
+        department,
+        location: "",
+        resolvedItems: resolvedTechItems,
+      });
+    } catch (error) {
+      await supabase.from("loan_requests").delete().eq("id", newLoan.id);
+      throw error;
+    }
+  }
+
   return newLoan.id;
 }
 
 async function createMatchedLaptopLoans({
   matchedUser,
   purpose,
+  remarks,
   department,
   resolvedLaptopGroups,
+  autoApprove,
 }) {
   const createdIds = [];
 
@@ -259,8 +285,10 @@ async function createMatchedLaptopLoans({
         start_date: group.start_date,
         end_date: group.end_date,
         purpose,
+        remarks,
         department,
-        status: "pending",
+        status: autoApprove ? "approved" : "pending",
+        admin_notes: autoApprove ? "Auto-approved by global setting" : null,
       })
       .select("id")
       .single();
@@ -289,6 +317,7 @@ async function notifyAdmins({
   admins,
   guestName,
   purpose,
+  remarks,
   summaryLines,
   warnings,
 }) {
@@ -307,7 +336,7 @@ async function notifyAdmins({
   for (const admin of admins || []) {
     sendTelegramMessage(
       admin.id,
-      `🧾 <b>Guest Checkout</b>\n<b>${guestName}</b> submitted a request.\nPurpose: ${purpose}\n${summaryLines.join("\n")}`,
+      `🧾 <b>Guest Checkout</b>\n<b>${guestName}</b> submitted a request.\nPurpose: ${purpose}${remarks ? `\nRemarks: ${remarks}` : ""}\n${summaryLines.join("\n")}`,
     ).catch(() => {});
   }
 }
@@ -333,6 +362,7 @@ export async function POST(request) {
       department,
       email,
       purpose,
+      remarks,
       start_date,
       end_date,
       tech_items,
@@ -366,6 +396,8 @@ export async function POST(request) {
     const normalizedTechItems = normalizeTechItems(tech_items || items || []);
     const normalizedStartDate = parseDate(start_date);
     const normalizedEndDate = parseDate(end_date);
+    const trimmedPurpose = purpose.trim();
+    const trimmedRemarks = remarks?.trim() || null;
 
     if (
       normalizedTechItems.length === 0 &&
@@ -422,6 +454,10 @@ export async function POST(request) {
     const resolvedTechItems = await resolveTechItems(db, normalizedTechItems);
     const resolvedLaptopGroups = await resolveLaptopGroups(laptop_groups || []);
     const matchedUser = await findMatchedUser(normalizedTelegram);
+    const autoApproveLoans = await isAppSettingEnabled("auto_approve_loans");
+    const autoApproveGuestRequests = await isAppSettingEnabled(
+      "auto_approve_guest_requests",
+    );
 
     const { data: admins, error: adminsError } = await supabase
       .from("users")
@@ -454,18 +490,23 @@ export async function POST(request) {
 
     if (matchedUser) {
       const techLoanId = await createMatchedTechLoan({
+        db,
         matchedUser,
-        purpose: purpose.trim(),
+        purpose: trimmedPurpose,
+        remarks: trimmedRemarks,
         department: department?.trim() || "",
         startDate: normalizedStartDate,
         endDate: normalizedEndDate,
         resolvedTechItems,
+        autoApprove: autoApproveLoans,
       });
       const laptopLoanIds = await createMatchedLaptopLoans({
         matchedUser,
-        purpose: purpose.trim(),
+        purpose: trimmedPurpose,
+        remarks: trimmedRemarks,
         department: department?.trim() || null,
         resolvedLaptopGroups,
+        autoApprove: autoApproveLoans,
       });
 
       if (techLoanId || laptopLoanIds.length > 0) {
@@ -475,8 +516,9 @@ export async function POST(request) {
           entries: [
             {
               user_id: matchedUser.id,
-              message:
-                "A guest checkout matched your Telegram handle and is now in My Loans.",
+              message: autoApproveLoans
+                ? "A guest checkout matched your Telegram handle and was auto-approved in My Loans."
+                : "A guest checkout matched your Telegram handle and is now in My Loans.",
               link: "/loans",
             },
           ],
@@ -485,13 +527,16 @@ export async function POST(request) {
         });
       }
 
-      await notifyAdmins({
-        admins,
-        guestName: guest_name.trim(),
-        purpose: purpose.trim(),
-        summaryLines,
-        warnings,
-      });
+      if (!autoApproveLoans) {
+        await notifyAdmins({
+          admins,
+          guestName: guest_name.trim(),
+          purpose: trimmedPurpose,
+          remarks: trimmedRemarks,
+          summaryLines,
+          warnings,
+        });
+      }
 
       return NextResponse.json(
         withWarnings(
@@ -499,7 +544,10 @@ export async function POST(request) {
             linked_user_id: matchedUser.id,
             tech_loan_id: techLoanId,
             laptop_loan_ids: laptopLoanIds,
-            message: "Request submitted and linked to your existing account.",
+            auto_approved: autoApproveLoans,
+            message: autoApproveLoans
+              ? "Request linked to your existing account and auto-approved."
+              : "Request submitted and linked to your existing account.",
           },
           warnings,
         ),
@@ -544,11 +592,16 @@ export async function POST(request) {
         telegram_handle: normalizedTelegram,
         department: department?.trim() || null,
         email: email?.trim() || null,
-        purpose: purpose.trim(),
+        purpose: trimmedPurpose,
+        remarks: trimmedRemarks,
         loan_type: "temporary",
         start_date: fallbackStartDate,
         end_date: fallbackEndDate,
         items: serializedItems,
+        status: autoApproveGuestRequests ? "approved" : "pending",
+        admin_notes: autoApproveGuestRequests
+          ? "Auto-approved by guest queue setting"
+          : null,
       })
       .select("id")
       .single();
@@ -565,19 +618,25 @@ export async function POST(request) {
       );
     }
 
-    await notifyAdmins({
-      admins,
-      guestName: guest_name.trim(),
-      purpose: purpose.trim(),
-      summaryLines: [`Guest request #${guestRequest.id}`, ...summaryLines],
-      warnings,
-    });
+    if (!autoApproveGuestRequests) {
+      await notifyAdmins({
+        admins,
+        guestName: guest_name.trim(),
+        purpose: trimmedPurpose,
+        remarks: trimmedRemarks,
+        summaryLines: [`Guest request #${guestRequest.id}`, ...summaryLines],
+        warnings,
+      });
+    }
 
     return NextResponse.json(
       withWarnings(
         {
           request_id: guestRequest.id,
-          message: "Guest borrow request submitted for review.",
+          auto_approved: autoApproveGuestRequests,
+          message: autoApproveGuestRequests
+            ? "Guest borrow request auto-approved in the guest queue."
+            : "Guest borrow request submitted for review.",
         },
         warnings,
       ),

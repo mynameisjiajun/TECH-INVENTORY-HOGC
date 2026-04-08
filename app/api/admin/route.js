@@ -15,7 +15,7 @@ const SHEETS_ENABLED = !!(
 );
 const ACTIVE_LOANS_DASHBOARD_LIMIT = 200;
 const TECH_LOAN_ADMIN_FIELDS =
-  "id, user_id, loan_type, purpose, department, location, start_date, end_date, status, admin_notes, created_at, updated_at";
+  "id, user_id, loan_type, purpose, remarks, department, location, start_date, end_date, status, admin_notes, created_at, updated_at";
 const TECH_LOAN_ITEM_FIELDS =
   "id, loan_request_id, item_id, sheet_row, item_name, quantity";
 const TECH_LOAN_LIST_SELECT = `${TECH_LOAN_ADMIN_FIELDS}, users (display_name, username)`;
@@ -817,7 +817,7 @@ export async function GET(request) {
       supabase
         .from("laptop_loan_requests")
         .select(
-          "id, user_id, loan_type, purpose, department, start_date, end_date, status, admin_notes, created_at, updated_at, users (display_name, username), laptop_loan_items(id, loan_request_id, laptop_id, laptops(id, name))",
+          "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users (display_name, username), laptop_loan_items(id, loan_request_id, laptop_id, laptops(id, name))",
         )
         .in("status", ["approved", "pending"])
         .order("start_date", { ascending: true })

@@ -1533,12 +1533,52 @@ tr:last-child td {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
 .gantt-header h3 {
   font-size: 16px;
   font-weight: 600;
+}
+
+.gantt-title {
+  min-width: 0;
+}
+
+.gantt-toolbar {
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.gantt-filter-group {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.gantt-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.gantt-scroll-area {
+  min-width: 0;
+}
+
+.gantt-grid-shell {
+  min-width: 0;
+}
+
+.dashboard-loan-modal {
+  max-height: min(90dvh, 760px);
+  overflow-y: auto;
+}
+
+.dashboard-loan-modal-grid {
+  min-width: 0;
 }
 
 .gantt-timeline {
@@ -1720,7 +1760,7 @@ tr:last-child td {
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 520px;
-  max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
 }

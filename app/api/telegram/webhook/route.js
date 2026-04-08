@@ -99,12 +99,13 @@ async function handleStart(chatId, userId) {
     replacedPreviousChat = true;
   }
 
-  const { data: conflictingUsers, error: conflictingUsersError } = await supabase
-    .from("users")
-    .select("id")
-    .eq("telegram_chat_id", currentChatId)
-    .neq("id", userId)
-    .limit(25);
+  const { data: conflictingUsers, error: conflictingUsersError } =
+    await supabase
+      .from("users")
+      .select("id")
+      .eq("telegram_chat_id", currentChatId)
+      .neq("id", userId)
+      .limit(25);
 
   if (conflictingUsersError) {
     return {
@@ -463,6 +464,7 @@ async function handleStatus(chatId, userId, loanIdStr) {
   message += `Status: ${statusMap[loan.status] || loan.status}\n`;
   message += `Type: ${loan.loan_type === "permanent" ? "📌 Permanent" : "⏱ Temporary"}\n`;
   message += `Purpose: ${loan.purpose}\n`;
+  if (loan.remarks) message += `Remarks: ${loan.remarks}\n`;
   if (loan.department) message += `Department: ${loan.department}\n`;
   if (loan.location) message += `Location: ${loan.location}\n`;
   message += `Start: ${loan.start_date}\n`;
@@ -557,7 +559,10 @@ export async function POST(request) {
         return NextResponse.json({ ok: true });
       }
 
-      const result = await handleStartByTelegramHandle(chatId, telegramUsername);
+      const result = await handleStartByTelegramHandle(
+        chatId,
+        telegramUsername,
+      );
       await sendStartResultReply(chatId, result);
       return NextResponse.json({ ok: true });
     }

@@ -4,8 +4,11 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import {
   sendNewLoanUserEmail,
   sendNewLoanAdminEmails,
+  sendLoanStatusEmail,
 } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { autoApproveTechLoan } from "@/lib/services/techLoanAutoApproval";
+import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { NextResponse } from "next/server";
 
 const VALID_LOAN_VIEWS = new Set(["my", "all", "active"]);
@@ -19,11 +22,13 @@ const VALID_LOAN_STATUSES = new Set([
 const DEFAULT_LOAN_PAGE_SIZE = 100;
 const MAX_LOAN_PAGE_SIZE = 100;
 const RELATED_SEARCH_MIN_LENGTH = 2;
+const AUTO_APPROVE_ADMIN_NOTE = "Auto-approved by global setting";
 const TECH_LOAN_SELECT = `
       id,
       user_id,
       loan_type,
       purpose,
+  remarks,
       department,
       location,
       start_date,
@@ -152,8 +157,8 @@ export async function GET(request) {
     .order("created_at", { ascending: false });
 
   if (view === "active") {
-    // Any authenticated user can see all approved loans (team visibility)
-    query = query.in("status", ["approved", "pending"]);
+    // Team calendar visibility should only expose approved loans.
+    query = query.eq("status", "approved");
   } else if (view !== "all" || user?.role !== "admin") {
     query = query.eq("user_id", user.id);
   }
@@ -182,6 +187,7 @@ export async function GET(request) {
     const orPattern = `*${sanitizedSearch}*`;
     const searchClauses = [
       `purpose.ilike.${orPattern}`,
+      `remarks.ilike.${orPattern}`,
       `department.ilike.${orPattern}`,
       `location.ilike.${orPattern}`,
     ];
@@ -202,8 +208,8 @@ export async function GET(request) {
   const { data: loanRows, count } = await query;
   let loans = (loanRows || []).map((lr) => ({
     ...lr,
-    requester_name: user ? lr.users?.display_name || null : null,
-    requester_username: user ? lr.users?.username || null : null,
+    requester_name: lr.users?.display_name || null,
+    requester_username: lr.users?.username || null,
     users: undefined,
     items: [],
   }));
@@ -260,6 +266,7 @@ export async function POST(request) {
     const {
       loan_type,
       purpose,
+      remarks,
       department,
       start_date,
       end_date,
@@ -374,17 +381,24 @@ export async function POST(request) {
       });
     }
 
+    const trimmedPurpose = purpose.trim();
+    const trimmedRemarks = remarks?.trim() || null;
+    const autoApproveLoans = await isAppSettingEnabled("auto_approve_loans");
+
     // Create loan request in Supabase
     const { data: newLoan, error: loanError } = await supabase
       .from("loan_requests")
       .insert({
         user_id: user.id,
         loan_type,
-        purpose: purpose.trim(),
+        purpose: trimmedPurpose,
+        remarks: trimmedRemarks,
         department: department || "",
         location: location || "",
         start_date,
         end_date: end_date || null,
+        status: autoApproveLoans ? "approved" : "pending",
+        admin_notes: autoApproveLoans ? AUTO_APPROVE_ADMIN_NOTE : "",
       })
       .select("id")
       .single();
@@ -408,27 +422,27 @@ export async function POST(request) {
       throw itemsError;
     }
 
-    // Notify admins
-    const { data: admins } = await supabase
-      .from("users")
-      .select("id, email, display_name, mute_emails, mute_telegram")
-      .eq("role", "admin");
-
-    if (admins && admins.length > 0) {
-      await supabase.from("notifications").insert(
-        admins.map((admin) => ({
-          user_id: admin.id,
-          message: `New ${loan_type} loan request from ${user.display_name}`,
-          link: "/admin",
-        })),
-      );
+    if (autoApproveLoans) {
+      try {
+        await autoApproveTechLoan({
+          db,
+          loanId,
+          loanType: loan_type,
+          purpose: trimmedPurpose,
+          department: department || "",
+          location: location || "",
+          resolvedItems,
+        });
+      } catch (autoApproveError) {
+        await supabase.from("loan_requests").delete().eq("id", loanId);
+        throw autoApproveError;
+      }
     }
 
-    // Fire-and-forget: emails + telegram
     try {
       const { data: userRecord } = await supabase
         .from("users")
-        .select("email, mute_emails")
+        .select("email, display_name, mute_emails, mute_telegram")
         .eq("id", user.id)
         .single();
 
@@ -439,36 +453,97 @@ export async function POST(request) {
         item: i.item_name,
         quantity: i.quantity,
       }));
+      const remarksLine = trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : "";
 
-      if (userRecord?.email && !userRecord?.mute_emails) {
-        sendNewLoanUserEmail({
-          to: userRecord.email,
-          displayName: user.display_name || user.username,
-          loanId,
-          loanType: loan_type,
-          purpose,
-          items: itemsForEmail,
-        }).catch(() => {});
-      }
+      if (autoApproveLoans) {
+        await supabase.from("notifications").insert({
+          user_id: user.id,
+          message: `Your ${loan_type} loan request #${loanId} was auto-approved.`,
+          link: "/loans",
+        });
 
-      const unmutedAdminsEmail = (admins || []).filter((a) => !a.mute_emails);
-      if (unmutedAdminsEmail.length > 0) {
-        sendNewLoanAdminEmails({
-          admins: unmutedAdminsEmail,
-          userName: user.display_name || user.username,
-          loanId,
-          loanType: loan_type,
-          purpose,
-          items: itemsForEmail,
-        }).catch(() => {});
-      }
+        await supabase.from("activity_feed").insert({
+          user_id: user.id,
+          action: "auto_approve",
+          description: `Loan #${loanId} was auto-approved by global setting`,
+          link: "/loans",
+        });
 
-      for (const admin of admins || []) {
-        if (!admin.mute_telegram) {
+        await supabase.from("audit_log").insert({
+          user_id: user.id,
+          action: "auto_approve",
+          target_type: "loan",
+          target_id: loanId,
+          details: `Auto-approved ${loan_type} loan at submission by global setting.`,
+        });
+
+        if (userRecord?.email && !userRecord?.mute_emails) {
+          sendLoanStatusEmail({
+            to: userRecord.email,
+            displayName:
+              userRecord.display_name || user.display_name || user.username,
+            loanId,
+            status: "approved",
+            adminNotes: AUTO_APPROVE_ADMIN_NOTE,
+            items: itemsForEmail,
+          }).catch(() => {});
+        }
+
+        if (!userRecord?.mute_telegram) {
           sendTelegramMessage(
-            admin.id,
-            `🔔 <b>New Loan Request</b>\n<b>${user.display_name || user.username}</b> requested a <b>${loan_type}</b> loan.\n\nPurpose: ${purpose}\nItems: ${itemListStr}`,
+            user.id,
+            `✅ <b>Loan Auto-Approved</b>\nYour ${loan_type} loan request #${loanId} is approved and active now.${trimmedRemarks ? `${remarksLine}` : ""}`,
           ).catch(() => {});
+        }
+      } else {
+        // Notify admins
+        const { data: admins } = await supabase
+          .from("users")
+          .select("id, email, display_name, mute_emails, mute_telegram")
+          .eq("role", "admin");
+
+        if (admins && admins.length > 0) {
+          await supabase.from("notifications").insert(
+            admins.map((admin) => ({
+              user_id: admin.id,
+              message: `New ${loan_type} loan request from ${user.display_name}`,
+              link: "/admin",
+            })),
+          );
+        }
+
+        if (userRecord?.email && !userRecord?.mute_emails) {
+          sendNewLoanUserEmail({
+            to: userRecord.email,
+            displayName: user.display_name || user.username,
+            loanId,
+            loanType: loan_type,
+            purpose: trimmedPurpose,
+            remarks: trimmedRemarks,
+            items: itemsForEmail,
+          }).catch(() => {});
+        }
+
+        const unmutedAdminsEmail = (admins || []).filter((a) => !a.mute_emails);
+        if (unmutedAdminsEmail.length > 0) {
+          sendNewLoanAdminEmails({
+            admins: unmutedAdminsEmail,
+            userName: user.display_name || user.username,
+            loanId,
+            loanType: loan_type,
+            purpose: trimmedPurpose,
+            remarks: trimmedRemarks,
+            items: itemsForEmail,
+          }).catch(() => {});
+        }
+
+        for (const admin of admins || []) {
+          if (!admin.mute_telegram) {
+            sendTelegramMessage(
+              admin.id,
+              `🔔 <b>New Loan Request</b>\n<b>${user.display_name || user.username}</b> requested a <b>${loan_type}</b> loan.\n\nPurpose: ${trimmedPurpose}${remarksLine}\nItems: ${itemListStr}`,
+            ).catch(() => {});
+          }
         }
       }
     } catch (notifErr) {
@@ -477,7 +552,10 @@ export async function POST(request) {
 
     return NextResponse.json({
       loan_id: loanId,
-      message: "Loan request submitted!",
+      auto_approved: autoApproveLoans,
+      message: autoApproveLoans
+        ? "Loan request auto-approved!"
+        : "Loan request submitted!",
     });
   } catch (error) {
     console.error("Loan creation error:", error);

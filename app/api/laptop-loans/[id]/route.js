@@ -93,8 +93,15 @@ export async function PUT(request, { params }) {
 
   try {
     const { id } = await params;
-    const { laptop_ids, loan_type, start_date, end_date, purpose, department } =
-      await request.json();
+    const {
+      laptop_ids,
+      loan_type,
+      start_date,
+      end_date,
+      purpose,
+      remarks,
+      department,
+    } = await request.json();
 
     if (!laptop_ids?.length)
       return NextResponse.json(
@@ -248,6 +255,7 @@ export async function PUT(request, { params }) {
       start_date: existingLoan.start_date,
       end_date: existingLoan.end_date,
       purpose: existingLoan.purpose,
+      remarks: existingLoan.remarks,
       department: existingLoan.department,
       status: existingLoan.status,
       admin_notes: existingLoan.admin_notes,
@@ -261,6 +269,7 @@ export async function PUT(request, { params }) {
         start_date,
         end_date: loan_type === "temporary" ? end_date : null,
         purpose: purpose.trim(),
+        remarks: remarks?.trim() || null,
         department: department?.trim() || null,
         status: "pending",
         admin_notes: existingLoan.admin_notes
