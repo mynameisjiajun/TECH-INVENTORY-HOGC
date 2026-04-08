@@ -1,17 +1,17 @@
 :root {
-  --bg-primary: #070b16;
-  --bg-secondary: #0e1428;
-  --bg-card: #121a30;
-  --bg-card-hover: #17213c;
-  --bg-glass: #10182c;
-  --border: rgba(114, 102, 255, 0.16);
-  --border-hover: rgba(139, 129, 255, 0.36);
-  --text-primary: #f1f5f9;
-  --text-secondary: #98a3bd;
-  --text-muted: #6a7692;
+  --bg-primary: #060a14;
+  --bg-secondary: #0c1322;
+  --bg-card: #111b32;
+  --bg-card-hover: #172240;
+  --bg-glass: #0f1930;
+  --border: rgba(120, 110, 255, 0.2);
+  --border-hover: rgba(148, 138, 255, 0.42);
+  --text-primary: #f0f4fc;
+  --text-secondary: #94a3b8;
+  --text-muted: #60708a;
   --accent: #7266ff;
   --accent-hover: #8b81ff;
-  --accent-glow: rgba(114, 102, 255, 0.32);
+  --accent-glow: rgba(114, 102, 255, 0.3);
   --success: #10b981;
   --success-bg: rgba(16, 185, 129, 0.1);
   --warning: #f59e0b;
@@ -27,8 +27,8 @@
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 16px;
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.4);
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.45);
   --shell-navbar-safe-top: 0px;
   --shell-mobile-nav-min-height: 68px;
   --shell-mobile-nav-padding-bottom: 8px;
@@ -526,6 +526,9 @@ a:hover {
   transition: var(--transition);
   content-visibility: auto;
   contain-intrinsic-size: 280px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .glass-panel {
@@ -648,15 +651,17 @@ a:hover {
 .input-group {
   margin-bottom: 16px;
   min-width: 0;
-  overflow: hidden;
+  /* overflow: visible — do NOT set hidden here; it clips the date picker
+     calendar icon on the right edge, making it unclickable */
 }
 
 .input-group label {
   display: block;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 6px;
+  letter-spacing: 0.2px;
 }
 
 .input,
@@ -669,7 +674,7 @@ select,
 textarea {
   width: 100%;
   padding: 10px 14px;
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(10, 16, 32, 0.85);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
@@ -695,8 +700,21 @@ input[type="date"]:hover,
 input[type="number"]:hover,
 select:hover,
 textarea:hover {
-  border-color: rgba(129, 140, 248, 0.28);
-  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(130, 120, 255, 0.32);
+  background: rgba(12, 18, 36, 0.92);
+}
+
+.input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="date"]:focus,
+input[type="number"]:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(114, 102, 255, 0.6);
+  background: rgba(10, 16, 32, 0.96);
+  box-shadow: 0 0 0 3px rgba(114, 102, 255, 0.14);
 }
 
 /* Restore compact size on desktop where zoom isn't an issue */
@@ -715,6 +733,9 @@ textarea:hover {
 
 input[type="date"] {
   color-scheme: dark;
+  /* Restore native date picker — appearance:none breaks it on Safari/iOS */
+  -webkit-appearance: auto;
+  appearance: auto;
 }
 
 input::placeholder,
@@ -723,9 +744,11 @@ textarea::placeholder {
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {
-  opacity: 0.72;
+  opacity: 0.85;
   cursor: pointer;
-  filter: invert(0.88) sepia(0.1) saturate(0.45) hue-rotate(180deg);
+  /* Force white icon on dark backgrounds */
+  filter: brightness(0) invert(1);
+  padding: 0 2px 0 4px;
 }
 
 input[type="date"]::-webkit-datetime-edit,
@@ -735,6 +758,8 @@ input[type="date"]::-webkit-datetime-edit-month-field,
 input[type="date"]::-webkit-datetime-edit-day-field,
 input[type="date"]::-webkit-datetime-edit-year-field {
   color: var(--text-primary);
+  font-family: inherit;
+  font-size: inherit;
 }
 
 input:-webkit-autofill,
@@ -1084,7 +1109,7 @@ tr:last-child td {
 .filter-select-compact {
   min-width: 132px;
   max-width: 176px;
-  font-size: 13px;
+  font-size: 14px;
   padding: 7px 32px 7px 10px;
 }
 
@@ -1096,10 +1121,11 @@ tr:last-child td {
 }
 
 .filter-shell {
-  background: #10182c;
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .filter-toolbar {
@@ -1230,12 +1256,11 @@ tr:last-child td {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(129, 140, 248, 0.14);
-  background:
-    linear-gradient(180deg, rgba(18, 26, 44, 0.9), rgba(12, 18, 32, 0.82)),
-    rgba(15, 23, 42, 0.82);
+  border: 1px solid var(--border);
+  background: rgba(10, 16, 32, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .filter-date-range .filter-icon {
@@ -1245,13 +1270,15 @@ tr:last-child td {
 }
 
 .filter-date-input {
-  width: 136px !important;
+  width: 140px !important;
   min-width: 0;
-  padding: 0 !important;
+  /* Right padding keeps the native calendar icon accessible */
+  padding: 0 6px 0 0 !important;
   border: none !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+  font-size: 14px !important;
 }
 
 .filter-date-input:hover,
@@ -2494,20 +2521,24 @@ body.rickroll-lock {
 .laptop-sticky-bar {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 20px;
+  border-radius: 16px;
+  padding: 16px 18px;
   margin-bottom: 24px;
   position: sticky;
   top: 70px;
   z-index: 10;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
   overflow: visible;
 }
 
 .laptop-loan-type-toggle {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 6px;
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
 }
 
 .laptop-date-grid {
@@ -2544,13 +2575,13 @@ body.rickroll-lock {
 @media (max-width: 768px) {
   .laptop-sticky-bar {
     top: var(--shell-sticky-top-mobile);
-    border-radius: 0 0 14px 14px;
+    border-radius: 0 0 16px 16px;
     margin-left: -12px;
     margin-right: -12px;
     border-left: none;
     border-right: none;
     border-top: none;
-    padding: 8px 10px;
+    padding: 10px 12px;
     background: var(--bg-secondary);
     /* overflow:clip contains children without creating a scroll context;
        do NOT use overflow:hidden — it breaks sticky positioning on iOS */
@@ -2589,11 +2620,11 @@ body.rickroll-lock {
 
   .laptop-loan-type-toggle button {
     font-size: 11px !important;
-    padding: 7px 4px !important;
+    padding: 7px 6px !important;
   }
 
   .laptop-loan-type-toggle {
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
 
   .laptop-content-grid.with-sidebar {

@@ -439,125 +439,133 @@ export default function CartPanel() {
                           style={{
                             flexDirection: "column",
                             alignItems: "stretch",
-                            gap: 8,
-                            padding: "12px 16px",
+                            gap: 10,
+                            padding: "14px 16px",
+                            borderColor: item.loan_type === "permanent"
+                              ? "rgba(139,92,246,0.25)"
+                              : "var(--border)",
                           }}
                         >
                           <div
                             style={{
                               display: "flex",
                               justifyContent: "space-between",
-                              alignItems: "flex-start",
+                              alignItems: "center",
                             }}
                           >
-                            <div className="cart-item-info" style={{ flex: 1 }}>
-                              <h4
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 6,
-                                }}
-                              >
-                                <RiMacbookLine
-                                  style={{
-                                    color: "var(--accent)",
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                {item.name}
-                              </h4>
-                              <p style={{ fontSize: 12 }}>
-                                {item.screen_size}
-                                {item.screen_size && item.cpu ? " · " : ""}
-                                {item.cpu}
-                              </p>
-                              <span
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 3,
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  padding: "2px 7px",
-                                  borderRadius: 5,
-                                  marginTop: 3,
-                                  background:
-                                    item.loan_type === "permanent"
-                                      ? "rgba(139,92,246,0.15)"
-                                      : "rgba(59,130,246,0.12)",
-                                  color:
-                                    item.loan_type === "permanent"
-                                      ? "#8b5cf6"
-                                      : "#3b82f6",
-                                  border: `1px solid ${item.loan_type === "permanent" ? "rgba(139,92,246,0.3)" : "rgba(59,130,246,0.3)"}`,
-                                }}
-                              >
-                                {item.loan_type === "permanent" ? (
-                                  <>
-                                    <RiPushpinLine />
-                                    Permanent
-                                  </>
-                                ) : (
-                                  <>
-                                    <RiTimeLine />
-                                    Temporary
-                                  </>
-                                )}
-                              </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                              <div style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 9,
+                                flexShrink: 0,
+                                background: item.loan_type === "permanent"
+                                  ? "rgba(139,92,246,0.12)"
+                                  : "rgba(99,102,241,0.1)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: item.loan_type === "permanent" ? "#8b5cf6" : "var(--accent)",
+                                fontSize: 18,
+                              }}>
+                                <RiMacbookLine />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {item.name}
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                  {(item.screen_size || item.cpu) && (
+                                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                                      {item.screen_size}{item.screen_size && item.cpu ? " · " : ""}{item.cpu}
+                                    </span>
+                                  )}
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 3,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      padding: "2px 7px",
+                                      borderRadius: 5,
+                                      background:
+                                        item.loan_type === "permanent"
+                                          ? "rgba(139,92,246,0.15)"
+                                          : "rgba(59,130,246,0.12)",
+                                      color:
+                                        item.loan_type === "permanent"
+                                          ? "#8b5cf6"
+                                          : "#3b82f6",
+                                      border: `1px solid ${item.loan_type === "permanent" ? "rgba(139,92,246,0.3)" : "rgba(59,130,246,0.3)"}`,
+                                    }}
+                                  >
+                                    {item.loan_type === "permanent" ? (
+                                      <><RiPushpinLine />Permanent</>
+                                    ) : (
+                                      <><RiTimeLine />Temporary</>
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                             <button
                               aria-label="Remove laptop"
                               className="cart-delete-btn"
-                              onClick={() =>
-                                removeItem(item.id, item.start_date)
-                              }
+                              onClick={() => removeItem(item.id, item.start_date)}
                               title="Remove"
+                              style={{ flexShrink: 0, marginLeft: 4 }}
                             >
                               <RiDeleteBinLine size={16} />
                             </button>
                           </div>
                           {/* Per-laptop date pickers */}
-                          {(!item.start_date ||
-                            (item.loan_type === "temporary" &&
-                              !item.end_date)) && (
-                            <div
-                              style={{
-                                fontSize: 11,
-                                color: "var(--warning)",
-                                fontWeight: 600,
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 4,
-                              }}
-                            >
-                              ⚠️{" "}
-                              {!item.start_date
-                                ? "Borrow date required"
-                                : "Return date required"}
-                            </div>
-                          )}
                           <div
                             style={{
-                              display: "grid",
-                              /* Always 1 column — date text at 16px is too wide
-                                 to fit two columns in a narrow cart panel */
-                              gridTemplateColumns: "minmax(0, 1fr)",
-                              gap: 6,
+                              background: "rgba(255,255,255,0.03)",
+                              border: "1px solid var(--border)",
+                              borderRadius: 10,
+                              padding: "10px 12px",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 8,
                             }}
                           >
+                            {(!item.start_date ||
+                              (item.loan_type === "temporary" &&
+                                !item.end_date)) && (
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: "var(--warning)",
+                                  fontWeight: 600,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  padding: "4px 0 2px",
+                                }}
+                              >
+                                <RiCalendarLine size={12} />
+                                {!item.start_date
+                                  ? "Set borrow date to continue"
+                                  : "Set return date to continue"}
+                              </div>
+                            )}
                             <div style={{ minWidth: 0 }}>
                               <label
                                 style={{
                                   fontSize: 10,
                                   color: "var(--text-muted)",
                                   fontWeight: 600,
+                                  letterSpacing: 0.3,
+                                  textTransform: "uppercase",
                                   display: "flex",
                                   alignItems: "center",
                                   gap: 4,
-                                  marginBottom: 4,
+                                  marginBottom: 5,
                                 }}
                               >
-                                <RiCalendarLine />
+                                <RiCalendarLine size={11} />
                                 Borrow Date
                               </label>
                               <input
@@ -576,7 +584,7 @@ export default function CartPanel() {
                                   boxSizing: "border-box",
                                   minWidth: 0,
                                   fontSize: 16,
-                                  padding: "5px 8px",
+                                  padding: "7px 10px",
                                 }}
                               />
                             </div>
@@ -587,13 +595,15 @@ export default function CartPanel() {
                                     fontSize: 10,
                                     color: "var(--text-muted)",
                                     fontWeight: 600,
+                                    letterSpacing: 0.3,
+                                    textTransform: "uppercase",
                                     display: "flex",
                                     alignItems: "center",
                                     gap: 4,
-                                    marginBottom: 4,
+                                    marginBottom: 5,
                                   }}
                                 >
-                                  <RiCalendarLine />
+                                  <RiCalendarLine size={11} />
                                   Return Date
                                 </label>
                                 <input
@@ -613,7 +623,7 @@ export default function CartPanel() {
                                     boxSizing: "border-box",
                                     minWidth: 0,
                                     fontSize: 16,
-                                    padding: "5px 8px",
+                                    padding: "7px 10px",
                                   }}
                                 />
                               </div>
@@ -931,15 +941,23 @@ export default function CartPanel() {
                     {/* Loan type toggle */}
                     {!modifyingLoan && (
                       <div
-                        style={{ display: "flex", gap: 8, marginBottom: 16 }}
+                        style={{
+                          display: "flex",
+                          gap: 0,
+                          marginBottom: 16,
+                          background: "rgba(255,255,255,0.04)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 12,
+                          padding: 4,
+                        }}
                       >
                         <button
                           type="button"
                           onClick={() => setTechLoanType("temporary")}
                           style={{
                             flex: 1,
-                            padding: "9px 0",
-                            borderRadius: 10,
+                            padding: "8px 0",
+                            borderRadius: 9,
                             fontWeight: 600,
                             fontSize: 13,
                             cursor: "pointer",
@@ -947,14 +965,23 @@ export default function CartPanel() {
                             background:
                               techLoanType === "temporary"
                                 ? "linear-gradient(135deg, var(--accent), #818cf8)"
-                                : "rgba(255,255,255,0.05)",
+                                : "transparent",
                             color:
                               techLoanType === "temporary"
                                 ? "white"
-                                : "var(--text-secondary)",
+                                : "var(--text-muted)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            boxShadow: techLoanType === "temporary"
+                              ? "0 2px 8px rgba(99,102,241,0.3)"
+                              : "none",
+                            transition: "all 0.18s",
                           }}
                         >
-                          ⏱️ Temporary
+                          <RiTimeLine size={14} />
+                          Temporary
                         </button>
                         {canPermanent && (
                           <button
@@ -962,8 +989,8 @@ export default function CartPanel() {
                             onClick={() => setTechLoanType("permanent")}
                             style={{
                               flex: 1,
-                              padding: "9px 0",
-                              borderRadius: 10,
+                              padding: "8px 0",
+                              borderRadius: 9,
                               fontWeight: 600,
                               fontSize: 13,
                               cursor: "pointer",
@@ -971,14 +998,23 @@ export default function CartPanel() {
                               background:
                                 techLoanType === "permanent"
                                   ? "linear-gradient(135deg, #8b5cf6, #a78bfa)"
-                                  : "rgba(255,255,255,0.05)",
+                                  : "transparent",
                               color:
                                 techLoanType === "permanent"
                                   ? "white"
-                                  : "var(--text-secondary)",
+                                  : "var(--text-muted)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 6,
+                              boxShadow: techLoanType === "permanent"
+                                ? "0 2px 8px rgba(139,92,246,0.3)"
+                                : "none",
+                              transition: "all 0.18s",
                             }}
                           >
-                            📌 Permanent
+                            <RiPushpinLine size={14} />
+                            Permanent
                           </button>
                         )}
                       </div>

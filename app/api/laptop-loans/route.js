@@ -3,6 +3,14 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
+const VALID_LOAN_VIEWS = new Set(["my", "all", "active"]);
+const VALID_LOAN_STATUSES = new Set([
+  "pending",
+  "approved",
+  "rejected",
+  "returned",
+]);
+
 export async function GET(request) {
   const user = await getCurrentUser();
   if (!user)
@@ -12,6 +20,14 @@ export async function GET(request) {
   const view = searchParams.get("view") || "my";
   const status = searchParams.get("status") || "";
   const countOnly = searchParams.get("count_only") === "true";
+
+  if (!VALID_LOAN_VIEWS.has(view)) {
+    return NextResponse.json({ error: "Invalid view" }, { status: 400 });
+  }
+
+  if (status && !VALID_LOAN_STATUSES.has(status)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
 
   if (countOnly && user.role === "admin") {
     let cq = supabase

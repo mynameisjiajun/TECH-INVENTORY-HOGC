@@ -2,17 +2,16 @@ import { supabase } from "@/lib/db/supabase";
 import { hashPassword, createResetToken, verifyResetToken, decodeTokenUnsafe } from "@/lib/utils/auth";
 import { sendPasswordResetEmail } from "@/lib/services/email";
 import { checkRateLimit } from "@/lib/utils/rateLimit";
+import { getRequestClientIdentifier } from "@/lib/utils/request";
 import { NextResponse } from "next/server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export async function POST(request) {
   try {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    const clientId = getRequestClientIdentifier(request);
     // Separate rate limit key from login so they don't interfere with each other
-    const { limited, retryAfterSeconds } = checkRateLimit(`reset:${ip}`);
+    const { limited, retryAfterSeconds } = checkRateLimit(`reset:${clientId}`);
     if (limited) {
       return NextResponse.json(
         {

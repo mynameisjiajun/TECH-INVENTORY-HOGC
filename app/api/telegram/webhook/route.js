@@ -306,8 +306,15 @@ async function handleHistory(chatId, userId) {
 
 export async function POST(request) {
   try {
+    if (!WEBHOOK_SECRET) {
+      console.error("TELEGRAM_WEBHOOK_SECRET is not configured");
+      return NextResponse.json(
+        { error: "Server misconfiguration" },
+        { status: 500 },
+      );
+    }
+
     if (
-      WEBHOOK_SECRET &&
       request.headers.get("x-telegram-bot-api-secret-token") !== WEBHOOK_SECRET
     ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

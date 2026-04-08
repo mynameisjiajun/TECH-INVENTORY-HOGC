@@ -526,8 +526,8 @@ export default function LaptopLoansPage() {
                   }}
                   style={{
                     flex: 1,
-                    padding: "10px 0",
-                    borderRadius: 10,
+                    padding: "8px 0",
+                    borderRadius: 9,
                     fontWeight: 600,
                     fontSize: 13,
                     cursor: "pointer",
@@ -535,18 +535,23 @@ export default function LaptopLoansPage() {
                     background:
                       loanType === "temporary"
                         ? "linear-gradient(135deg, var(--accent), #818cf8)"
-                        : "rgba(255,255,255,0.05)",
+                        : "transparent",
                     color:
                       loanType === "temporary"
                         ? "white"
-                        : "var(--text-secondary)",
-                    transition: "all 0.15s",
+                        : "var(--text-muted)",
+                    transition: "all 0.18s",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    boxShadow: loanType === "temporary"
+                      ? "0 2px 8px rgba(99,102,241,0.35)"
+                      : "none",
                   }}
                 >
-                  <RiTimeLine
-                    style={{ verticalAlign: "middle", marginRight: 4 }}
-                  />
-                  ⏱️ Temporary Loan
+                  <RiTimeLine style={{ fontSize: 14 }} />
+                  Temporary
                 </button>
                 {canPermanent && (
                   <button
@@ -556,8 +561,8 @@ export default function LaptopLoansPage() {
                     }}
                     style={{
                       flex: 1,
-                      padding: "10px 0",
-                      borderRadius: 10,
+                      padding: "8px 0",
+                      borderRadius: 9,
                       fontWeight: 600,
                       fontSize: 13,
                       cursor: "pointer",
@@ -565,111 +570,118 @@ export default function LaptopLoansPage() {
                       background:
                         loanType === "permanent"
                           ? "linear-gradient(135deg, #8b5cf6, #a78bfa)"
-                          : "rgba(255,255,255,0.05)",
+                          : "transparent",
                       color:
                         loanType === "permanent"
                           ? "white"
-                          : "var(--text-secondary)",
-                      transition: "all 0.15s",
+                          : "var(--text-muted)",
+                      transition: "all 0.18s",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      boxShadow: loanType === "permanent"
+                        ? "0 2px 8px rgba(139,92,246,0.35)"
+                        : "none",
                     }}
                   >
-                    <RiPushpinLine
-                      style={{ verticalAlign: "middle", marginRight: 4 }}
-                    />
-                    📌 Permanent Loan
+                    <RiPushpinLine style={{ fontSize: 14 }} />
+                    Permanent
                   </button>
                 )}
               </div>
 
               {/* Date pickers */}
               <div
-                style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 10,
-                  padding: "8px 10px",
-                  marginTop: 4,
-                }}
+                className={`laptop-date-grid${loanType !== "temporary" ? " single-col" : ""}`}
+                style={{ marginTop: 4 }}
               >
-                <div
-                  className={`laptop-date-grid${loanType !== "temporary" ? " single-col" : ""}`}
-                >
-                  <div className="input-group" style={{ margin: 0 }}>
+                <div style={{ minWidth: 0 }}>
+                  <label
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--text-muted)",
+                      letterSpacing: 0.4,
+                      textTransform: "uppercase",
+                      marginBottom: 6,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                    }}
+                  >
+                    <RiCalendarLine style={{ fontSize: 12 }} />
+                    {loanType === "temporary" ? "Borrow Date" : "Start Date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    min={today}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setStartDate(val);
+                      if (endDate && val && endDate < val) setEndDate("");
+                    }}
+                    style={{ width: "100%", boxSizing: "border-box", minWidth: 0 }}
+                  />
+                </div>
+                {loanType === "temporary" && (
+                  <div style={{ minWidth: 0 }}>
                     <label
                       style={{
-                        fontSize: 12,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--text-muted)",
+                        letterSpacing: 0.4,
+                        textTransform: "uppercase",
                         marginBottom: 6,
-                        display: "block",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
                       }}
                     >
-                      {loanType === "temporary"
-                        ? "Borrow Date *"
-                        : "Start Date *"}
+                      <RiCalendarLine style={{ fontSize: 12 }} />
+                      Return Date
                     </label>
                     <input
                       type="date"
-                      value={startDate}
-                      min={today}
+                      value={endDate}
+                      min={startDate || today}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setStartDate(val);
-                        // Clear end date if it's now before the new start date
-                        if (endDate && val && endDate < val) setEndDate("");
+                        if (startDate && val < startDate) return;
+                        setEndDate(val);
                       }}
                       style={{
                         width: "100%",
                         boxSizing: "border-box",
                         minWidth: 0,
+                        borderColor:
+                          endDate && startDate && endDate < startDate
+                            ? "var(--error)"
+                            : undefined,
                       }}
                     />
                   </div>
-                  {loanType === "temporary" && (
-                    <div className="input-group" style={{ margin: 0 }}>
-                      <label
-                        style={{
-                          fontSize: 12,
-                          marginBottom: 6,
-                          display: "block",
-                        }}
-                      >
-                        Return Date *
-                      </label>
-                      <input
-                        type="date"
-                        value={endDate}
-                        min={startDate || today}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (startDate && val < startDate) return; // silently reject invalid range
-                          setEndDate(val);
-                        }}
-                        style={{
-                          width: "100%",
-                          boxSizing: "border-box",
-                          minWidth: 0,
-                          borderColor:
-                            endDate && startDate && endDate < startDate
-                              ? "var(--error)"
-                              : undefined,
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {!startDate && (
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      marginTop: 10,
-                      marginBottom: 0,
-                    }}
-                  >
-                    📅 Select a date to see availability and enable borrowing
-                  </p>
                 )}
               </div>
+
+              {!startDate && (
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                    marginTop: 8,
+                    marginBottom: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <RiCalendarLine style={{ opacity: 0.5 }} />
+                  Select a date to see availability and enable borrowing
+                </p>
+              )}
             </div>
 
             {/* Main content: tiers + optional returning soon sidebar */}

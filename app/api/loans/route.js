@@ -8,6 +8,14 @@ import {
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
+const VALID_LOAN_VIEWS = new Set(["my", "all", "active"]);
+const VALID_LOAN_STATUSES = new Set([
+  "pending",
+  "approved",
+  "rejected",
+  "returned",
+]);
+
 // GET: fetch loan requests
 export async function GET(request) {
   const user = await getCurrentUser();
@@ -17,10 +25,18 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") || "";
   const view = searchParams.get("view") || "my";
-  const search = searchParams.get("search") || "";
+  const search = (searchParams.get("search") || "").trim().slice(0, 100);
   const dateFrom = searchParams.get("date_from") || "";
   const dateTo = searchParams.get("date_to") || "";
   const countOnly = searchParams.get("count_only") === "true";
+
+  if (!VALID_LOAN_VIEWS.has(view)) {
+    return NextResponse.json({ error: "Invalid view" }, { status: 400 });
+  }
+
+  if (status && !VALID_LOAN_STATUSES.has(status)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
 
   // Lightweight count path — admin only, no payload
   if (countOnly && user.role === "admin") {

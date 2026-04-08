@@ -50,6 +50,14 @@ function fuzzyMatch(text, search) {
 
 // Cache TTL: 30 seconds for inventory data (balances freshness vs performance)
 const CACHE_TTL = 30_000;
+const VALID_TABS = new Set([
+  "storage",
+  "deployed",
+  "total_quantity",
+  "total_breakdown",
+  "low_stock",
+  "presets",
+]);
 
 function getFilters(db, table) {
   return cached(`filters:${table}`, () => {
@@ -81,13 +89,18 @@ export async function GET(request) {
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    await waitForSync();
-    const db = getDb();
     const { searchParams } = new URL(request.url);
     const tab = searchParams.get("tab") || "storage";
-    const search = searchParams.get("search") || "";
-    const type = searchParams.get("type") || "";
-    const brand = searchParams.get("brand") || "";
+    const search = (searchParams.get("search") || "").trim().slice(0, 100);
+    const type = (searchParams.get("type") || "").trim().slice(0, 80);
+    const brand = (searchParams.get("brand") || "").trim().slice(0, 80);
+
+    if (!VALID_TABS.has(tab)) {
+      return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
+    }
+
+    await waitForSync();
+    const db = getDb();
 
     if (tab === "storage") {
       let query = "SELECT * FROM storage_items WHERE 1=1";
@@ -196,8 +209,6 @@ export async function GET(request) {
     if (tab === "presets") {
       return respond({ items: [] });
     }
-
-    return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
   } catch (error) {
     console.error("Items GET error:", error);
     return NextResponse.json(

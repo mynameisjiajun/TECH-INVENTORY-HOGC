@@ -7,6 +7,7 @@ import {
 } from "@/lib/utils/auth";
 import { sendWelcomeEmail } from "@/lib/services/email";
 import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
+import { getRequestClientIdentifier } from "@/lib/utils/request";
 import { NextResponse } from "next/server";
 
 function rateLimitError(retryAfterSeconds) {
@@ -20,9 +21,7 @@ function rateLimitError(retryAfterSeconds) {
 
 export async function POST(request) {
   try {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    const clientId = getRequestClientIdentifier(request);
     const { action, username, password, display_name, invite_code, email } =
       await request.json();
 
@@ -41,7 +40,7 @@ export async function POST(request) {
       }
 
       const normalizedUsername = username.trim().toLowerCase();
-      const registerLimit = checkRateLimit(`auth:register:${ip}`);
+      const registerLimit = checkRateLimit(`auth:register:${clientId}`);
       if (registerLimit.limited) {
         return rateLimitError(registerLimit.retryAfterSeconds);
       }
@@ -109,7 +108,7 @@ export async function POST(request) {
       const response = NextResponse.json({ user: newUser });
       const cookieOpts = getTokenCookieOptions();
       response.cookies.set(cookieOpts.name, token, cookieOpts);
-      resetRateLimit(`auth:register:${ip}`);
+      resetRateLimit(`auth:register:${clientId}`);
       return response;
     }
 
@@ -121,7 +120,7 @@ export async function POST(request) {
         );
       }
       const normalizedUsername = username.trim().toLowerCase();
-      const ipLimit = checkRateLimit(`auth:login:ip:${ip}`);
+      const ipLimit = checkRateLimit(`auth:login:client:${clientId}`);
       if (ipLimit.limited) {
         return rateLimitError(ipLimit.retryAfterSeconds);
       }
@@ -145,7 +144,7 @@ export async function POST(request) {
         );
       }
 
-      resetRateLimit(`auth:login:ip:${ip}`);
+      resetRateLimit(`auth:login:client:${clientId}`);
       resetRateLimit(`auth:login:user:${normalizedUsername}`);
       const token = createToken(user);
       const response = NextResponse.json({

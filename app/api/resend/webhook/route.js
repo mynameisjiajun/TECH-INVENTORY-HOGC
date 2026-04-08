@@ -19,6 +19,14 @@ const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET;
 
 export async function POST(request) {
   try {
+    if (!RESEND_WEBHOOK_SECRET) {
+      console.error("RESEND_WEBHOOK_SECRET is not configured");
+      return NextResponse.json(
+        { error: "Server misconfiguration" },
+        { status: 500 },
+      );
+    }
+
     // Verify the webhook came from Resend using their svix signature
     // Install: npm install svix
     const rawBody = await request.text();
@@ -26,20 +34,17 @@ export async function POST(request) {
     const svixTimestamp = request.headers.get("svix-timestamp");
     const svixSignature = request.headers.get("svix-signature");
 
-    if (RESEND_WEBHOOK_SECRET) {
-      // Signature verification (recommended in production)
-      try {
-        const { Webhook } = await import("svix");
-        const wh = new Webhook(RESEND_WEBHOOK_SECRET);
-        wh.verify(rawBody, {
-          "svix-id": svixId,
-          "svix-timestamp": svixTimestamp,
-          "svix-signature": svixSignature,
-        });
-      } catch (verifyErr) {
-        console.error("Resend webhook signature verification failed:", verifyErr.message);
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-      }
+    try {
+      const { Webhook } = await import("svix");
+      const wh = new Webhook(RESEND_WEBHOOK_SECRET);
+      wh.verify(rawBody, {
+        "svix-id": svixId,
+        "svix-timestamp": svixTimestamp,
+        "svix-signature": svixSignature,
+      });
+    } catch (verifyErr) {
+      console.error("Resend webhook signature verification failed:", verifyErr.message);
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     const event = JSON.parse(rawBody);
