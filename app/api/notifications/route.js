@@ -4,28 +4,33 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const [{ data: notifications }, { count: unreadCount }] = await Promise.all([
     supabase
       .from("notifications")
-      .select("*")
+      .select("id, message, link, read, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20),
     supabase
       .from("notifications")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .eq("read", false),
   ]);
 
-  return NextResponse.json({ notifications: notifications || [], unreadCount: unreadCount || 0 });
+  return NextResponse.json({
+    notifications: notifications || [],
+    unreadCount: unreadCount || 0,
+  });
 }
 
 export async function POST(request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { action, notification_id } = await request.json();
 
@@ -53,7 +58,8 @@ export async function POST(request) {
 
 export async function DELETE() {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await supabase.from("notifications").delete().eq("user_id", user.id);
   return NextResponse.json({ ok: true });

@@ -1,4 +1,4 @@
-import { getDb, waitForSync } from "@/lib/db/db";
+import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import {
@@ -15,6 +15,33 @@ const VALID_LOAN_STATUSES = new Set([
   "rejected",
   "returned",
 ]);
+const DEFAULT_LOAN_PAGE_SIZE = 200;
+const MAX_LOAN_PAGE_SIZE = 200;
+const MAX_SEARCH_SCAN = 400;
+const TECH_LOAN_SELECT = `
+      id,
+      user_id,
+      loan_type,
+      purpose,
+      department,
+      location,
+      start_date,
+      end_date,
+      status,
+      admin_notes,
+      created_at,
+      updated_at,
+      users (display_name, username)
+    `;
+
+function parseBoundedInt(value, fallback, max) {
+  const parsed = Number.parseInt(value || "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.min(parsed, max);
+}
 
 // GET: fetch loan requests
 export async function GET(request) {
@@ -29,6 +56,13 @@ export async function GET(request) {
   const dateFrom = searchParams.get("date_from") || "";
   const dateTo = searchParams.get("date_to") || "";
   const countOnly = searchParams.get("count_only") === "true";
+  const page = parseBoundedInt(searchParams.get("page"), 1, 10_000);
+  const limit = parseBoundedInt(
+    searchParams.get("limit"),
+    DEFAULT_LOAN_PAGE_SIZE,
+    MAX_LOAN_PAGE_SIZE,
+  );
+  const offset = (page - 1) * limit;
 
   if (!VALID_LOAN_VIEWS.has(view)) {
     return NextResponse.json({ error: "Invalid view" }, { status: 400 });
@@ -51,12 +85,7 @@ export async function GET(request) {
   // Build query for loan_requests
   let query = supabase
     .from("loan_requests")
-    .select(
-      `
-      *,
-      users (display_name, username)
-    `,
-    )
+    .select(TECH_LOAN_SELECT, search ? undefined : { count: "exact" })
     .order("created_at", { ascending: false });
 
   if (view === "active") {
@@ -69,7 +98,14 @@ export async function GET(request) {
   if (dateFrom) query = query.gte("start_date", dateFrom);
   if (dateTo) query = query.lte("start_date", dateTo);
 
-  const { data: loanRows } = await query;
+  const searchScanLimit = Math.max(limit * page, DEFAULT_LOAN_PAGE_SIZE);
+  if (search) {
+    query = query.limit(Math.min(searchScanLimit, MAX_SEARCH_SCAN));
+  } else {
+    query = query.range(offset, offset + limit - 1);
+  }
+
+  const { data: loanRows, count } = await query;
   let loans = (loanRows || []).map((lr) => ({
     ...lr,
     requester_name: lr.users?.display_name || null,
@@ -83,7 +119,7 @@ export async function GET(request) {
     const loanIds = loans.map((l) => l.id);
     const { data: allItems } = await supabase
       .from("loan_items")
-      .select("*")
+      .select("id, loan_request_id, item_id, sheet_row, item_name, quantity")
       .in("loan_request_id", loanIds);
 
     const itemsByLoan = new Map();
@@ -108,10 +144,41 @@ export async function GET(request) {
         loan.purpose?.toLowerCase().includes(s) ||
         loan.items.some((item) => item.item?.toLowerCase().includes(s)),
     );
+    const filteredCount = loans.length;
+    loans = loans.slice(offset, offset + limit);
+
+    return NextResponse.json(
+      {
+        loans,
+        pagination: {
+          page,
+          limit,
+          total: filteredCount,
+          hasMore: offset + loans.length < filteredCount,
+          searchCapped:
+            (loanRows?.length || 0) >=
+            Math.min(searchScanLimit, MAX_SEARCH_SCAN),
+        },
+      },
+      {
+        headers: {
+          "Cache-Control": "private, s-maxage=5, stale-while-revalidate=15",
+        },
+      },
+    );
   }
 
   return NextResponse.json(
-    { loans },
+    {
+      loans,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        hasMore: offset + loans.length < (count || 0),
+        searchCapped: false,
+      },
+    },
     {
       headers: {
         "Cache-Control": "private, s-maxage=5, stale-while-revalidate=15",
@@ -125,6 +192,8 @@ export async function POST(request) {
   const user = await getCurrentUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  startSyncIfNeeded();
 
   try {
     const {

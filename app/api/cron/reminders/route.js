@@ -5,6 +5,7 @@ import {
   sendLaptopAvailableEmail,
 } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { getAppSettings } from "@/lib/utils/appSettings";
 import { NextResponse } from "next/server";
 
 const CRON_SECRET = process.env.CRON_SECRET?.trim();
@@ -42,14 +43,11 @@ export async function GET(request) {
         ? "reminder_saturday"
         : "reminder_weekday";
 
-  const { data: reminderSettings } = await supabase
-    .from("app_settings")
-    .select("key, value")
-    .in("key", ["reminder_weekday", "reminder_saturday", "reminder_sunday"]);
-
-  const settingsMap = Object.fromEntries(
-    (reminderSettings || []).map((s) => [s.key, s.value]),
-  );
+  const settingsMap = await getAppSettings([
+    "reminder_weekday",
+    "reminder_saturday",
+    "reminder_sunday",
+  ]);
   const configuredTime = settingsMap[dayKey] || null;
 
   let sendDueSoon = true;

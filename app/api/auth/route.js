@@ -5,6 +5,7 @@ import {
   createToken,
   getTokenCookieOptions,
 } from "@/lib/utils/auth";
+import { getAppSetting } from "@/lib/utils/appSettings";
 import { sendWelcomeEmail } from "@/lib/services/email";
 import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
 import { getRequestClientIdentifier } from "@/lib/utils/request";
@@ -46,12 +47,8 @@ export async function POST(request) {
       }
 
       // Get invite code from Supabase app_settings
-      const { data: setting } = await supabase
-        .from("app_settings")
-        .select("value")
-        .eq("key", "invite_code")
-        .single();
-      const currentInviteCode = setting?.value || process.env.INVITE_CODE;
+      const currentInviteCode =
+        (await getAppSetting("invite_code")) || process.env.INVITE_CODE;
       if (!currentInviteCode || invite_code !== currentInviteCode) {
         return NextResponse.json(
           { error: "Invalid invite code" },

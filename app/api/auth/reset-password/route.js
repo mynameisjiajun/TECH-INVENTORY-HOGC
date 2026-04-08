@@ -1,5 +1,10 @@
 import { supabase } from "@/lib/db/supabase";
-import { hashPassword, createResetToken, verifyResetToken, decodeTokenUnsafe } from "@/lib/utils/auth";
+import {
+  hashPassword,
+  createResetToken,
+  verifyResetToken,
+  decodeTokenUnsafe,
+} from "@/lib/utils/auth";
 import { sendPasswordResetEmail } from "@/lib/services/email";
 import { checkRateLimit } from "@/lib/utils/rateLimit";
 import { getRequestClientIdentifier } from "@/lib/utils/request";
@@ -99,13 +104,19 @@ export async function POST(request) {
       // Full cryptographic verify using current hash — fails if already used
       if (!verifyResetToken(token, user.password_hash)) {
         return NextResponse.json(
-          { error: "This reset link has already been used or has expired. Please request a new one." },
+          {
+            error:
+              "This reset link has already been used or has expired. Please request a new one.",
+          },
           { status: 400 },
         );
       }
 
       const hash = await hashPassword(new_password);
-      await supabase.from("users").update({ password_hash: hash }).eq("id", user.id);
+      await supabase
+        .from("users")
+        .update({ password_hash: hash })
+        .eq("id", user.id);
 
       return NextResponse.json({
         message: "Password has been reset successfully! You can now log in.",

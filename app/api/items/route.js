@@ -1,4 +1,4 @@
-import { getDb, waitForSync } from "@/lib/db/db";
+import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { cached } from "@/lib/utils/cache";
 import { NextResponse } from "next/server";
@@ -60,19 +60,23 @@ const VALID_TABS = new Set([
 ]);
 
 function getFilters(db, table) {
-  return cached(`filters:${table}`, () => {
-    const types = db
-      .prepare(`SELECT DISTINCT type FROM ${table} ORDER BY type`)
-      .all()
-      .map((r) => r.type);
-    const brands = db
-      .prepare(
-        `SELECT DISTINCT brand FROM ${table} WHERE brand != '-' ORDER BY brand`,
-      )
-      .all()
-      .map((r) => r.brand);
-    return { types, brands };
-  }, CACHE_TTL);
+  return cached(
+    `filters:${table}`,
+    () => {
+      const types = db
+        .prepare(`SELECT DISTINCT type FROM ${table} ORDER BY type`)
+        .all()
+        .map((r) => r.type);
+      const brands = db
+        .prepare(
+          `SELECT DISTINCT brand FROM ${table} WHERE brand != '-' ORDER BY brand`,
+        )
+        .all()
+        .map((r) => r.brand);
+      return { types, brands };
+    },
+    CACHE_TTL,
+  );
 }
 
 function respond(data) {
@@ -88,6 +92,8 @@ export async function GET(request) {
     const user = await getCurrentUser();
     if (!user)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    startSyncIfNeeded();
 
     const { searchParams } = new URL(request.url);
     const tab = searchParams.get("tab") || "storage";
@@ -163,7 +169,9 @@ export async function GET(request) {
       const items = await cached(
         "total_quantity",
         () =>
-          db.prepare(`
+          db
+            .prepare(
+              `
             SELECT type,
                    SUM(quantity_spare) as total_spare,
                    SUM(current) as total_current,
@@ -171,7 +179,9 @@ export async function GET(request) {
             FROM storage_items
             GROUP BY type
             ORDER BY type
-          `).all(),
+          `,
+            )
+            .all(),
         CACHE_TTL,
       );
       return respond({ items });
@@ -181,12 +191,16 @@ export async function GET(request) {
       const items = await cached(
         "total_breakdown",
         () =>
-          db.prepare(`
+          db
+            .prepare(
+              `
             SELECT item, type, brand, model, quantity_spare,
                    current, (quantity_spare - current) as loaned_out
             FROM storage_items
             ORDER BY sheet_row ASC, id ASC
-          `).all(),
+          `,
+            )
+            .all(),
         CACHE_TTL,
       );
       return respond({ items });
@@ -196,11 +210,15 @@ export async function GET(request) {
       const items = await cached(
         "low_stock",
         () =>
-          db.prepare(`
+          db
+            .prepare(
+              `
             SELECT * FROM storage_items
             WHERE current <= 2 AND quantity_spare > 0
             ORDER BY current ASC, item ASC
-          `).all(),
+          `,
+            )
+            .all(),
         CACHE_TTL,
       );
       return respond({ items });

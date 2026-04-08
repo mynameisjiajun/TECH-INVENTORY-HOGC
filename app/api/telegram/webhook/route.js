@@ -29,7 +29,9 @@ async function fetchAllLoanItems(loanIds) {
 }
 
 function formatItems(items) {
-  return items.map((i) => `  • ${i.item_name || i.item} × ${i.quantity}`).join("\n");
+  return items
+    .map((i) => `  • ${i.item_name || i.item} × ${i.quantity}`)
+    .join("\n");
 }
 
 function daysUntil(dateStr) {
@@ -49,7 +51,10 @@ async function handleStart(chatId, userId) {
     .single();
 
   if (!user) {
-    await reply(chatId, "❌ Invalid link. Please use the link from your Profile page.");
+    await reply(
+      chatId,
+      "❌ Invalid link. Please use the link from your Profile page.",
+    );
     return;
   }
 
@@ -90,18 +95,21 @@ async function handleStart(chatId, userId) {
 }
 
 async function handleHelp(chatId) {
-  await reply(chatId, [
-    "<b>Tech Inventory Bot Commands:</b>",
-    "",
-    "/loans — View your active & pending loans",
-    "/returns — Items you need to return",
-    "/overdue — Overdue items (need immediate attention)",
-    "/status &lt;id&gt; — Check a specific loan (e.g. /status 5)",
-    "/history — Your recent loan history",
-    "/mute — Mute Telegram notifications",
-    "/unmute — Unmute Telegram notifications",
-    "/help — Show this message",
-  ].join("\n"));
+  await reply(
+    chatId,
+    [
+      "<b>Tech Inventory Bot Commands:</b>",
+      "",
+      "/loans — View your active & pending loans",
+      "/returns — Items you need to return",
+      "/overdue — Overdue items (need immediate attention)",
+      "/status &lt;id&gt; — Check a specific loan (e.g. /status 5)",
+      "/history — Your recent loan history",
+      "/mute — Mute Telegram notifications",
+      "/unmute — Unmute Telegram notifications",
+      "/help — Show this message",
+    ].join("\n"),
+  );
 }
 
 async function handleMute(chatId, userId, mute) {
@@ -138,10 +146,13 @@ async function handleLoans(chatId, userId) {
     if (loan.loan_type === "temporary" && loan.end_date) {
       const days = daysUntil(loan.end_date);
       const dueText =
-        days < 0 ? `⚠️ OVERDUE by ${Math.abs(days)} day(s)` :
-        days === 0 ? "⚠️ Due TODAY" :
-        days === 1 ? "⏰ Due TOMORROW" :
-        `Due: ${loan.end_date} (${days} days)`;
+        days < 0
+          ? `⚠️ OVERDUE by ${Math.abs(days)} day(s)`
+          : days === 0
+            ? "⚠️ Due TODAY"
+            : days === 1
+              ? "⏰ Due TOMORROW"
+              : `Due: ${loan.end_date} (${days} days)`;
       message += `${dueText}\n`;
     }
     message += `Items:\n${formatItems(items)}\n\n`;
@@ -225,7 +236,10 @@ async function handleOverdue(chatId, userId) {
 async function handleStatus(chatId, userId, loanIdStr) {
   const loanId = parseInt(loanIdStr, 10);
   if (isNaN(loanId)) {
-    await reply(chatId, "Usage: /status &lt;loan_id&gt;\nExample: <code>/status 5</code>");
+    await reply(
+      chatId,
+      "Usage: /status &lt;loan_id&gt;\nExample: <code>/status 5</code>",
+    );
     return;
   }
 
@@ -237,7 +251,10 @@ async function handleStatus(chatId, userId, loanIdStr) {
     .single();
 
   if (!loan) {
-    await reply(chatId, `❌ Loan #${loanId} not found or doesn't belong to you.`);
+    await reply(
+      chatId,
+      `❌ Loan #${loanId} not found or doesn't belong to you.`,
+    );
     return;
   }
 
@@ -373,12 +390,18 @@ export async function POST(request) {
     } else if (text === "/unmute") {
       await handleMute(chatId, user.id, false);
     } else {
-      await reply(chatId, "I didn't understand that. Send /help to see what I can do.");
+      await reply(
+        chatId,
+        "I didn't understand that. Send /help to see what I can do.",
+      );
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Telegram Webhook Error:", err.message);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }

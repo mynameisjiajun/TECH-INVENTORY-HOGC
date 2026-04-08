@@ -8,16 +8,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const user = await getCurrentUser();
-    if (!user || user.role !== "admin") {
-      return NextResponse.json(
-        { error: "Admin access required" },
-        { status: 403 },
-      );
+    // All authenticated users need to read templates (for quick-borrow on inventory page)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { data: templates, error: templatesError } = await supabase
       .from("loan_templates")
-      .select("*")
+      .select(
+        "id, name, description, loan_type, items_json, created_by, order_idx, created_at",
+      )
       .order("order_idx", { ascending: true })
       .order("created_at", { ascending: false });
 
@@ -26,7 +26,11 @@ export async function GET() {
     }
 
     const createdByIds = [
-      ...new Set((templates || []).map((template) => template.created_by).filter(Boolean)),
+      ...new Set(
+        (templates || [])
+          .map((template) => template.created_by)
+          .filter(Boolean),
+      ),
     ];
     let usersById = new Map();
 
@@ -37,7 +41,9 @@ export async function GET() {
         .in("id", createdByIds);
 
       if (usersError) {
-        throw new Error(usersError.message || "Failed to load template authors");
+        throw new Error(
+          usersError.message || "Failed to load template authors",
+        );
       }
 
       usersById = new Map((users || []).map((entry) => [entry.id, entry]));
@@ -81,7 +87,8 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { action, id, name, description, loan_type, items, orderedIds } = body;
+    const { action, id, name, description, loan_type, items, orderedIds } =
+      body;
 
     if (action === "create" || action === "update") {
       if (!name || !name.trim()) {
@@ -127,7 +134,10 @@ export async function POST(request) {
           .single();
 
         if (error) throw error;
-        return NextResponse.json({ message: "Template created", id: created.id });
+        return NextResponse.json({
+          message: "Template created",
+          id: created.id,
+        });
       }
 
       if (!id) {

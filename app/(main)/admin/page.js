@@ -1313,9 +1313,12 @@ function AdminPageContent() {
                 (l) => l.loan_type === "temporary" && l._source !== "laptop",
               ) && (
                 <div
+                  className="admin-bulk-bar"
                   style={{
                     display: "flex",
                     gap: 8,
+                    rowGap: 8,
+                    flexWrap: "wrap",
                     alignItems: "center",
                     padding: "12px 16px",
                     background: "rgba(99,102,241,0.05)",

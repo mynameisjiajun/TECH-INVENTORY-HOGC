@@ -10,6 +10,32 @@ const VALID_LOAN_STATUSES = new Set([
   "rejected",
   "returned",
 ]);
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeLaptopIds(laptopIds) {
+  if (!Array.isArray(laptopIds) || laptopIds.length === 0) {
+    return { error: "Each loan group must include at least one laptop" };
+  }
+
+  const normalizedIds = [];
+  const seenIds = new Set();
+
+  for (const laptopId of laptopIds) {
+    if (laptopId === null || laptopId === undefined || laptopId === "") {
+      return { error: "Invalid laptop selection" };
+    }
+
+    const normalizedKey = String(laptopId);
+    if (seenIds.has(normalizedKey)) {
+      return { error: "Duplicate laptops are not allowed in the same request" };
+    }
+
+    seenIds.add(normalizedKey);
+    normalizedIds.push(laptopId);
+  }
+
+  return { laptopIds: normalizedIds };
+}
 
 export async function GET(request) {
   const user = await getCurrentUser();
@@ -94,7 +120,7 @@ export async function POST(request) {
   const { loan_groups, purpose, department } = await request.json();
   // loan_groups = [{ loan_type, start_date, end_date, laptop_ids: [] }]
 
-  if (!loan_groups?.length)
+  if (!Array.isArray(loan_groups) || loan_groups.length === 0)
     return NextResponse.json({ error: "No laptops selected" }, { status: 400 });
   if (!purpose?.trim())
     return NextResponse.json({ error: "Purpose is required" }, { status: 400 });
@@ -107,16 +133,26 @@ export async function POST(request) {
     );
   }
 
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const allRequestedLaptopIds = [];
+  const requestedLaptopIdKeys = new Set();
+  const normalizedGroups = [];
+
   for (const group of loan_groups) {
+    if (!group || typeof group !== "object") {
+      return NextResponse.json(
+        { error: "Invalid loan group" },
+        { status: 400 },
+      );
+    }
+
     const { loan_type, start_date, end_date } = group;
     if (!["temporary", "permanent"].includes(loan_type)) {
       return NextResponse.json({ error: "Invalid loan type" }, { status: 400 });
     }
     if (
       !start_date ||
-      !dateRegex.test(start_date) ||
-      isNaN(Date.parse(start_date))
+      !DATE_REGEX.test(start_date) ||
+      Number.isNaN(Date.parse(start_date))
     ) {
       return NextResponse.json(
         { error: "Valid start date is required" },
@@ -126,8 +162,8 @@ export async function POST(request) {
     if (loan_type === "temporary") {
       if (
         !end_date ||
-        !dateRegex.test(end_date) ||
-        isNaN(Date.parse(end_date))
+        !DATE_REGEX.test(end_date) ||
+        Number.isNaN(Date.parse(end_date))
       ) {
         return NextResponse.json(
           { error: "Valid end date required for temporary loans" },
@@ -140,6 +176,63 @@ export async function POST(request) {
           { status: 400 },
         );
       }
+    } else if (end_date) {
+      return NextResponse.json(
+        { error: "Permanent loans cannot include an end date" },
+        { status: 400 },
+      );
+    }
+
+    const { laptopIds, error: laptopIdsError } = normalizeLaptopIds(
+      group.laptop_ids,
+    );
+    if (laptopIdsError) {
+      return NextResponse.json({ error: laptopIdsError }, { status: 400 });
+    }
+
+    for (const laptopId of laptopIds) {
+      const normalizedKey = String(laptopId);
+      if (requestedLaptopIdKeys.has(normalizedKey)) {
+        return NextResponse.json(
+          { error: "Each laptop can only be requested once per submission" },
+          { status: 400 },
+        );
+      }
+
+      requestedLaptopIdKeys.add(normalizedKey);
+      allRequestedLaptopIds.push(laptopId);
+    }
+
+    normalizedGroups.push({
+      loan_type,
+      start_date,
+      end_date: loan_type === "temporary" ? end_date : null,
+      laptop_ids: laptopIds,
+    });
+  }
+
+  const { data: laptops } = await supabase
+    .from("laptops")
+    .select("id, name, is_perm_loaned")
+    .in("id", allRequestedLaptopIds);
+
+  const laptopMap = new Map(
+    (laptops || []).map((laptop) => [String(laptop.id), laptop]),
+  );
+
+  if (laptopMap.size !== allRequestedLaptopIds.length) {
+    return NextResponse.json(
+      { error: "One or more selected laptops no longer exist" },
+      { status: 400 },
+    );
+  }
+
+  for (const laptop of laptopMap.values()) {
+    if (laptop.is_perm_loaned) {
+      return NextResponse.json(
+        { error: `Laptop "${laptop.name}" is permanently loaned` },
+        { status: 400 },
+      );
     }
   }
 
@@ -151,25 +244,8 @@ export async function POST(request) {
 
   const createdLoans = [];
 
-  for (const group of loan_groups) {
+  for (const group of normalizedGroups) {
     const { loan_type, start_date, end_date, laptop_ids } = group;
-
-    if (!laptop_ids?.length) continue;
-
-    // Verify laptops exist and are not perm-loaned
-    const { data: laptops } = await supabase
-      .from("laptops")
-      .select("id, name, is_perm_loaned")
-      .in("id", laptop_ids);
-
-    for (const laptop of laptops || []) {
-      if (laptop.is_perm_loaned) {
-        return NextResponse.json(
-          { error: `Laptop "${laptop.name}" is permanently loaned` },
-          { status: 400 },
-        );
-      }
-    }
 
     // Check for date conflicts using pre-fetched active loans
     if (loan_type === "temporary") {
@@ -178,7 +254,7 @@ export async function POST(request) {
         if (conflict.start_date <= end_date && cEnd >= start_date) {
           for (const item of conflict.laptop_loan_items || []) {
             if (laptop_ids.includes(item.laptop_id)) {
-              const laptop = laptops?.find((l) => l.id === item.laptop_id);
+              const laptop = laptopMap.get(String(item.laptop_id));
               return NextResponse.json(
                 {
                   error: `Laptop "${laptop?.name || item.laptop_id}" is already booked for those dates`,
@@ -214,8 +290,10 @@ export async function POST(request) {
       .insert(
         laptop_ids.map((lid) => ({ loan_request_id: loan.id, laptop_id: lid })),
       );
-    if (itemsErr)
+    if (itemsErr) {
+      await supabase.from("laptop_loan_requests").delete().eq("id", loan.id);
       return NextResponse.json({ error: itemsErr.message }, { status: 500 });
+    }
 
     createdLoans.push(loan);
   }
@@ -225,13 +303,13 @@ export async function POST(request) {
     .from("users")
     .select("id, mute_telegram")
     .eq("role", "admin");
-  const laptopNames = loan_groups.flatMap((g) => g.laptop_ids).length;
+  const laptopCount = allRequestedLaptopIds.length;
 
   if (admins?.length) {
     await supabase.from("notifications").insert(
       admins.map((a) => ({
         user_id: a.id,
-        message: `${user.display_name} submitted ${createdLoans.length} laptop loan request(s) for ${laptopNames} laptop(s).`,
+        message: `${user.display_name} submitted ${createdLoans.length} laptop loan request(s) for ${laptopCount} laptop(s).`,
         link: "/admin",
       })),
     );
@@ -239,7 +317,7 @@ export async function POST(request) {
       if (!admin.mute_telegram) {
         sendTelegramMessage(
           admin.id,
-          `💻 <b>New Laptop Loan Request</b>\n<b>${user.display_name}</b> requested ${laptopNames} laptop(s).\nPurpose: ${purpose.trim()}`,
+          `💻 <b>New Laptop Loan Request</b>\n<b>${user.display_name}</b> requested ${laptopCount} laptop(s).\nPurpose: ${purpose.trim()}`,
         ).catch(() => {});
       }
     }

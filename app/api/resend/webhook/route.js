@@ -43,7 +43,10 @@ export async function POST(request) {
         "svix-signature": svixSignature,
       });
     } catch (verifyErr) {
-      console.error("Resend webhook signature verification failed:", verifyErr.message);
+      console.error(
+        "Resend webhook signature verification failed:",
+        verifyErr.message,
+      );
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
@@ -64,11 +67,15 @@ export async function POST(request) {
         break;
 
       case "email.delivery_delayed":
-        console.warn(`[Resend] ⏳ Delayed — ${emailId} to ${to}. Reason: ${data?.reason || "unknown"}`);
+        console.warn(
+          `[Resend] ⏳ Delayed — ${emailId} to ${to}. Reason: ${data?.reason || "unknown"}`,
+        );
         break;
 
       case "email.bounced":
-        console.error(`[Resend] ❌ Bounced — ${emailId} to ${to}. Type: ${data?.bounce?.type}, Sub: ${data?.bounce?.subtype}`);
+        console.error(
+          `[Resend] ❌ Bounced — ${emailId} to ${to}. Type: ${data?.bounce?.type}, Sub: ${data?.bounce?.subtype}`,
+        );
         // TODO: optionally mark the user's email as invalid in Supabase
         // await supabase.from('users').update({ email_invalid: true }).eq('email', to);
         break;
@@ -82,7 +89,9 @@ export async function POST(request) {
         break;
 
       case "email.clicked":
-        console.log(`[Resend] 🖱 Clicked — ${emailId} by ${to}, link: ${data?.click?.link}`);
+        console.log(
+          `[Resend] 🖱 Clicked — ${emailId} by ${to}, link: ${data?.click?.link}`,
+        );
         break;
 
       default:
@@ -92,6 +101,9 @@ export async function POST(request) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Resend webhook error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

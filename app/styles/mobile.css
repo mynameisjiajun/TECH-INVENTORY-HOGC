@@ -327,14 +327,16 @@ html[data-shell="mobile-web"][data-platform="ios"] {
   }
 
   html[data-shell="mobile-web"] .filter-date-range {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
     width: 100%;
-    flex-wrap: wrap;
     gap: 4px;
-    padding: 8px 9px;
+    padding: 7px 9px;
+    align-items: center;
   }
 
   html[data-shell="mobile-web"] .filter-date-input {
-    width: calc(50% - 18px) !important;
+    width: 100% !important;
     min-width: 0;
   }
 
@@ -539,6 +541,9 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.03);
     z-index: 100;
     -webkit-tap-highlight-color: transparent;
+    /* GPU layer prevents iOS repaint from moving the nav during scroll */
+    transform: translateZ(0);
+    will-change: transform;
   }
 
   html[data-shell="mobile-web"] .mobile-nav .nav-link {
@@ -914,6 +919,16 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     padding: 4px 8px !important;
     font-size: 10px !important;
     border-radius: 7px !important;
+  }
+
+  html[data-shell="mobile-web"] .admin-bulk-bar {
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+  }
+
+  html[data-shell="mobile-web"] .admin-bulk-bar .btn-sm {
+    font-size: 11px !important;
+    padding: 6px 10px !important;
   }
 
   html[data-shell="mobile-web"] .cart-success-state,

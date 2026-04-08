@@ -1,9 +1,28 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser, hashPassword } from "@/lib/utils/auth";
+import {
+  getAppSettings,
+  invalidateAppSettingsCache,
+} from "@/lib/utils/appSettings";
 import { NextResponse } from "next/server";
 
+const DEFAULT_USER_PAGE_SIZE = 200;
+const MAX_USER_PAGE_SIZE = 200;
+
+function parseBoundedInt(value, fallback, max) {
+  const parsed = Number.parseInt(value || "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.min(parsed, max);
+}
+
 async function deleteByUserId(table, userIdColumn, userId) {
-  const { error } = await supabase.from(table).delete().eq(userIdColumn, userId);
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq(userIdColumn, userId);
   if (error) throw new Error(error.message || `Failed to delete ${table}`);
 }
 
@@ -16,27 +35,49 @@ async function nullifyUserReference(table, userIdColumn, userId) {
 }
 
 // GET: list all users (admin only)
-export async function GET() {
+export async function GET(request) {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Admin access required" },
+      { status: 403 },
+    );
   }
 
-  const [{ data: users }, { data: settings }] = await Promise.all([
+  const { searchParams } = new URL(request.url);
+  const page = parseBoundedInt(searchParams.get("page"), 1, 10_000);
+  const limit = parseBoundedInt(
+    searchParams.get("limit"),
+    DEFAULT_USER_PAGE_SIZE,
+    MAX_USER_PAGE_SIZE,
+  );
+  const offset = (page - 1) * limit;
+
+  const [{ data: users, count: totalUsers }, settingsMap] = await Promise.all([
     supabase
       .from("users")
-      .select("id, username, display_name, role, email, telegram_chat_id, created_at")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("app_settings")
-      .select("key, value")
-      .in("key", ["invite_code", "reminder_weekday", "reminder_saturday", "reminder_sunday"]),
+      .select(
+        "id, username, display_name, role, email, telegram_chat_id, created_at",
+        { count: "exact" },
+      )
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1),
+    getAppSettings([
+      "invite_code",
+      "reminder_weekday",
+      "reminder_saturday",
+      "reminder_sunday",
+    ]),
   ]);
-
-  const settingsMap = Object.fromEntries((settings || []).map((s) => [s.key, s.value]));
 
   return NextResponse.json({
     users: users || [],
+    pagination: {
+      page,
+      limit,
+      total: totalUsers || 0,
+      hasMore: offset + (users?.length || 0) < (totalUsers || 0),
+    },
     invite_code: settingsMap.invite_code || "",
     reminder_times: {
       weekday: settingsMap.reminder_weekday || "09:00",
@@ -50,11 +91,22 @@ export async function GET() {
 export async function POST(request) {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Admin access required" },
+      { status: 403 },
+    );
   }
 
   const body = await request.json();
-  const { action, user_id, new_password, new_role, display_name, invite_code, reminder_times } = body;
+  const {
+    action,
+    user_id,
+    new_password,
+    new_role,
+    display_name,
+    invite_code,
+    reminder_times,
+  } = body;
 
   if (action === "reset_password") {
     if (!user_id || !new_password) {
@@ -75,7 +127,8 @@ export async function POST(request) {
       .select("id, username")
       .eq("id", user_id)
       .single();
-    if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!target)
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const hash = await hashPassword(new_password);
     const { error: passwordResetError } = await supabase
@@ -96,7 +149,9 @@ export async function POST(request) {
       details: `Reset password for @${target.username}`,
     });
 
-    return NextResponse.json({ message: `Password reset for @${target.username}` });
+    return NextResponse.json({
+      message: `Password reset for @${target.username}`,
+    });
   }
 
   if (action === "change_role") {
@@ -110,7 +165,10 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
     if (Number(user_id) === Number(user.id)) {
-      return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Cannot change your own role" },
+        { status: 400 },
+      );
     }
 
     const { data: target } = await supabase
@@ -118,11 +176,18 @@ export async function POST(request) {
       .select("id, username")
       .eq("id", user_id)
       .single();
-    if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!target)
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    const { error: updateError } = await supabase.from("users").update({ role: new_role }).eq("id", user_id);
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ role: new_role })
+      .eq("id", user_id);
     if (updateError) {
-      return NextResponse.json({ error: updateError.message || "Failed to update role" }, { status: 500 });
+      return NextResponse.json(
+        { error: updateError.message || "Failed to update role" },
+        { status: 500 },
+      );
     }
     await supabase.from("audit_log").insert({
       user_id: user.id,
@@ -132,13 +197,19 @@ export async function POST(request) {
       details: `Changed @${target.username} role to ${new_role}`,
     });
 
-    return NextResponse.json({ message: `Role updated for @${target.username}` });
+    return NextResponse.json({
+      message: `Role updated for @${target.username}`,
+    });
   }
 
   if (action === "delete_user") {
-    if (!user_id) return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    if (!user_id)
+      return NextResponse.json({ error: "User ID required" }, { status: 400 });
     if (Number(user_id) === Number(user.id)) {
-      return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Cannot delete yourself" },
+        { status: 400 },
+      );
     }
 
     const { data: target } = await supabase
@@ -146,7 +217,8 @@ export async function POST(request) {
       .select("id, username")
       .eq("id", user_id)
       .single();
-    if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!target)
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     try {
       const [{ data: techLoans }, { data: laptopLoans }] = await Promise.all([
@@ -165,13 +237,19 @@ export async function POST(request) {
           .from("loan_items")
           .delete()
           .in("loan_request_id", techLoanIds);
-        if (loanItemsError) throw new Error(loanItemsError.message || "Failed to delete loan items");
+        if (loanItemsError)
+          throw new Error(
+            loanItemsError.message || "Failed to delete loan items",
+          );
 
         const { error: loansError } = await supabase
           .from("loan_requests")
           .delete()
           .eq("user_id", user_id);
-        if (loansError) throw new Error(loansError.message || "Failed to delete loan requests");
+        if (loansError)
+          throw new Error(
+            loansError.message || "Failed to delete loan requests",
+          );
       }
 
       if (laptopLoanIds.length > 0) {
@@ -181,7 +259,8 @@ export async function POST(request) {
           .in("loan_request_id", laptopLoanIds);
         if (laptopLoanItemsError) {
           throw new Error(
-            laptopLoanItemsError.message || "Failed to delete laptop loan items",
+            laptopLoanItemsError.message ||
+              "Failed to delete laptop loan items",
           );
         }
 
@@ -204,12 +283,16 @@ export async function POST(request) {
         nullifyUserReference("audit_log", "user_id", user_id),
       ]);
 
-      const { error: deleteError } = await supabase
+      const { data: deletedUsers, error: deleteError } = await supabase
         .from("users")
         .delete()
-        .eq("id", user_id);
+        .eq("id", user_id)
+        .select("id");
       if (deleteError) {
         throw new Error(deleteError.message || "Failed to delete user");
+      }
+      if (!deletedUsers?.length) {
+        throw new Error("User no longer exists or could not be deleted");
       }
     } catch (deleteErr) {
       return NextResponse.json(
@@ -230,14 +313,16 @@ export async function POST(request) {
   }
 
   if (action === "update_user") {
-    if (!user_id) return NextResponse.json({ error: "User ID required" }, { status: 400 });
+    if (!user_id)
+      return NextResponse.json({ error: "User ID required" }, { status: 400 });
 
     const { data: target } = await supabase
       .from("users")
       .select("id, username")
       .eq("id", user_id)
       .single();
-    if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!target)
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     if (display_name) {
       const trimmedDisplayName = display_name.trim();
@@ -288,24 +373,38 @@ export async function POST(request) {
       details: "Updated the registration invite code",
     });
 
+    invalidateAppSettingsCache();
+
     return NextResponse.json({ message: "Invite code updated" });
   }
 
   if (action === "set_reminder_times") {
     if (!reminder_times || typeof reminder_times !== "object") {
-      return NextResponse.json({ error: "Invalid reminder times" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid reminder times" },
+        { status: 400 },
+      );
     }
     const timeRegex = /^\d{2}:\d{2}$/;
     const { weekday, saturday, sunday } = reminder_times;
-    if (!timeRegex.test(weekday) || !timeRegex.test(saturday) || !timeRegex.test(sunday)) {
-      return NextResponse.json({ error: "Times must be in HH:MM format" }, { status: 400 });
+    if (
+      !timeRegex.test(weekday) ||
+      !timeRegex.test(saturday) ||
+      !timeRegex.test(sunday)
+    ) {
+      return NextResponse.json(
+        { error: "Times must be in HH:MM format" },
+        { status: 400 },
+      );
     }
 
-    const { error: reminderError } = await supabase.from("app_settings").upsert([
-      { key: "reminder_weekday", value: weekday },
-      { key: "reminder_saturday", value: saturday },
-      { key: "reminder_sunday", value: sunday },
-    ]);
+    const { error: reminderError } = await supabase
+      .from("app_settings")
+      .upsert([
+        { key: "reminder_weekday", value: weekday },
+        { key: "reminder_saturday", value: saturday },
+        { key: "reminder_sunday", value: sunday },
+      ]);
     if (reminderError) {
       return NextResponse.json(
         { error: reminderError.message || "Failed to update reminder times" },
@@ -320,6 +419,8 @@ export async function POST(request) {
       target_id: 0,
       details: `Set reminder times — Weekday: ${weekday}, Saturday: ${saturday}, Sunday: ${sunday} (SGT)`,
     });
+
+    invalidateAppSettingsCache();
 
     return NextResponse.json({ message: "Reminder times updated" });
   }

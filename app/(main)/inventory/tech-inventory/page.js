@@ -133,7 +133,8 @@ export default function InventoryPage() {
     (template) => {
       let added = 0;
       template.items.forEach((ti) => {
-        const match = items.find((i) => i.id === ti.item_id);
+        // Coerce both to Number — SQLite returns integers, JSON may store strings
+        const match = items.find((i) => Number(i.id) === Number(ti.item_id));
         if (match && match.current > 0) {
           addItem(match); // adds with qty 1
           const qty = Math.min(ti.quantity, match.current);
