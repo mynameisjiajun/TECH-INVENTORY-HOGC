@@ -66,11 +66,14 @@ function getConfig() {
   const env = loadEnv();
   const botToken = env.TELEGRAM_BOT_TOKEN;
   const appUrl = trimTrailingSlash(env.NEXT_PUBLIC_APP_URL);
-  const webhookUrl = trimTrailingSlash(env.TELEGRAM_WEBHOOK_URL)
-    || (appUrl ? `${appUrl}/api/telegram/webhook` : "");
+  const webhookUrl =
+    trimTrailingSlash(env.TELEGRAM_WEBHOOK_URL) ||
+    (appUrl ? `${appUrl}/api/telegram/webhook` : "");
 
   if (!botToken) {
-    throw new Error("TELEGRAM_BOT_TOKEN is required in the environment or .env.local");
+    throw new Error(
+      "TELEGRAM_BOT_TOKEN is required in the environment or .env.local",
+    );
   }
 
   if (!webhookUrl) {
@@ -88,11 +91,14 @@ function getConfig() {
 }
 
 async function telegramApi(botToken, method, payload) {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload || {}),
-  });
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/${method}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    },
+  );
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok || !data.ok) {
@@ -161,7 +167,10 @@ async function main() {
   const { checkOnly, shouldSetup } = parseArgs(process.argv);
   const config = getConfig();
   const currentInfo = await telegramApi(config.botToken, "getWebhookInfo");
-  const expectedProbe = await probeWebhook(config.webhookUrl, config.webhookSecret);
+  const expectedProbe = await probeWebhook(
+    config.webhookUrl,
+    config.webhookSecret,
+  );
 
   console.log(`Expected webhook URL: ${config.webhookUrl}`);
   if (config.appUrl) {
@@ -169,8 +178,12 @@ async function main() {
   }
   summarizeWebhookInfo("Current Telegram webhook", currentInfo);
   console.log("Target probe:");
-  console.log(`  GET status: ${expectedProbe.getStatus}${expectedProbe.getError ? ` (${expectedProbe.getError})` : ""}`);
-  console.log(`  POST status: ${expectedProbe.postStatus}${expectedProbe.postError ? ` (${expectedProbe.postError})` : ""}`);
+  console.log(
+    `  GET status: ${expectedProbe.getStatus}${expectedProbe.getError ? ` (${expectedProbe.getError})` : ""}`,
+  );
+  console.log(
+    `  POST status: ${expectedProbe.postStatus}${expectedProbe.postError ? ` (${expectedProbe.postError})` : ""}`,
+  );
   if (expectedProbe.postStatus >= 400 && expectedProbe.postBody) {
     console.log(`  POST body: ${expectedProbe.postBody}`);
   }
@@ -180,7 +193,9 @@ async function main() {
       console.log("\nWebhook mismatch detected.");
     }
     if (!isHealthyProbe(expectedProbe)) {
-      console.log("\nTarget webhook is not healthy. Deploy the latest app first or override TELEGRAM_WEBHOOK_URL.");
+      console.log(
+        "\nTarget webhook is not healthy. Deploy the latest app first or override TELEGRAM_WEBHOOK_URL.",
+      );
       process.exitCode = 1;
     }
     return;
