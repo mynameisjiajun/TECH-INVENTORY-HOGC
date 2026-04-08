@@ -20,7 +20,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (user) router.replace("/inventory");
+    if (user) router.replace("/home");
   }, [user, router]);
 
   const handleSubmit = async (e) => {
@@ -45,10 +45,10 @@ export default function RegisterPage() {
       formData.password,
       formData.display_name,
       formData.invite_code,
-      formData.email
+      formData.email,
     );
     if (result.ok) {
-      router.push("/inventory");
+      router.push("/home");
     } else {
       setError(result.error);
     }

@@ -1,19 +1,90 @@
 import { supabase } from "@/lib/db/supabase";
-import { getCurrentUser, hashPassword, verifyPassword, createToken, getTokenCookieOptions } from "@/lib/utils/auth";
+import {
+  getCurrentUser,
+  hashPassword,
+  verifyPassword,
+  createToken,
+  getTokenCookieOptions,
+} from "@/lib/utils/auth";
+import { normalizeTelegramHandle } from "@/lib/utils/telegramHandle";
+import { sendTelegramChatMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
+
+function isMissingTelegramHandleColumn(error) {
+  const message = error?.message || "";
+  return (
+    error?.code === "42703" ||
+    message.includes("telegram_handle") ||
+    message.includes("column")
+  );
+}
+
+async function getProfileRow(userId) {
+  const fullSelect = await supabase
+    .from("users")
+    .select(
+      "id, username, display_name, role, email, telegram_chat_id, telegram_handle, mute_emails, mute_telegram, created_at",
+    )
+    .eq("id", userId)
+    .single();
+
+  if (!fullSelect.error) {
+    return fullSelect;
+  }
+
+  if (!isMissingTelegramHandleColumn(fullSelect.error)) {
+    return fullSelect;
+  }
+
+  const legacySelect = await supabase
+    .from("users")
+    .select(
+      "id, username, display_name, role, email, telegram_chat_id, mute_emails, mute_telegram, created_at",
+    )
+    .eq("id", userId)
+    .single();
+
+  if (legacySelect.error) {
+    return legacySelect;
+  }
+
+  return {
+    data: { ...legacySelect.data, telegram_handle: null },
+    error: null,
+  };
+}
+
+async function updateProfileRow(userId, values) {
+  const fullUpdate = await supabase
+    .from("users")
+    .update(values)
+    .eq("id", userId);
+
+  if (!fullUpdate.error || !isMissingTelegramHandleColumn(fullUpdate.error)) {
+    return fullUpdate;
+  }
+
+  const { telegram_handle, ...legacyValues } = values;
+  return supabase.from("users").update(legacyValues).eq("id", userId);
+}
 
 // GET: get profile info
 export async function GET() {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("id, username, display_name, role, email, telegram_chat_id, mute_emails, mute_telegram, created_at")
-    .eq("id", user.id)
-    .single();
+  const { data: profile, error } = await getProfileRow(user.id);
 
-  if (!profile) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  if (error) {
+    return NextResponse.json(
+      { error: error.message || "Failed to load profile" },
+      { status: 500 },
+    );
+  }
+
+  if (!profile)
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   return NextResponse.json({ profile });
 }
@@ -21,10 +92,19 @@ export async function GET() {
 // POST: update profile or change password
 export async function POST(request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { action, display_name, email, mute_emails, mute_telegram, current_password, new_password } =
-    await request.json();
+  const {
+    action,
+    display_name,
+    email,
+    telegram_handle,
+    mute_emails,
+    mute_telegram,
+    current_password,
+    new_password,
+  } = await request.json();
 
   if (action === "update_profile") {
     if (!display_name || display_name.trim().length < 2) {
@@ -34,29 +114,39 @@ export async function POST(request) {
       );
     }
     const cleanEmail = email ? email.trim() : null;
+    const cleanTelegramHandle = normalizeTelegramHandle(telegram_handle);
     if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid email format" },
+        { status: 400 },
+      );
     }
 
     const trimmedDisplayName = display_name.trim();
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({
-        display_name: trimmedDisplayName,
-        email: cleanEmail,
-        mute_emails: mute_emails === true,
-        mute_telegram: mute_telegram === true,
-      })
-      .eq("id", user.id);
+    const { error: updateError } = await updateProfileRow(user.id, {
+      display_name: trimmedDisplayName,
+      email: cleanEmail,
+      telegram_handle: cleanTelegramHandle,
+      mute_emails: mute_emails === true,
+      mute_telegram: mute_telegram === true,
+    });
     if (updateError) {
       return NextResponse.json(
-        { error: updateError.message || "Failed to update profile" },
+        {
+          error:
+            updateError.code === "23505"
+              ? "That Telegram handle is already linked to another account"
+              : updateError.message || "Failed to update profile",
+        },
         { status: 500 },
       );
     }
 
     // Re-issue JWT so navbar reflects new display_name immediately
-    const updatedToken = createToken({ ...user, display_name: trimmedDisplayName });
+    const updatedToken = createToken({
+      ...user,
+      display_name: trimmedDisplayName,
+    });
     const response = NextResponse.json({ message: "Profile updated!" });
     const cookieOpts = getTokenCookieOptions();
     response.cookies.set(cookieOpts.name, updatedToken, cookieOpts);
@@ -83,7 +173,8 @@ export async function POST(request) {
       .eq("id", user.id)
       .single();
 
-    if (!dbUser) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    if (!dbUser)
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const valid = await verifyPassword(current_password, dbUser.password_hash);
     if (!valid) {
@@ -109,6 +200,30 @@ export async function POST(request) {
   }
 
   if (action === "unlink_telegram") {
+    const { data: existingUser, error: existingUserError } = await supabase
+      .from("users")
+      .select("telegram_chat_id")
+      .eq("id", user.id)
+      .single();
+
+    if (existingUserError) {
+      return NextResponse.json(
+        {
+          error:
+            existingUserError.message || "Failed to load Telegram link state",
+        },
+        { status: 500 },
+      );
+    }
+
+    if (!existingUser?.telegram_chat_id) {
+      return NextResponse.json(
+        { error: "No Telegram account is currently linked" },
+        { status: 400 },
+      );
+    }
+
+    const chatId = existingUser.telegram_chat_id;
     const { error: unlinkError } = await supabase
       .from("users")
       .update({ telegram_chat_id: null })
@@ -119,7 +234,16 @@ export async function POST(request) {
         { status: 500 },
       );
     }
-    return NextResponse.json({ message: "Telegram unlinked" });
+
+    sendTelegramChatMessage(
+      chatId,
+      "🔌 Your Tech Inventory account was unlinked from the app profile. Commands and alerts are now disabled until you relink from Profile.",
+    ).catch(() => {});
+
+    return NextResponse.json({
+      message:
+        "Telegram unlinked. A confirmation was sent in Telegram if the chat is still reachable.",
+    });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

@@ -90,8 +90,6 @@ function respond(data) {
 export async function GET(request) {
   try {
     const user = await getCurrentUser();
-    if (!user)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     startSyncIfNeeded();
 
@@ -103,6 +101,13 @@ export async function GET(request) {
 
     if (!VALID_TABS.has(tab)) {
       return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
+    }
+
+    if (!user && !["storage", "presets"].includes(tab)) {
+      return NextResponse.json(
+        { error: "Sign in to access this inventory view" },
+        { status: 403 },
+      );
     }
 
     await waitForSync();

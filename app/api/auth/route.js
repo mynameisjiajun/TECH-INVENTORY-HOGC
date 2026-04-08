@@ -41,7 +41,7 @@ export async function POST(request) {
       }
 
       const normalizedUsername = username.trim().toLowerCase();
-      const registerLimit = checkRateLimit(`auth:register:${clientId}`);
+      const registerLimit = await checkRateLimit(`auth:register:${clientId}`);
       if (registerLimit.limited) {
         return rateLimitError(registerLimit.retryAfterSeconds);
       }
@@ -105,7 +105,7 @@ export async function POST(request) {
       const response = NextResponse.json({ user: newUser });
       const cookieOpts = getTokenCookieOptions();
       response.cookies.set(cookieOpts.name, token, cookieOpts);
-      resetRateLimit(`auth:register:${clientId}`);
+      await resetRateLimit(`auth:register:${clientId}`);
       return response;
     }
 
@@ -117,11 +117,11 @@ export async function POST(request) {
         );
       }
       const normalizedUsername = username.trim().toLowerCase();
-      const ipLimit = checkRateLimit(`auth:login:client:${clientId}`);
+      const ipLimit = await checkRateLimit(`auth:login:client:${clientId}`);
       if (ipLimit.limited) {
         return rateLimitError(ipLimit.retryAfterSeconds);
       }
-      const usernameLimit = checkRateLimit(
+      const usernameLimit = await checkRateLimit(
         `auth:login:user:${normalizedUsername}`,
       );
       if (usernameLimit.limited) {
@@ -141,8 +141,8 @@ export async function POST(request) {
         );
       }
 
-      resetRateLimit(`auth:login:client:${clientId}`);
-      resetRateLimit(`auth:login:user:${normalizedUsername}`);
+      await resetRateLimit(`auth:login:client:${clientId}`);
+      await resetRateLimit(`auth:login:user:${normalizedUsername}`);
       const token = createToken(user);
       const response = NextResponse.json({
         user: {

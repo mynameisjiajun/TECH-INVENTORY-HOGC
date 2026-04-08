@@ -389,10 +389,6 @@ export default function LoansPage() {
   }, [fetchLoans]);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
-
-  useEffect(() => {
     const timer = setTimeout(fetchLoans, 300);
     return () => clearTimeout(timer);
   }, [fetchLoans]);
@@ -440,7 +436,69 @@ export default function LoansPage() {
 
   if (loading) return <AppShellLoading />;
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <>
+        <Navbar />
+        <CartPanel />
+        <div className="page-container loans-page">
+          <div className="page-header">
+            <h1>My Loans</h1>
+            <p>Track requests, returns, and reminders after you log in.</p>
+          </div>
+
+          <div
+            className="glass-card"
+            style={{
+              maxWidth: 720,
+              margin: "24px auto 0",
+              padding: 28,
+              border: "1px solid var(--border)",
+              background: "rgba(255,255,255,0.03)",
+            }}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: 10 }}>
+              Log in to unlock My Loans
+            </h2>
+            <p style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              Signed-in users can track approval status, receive Telegram and
+              email reminders, upload return proof, and manage every active
+              request in one place.
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: 12,
+                marginTop: 18,
+                marginBottom: 22,
+              }}
+            >
+              <div className="loan-item-chip">Approval and return tracking</div>
+              <div className="loan-item-chip">Telegram availability alerts</div>
+              <div className="loan-item-chip">
+                Return reminders and overdue notices
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                className="btn btn-primary"
+                onClick={() => router.push("/login")}
+              >
+                Log In
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={() => router.push("/register")}
+              >
+                Create Account
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -527,11 +585,12 @@ export default function LoansPage() {
 
     if (search) {
       const query = search.toLowerCase();
+      const matchesId = String(loan.id).includes(query);
       const matchesPurpose = loan.purpose?.toLowerCase().includes(query);
       const matchesItem = loan.items.some((item) =>
         item.item?.toLowerCase().includes(query),
       );
-      if (!matchesPurpose && !matchesItem) return false;
+      if (!matchesId && !matchesPurpose && !matchesItem) return false;
     }
 
     if (dateFrom && loan.start_date < dateFrom) return false;
@@ -553,6 +612,13 @@ export default function LoansPage() {
     const overdue = isOverdue(loan);
     const dueSoon = !overdue && isDueSoon(loan);
     const isLaptop = loan._loanKind === "laptop";
+    const loanTitle =
+      loan.purpose?.trim() ||
+      (loan.items?.[0]?.item
+        ? `${loan.items[0].item}${loan.items.length > 1 ? ` +${loan.items.length - 1} more` : ""}`
+        : isLaptop
+          ? "Laptop loan request"
+          : "Loan request");
 
     return (
       <div
@@ -628,18 +694,18 @@ export default function LoansPage() {
               {typeBadge(loan.loan_type)}
               {statusBadge(loan.status)}
             </div>
-            <p
-              className="loan-card-request-id"
-              style={{ fontSize: 14, fontWeight: 500 }}
+            <h3
+              className="loan-card-title"
+              style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25 }}
             >
-              Request #{loan.id}
-            </p>
+              {loanTitle}
+            </h3>
           </div>
           <span
             className="loan-card-created-at"
             style={{ fontSize: 12, color: "var(--text-muted)" }}
           >
-            {new Date(loan.created_at).toLocaleDateString()}
+            #{loan.id} · {new Date(loan.created_at).toLocaleDateString()}
           </span>
         </div>
 
@@ -662,7 +728,6 @@ export default function LoansPage() {
         </div>
 
         <div className="loan-card-meta">
-          {loan.purpose && <span>📝 {loan.purpose}</span>}
           {loan.department && <span>🏢 {loan.department}</span>}
           <span>
             📅 {loan.start_date}
@@ -815,7 +880,7 @@ export default function LoansPage() {
     <>
       <Navbar />
       <CartPanel />
-      <div className="page-container">
+      <div className="page-container loans-page">
         <div className="page-header">
           <div>
             <h1>My Loans</h1>
@@ -910,7 +975,7 @@ export default function LoansPage() {
 
         {/* Filters */}
         <div
-          className="filter-shell filter-toolbar"
+          className="filter-shell filter-toolbar loans-filter-toolbar"
           style={{
             marginBottom: 24,
           }}
@@ -928,7 +993,7 @@ export default function LoansPage() {
               spellCheck={false}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by item or purpose…"
+              placeholder="Search by purpose, item, or request ID…"
             />
           </div>
           <div className="loans-status-filter-select">
@@ -1052,7 +1117,7 @@ export default function LoansPage() {
             <button
               className="btn btn-primary"
               style={{ marginTop: 12 }}
-              onClick={() => router.push("/inventory")}
+              onClick={() => router.push("/home")}
             >
               Browse Inventory
             </button>

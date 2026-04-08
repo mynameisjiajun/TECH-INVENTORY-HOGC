@@ -27,6 +27,7 @@ const LaptopCard = memo(function LaptopCard({
   canSeeSpecs,
   onNotify,
   isInCart,
+  canManageNotifications,
 }) {
   const isAvailable = laptop.availability === "available";
   const isBlocked = laptop.availability === "blocked";
@@ -303,7 +304,11 @@ const LaptopCard = memo(function LaptopCard({
               }}
             >
               <RiBellLine style={{ opacity: laptop.notify_me ? 1 : 0.4 }} />
-              {laptop.notify_me ? "Notify Me — On" : "Notify Me When Available"}
+              {canManageNotifications
+                ? laptop.notify_me
+                  ? "Notify Me — On"
+                  : "Notify Me When Available"
+                : "Log In for Alerts"}
             </button>
           )}
         </div>
@@ -329,15 +334,10 @@ export default function LaptopLoansPage() {
   const abortRef = useRef(null);
   const debounceRef = useRef(null);
 
-  useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
-
   const today = new Date().toISOString().split("T")[0];
 
   const fetchLaptops = useCallback(
     async (signal) => {
-      if (!user) return;
       setFetching(true);
       setError("");
       try {
@@ -366,11 +366,10 @@ export default function LaptopLoansPage() {
         setFetching(false);
       }
     },
-    [user, startDate, endDate, loanType],
+    [startDate, endDate, loanType],
   );
 
   useEffect(() => {
-    if (!user) return;
     // Cancel any in-flight request
     if (abortRef.current) abortRef.current.abort();
     // Debounce 300ms so rapid date changes don't fire multiple requests
@@ -381,7 +380,7 @@ export default function LaptopLoansPage() {
       fetchLaptops(controller.signal);
     }, 300);
     return () => clearTimeout(debounceRef.current);
-  }, [user, fetchLaptops]);
+  }, [fetchLaptops]);
 
   const handleBorrow = useCallback(
     (laptop) => {
@@ -398,6 +397,11 @@ export default function LaptopLoansPage() {
 
   const handleNotify = useCallback(
     async (laptop) => {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
       try {
         const res = await fetch(`/api/laptop-notify/${laptop.id}`, {
           method: "POST",
@@ -424,7 +428,7 @@ export default function LaptopLoansPage() {
         toast.error("Network error — could not update notification");
       }
     },
-    [toast],
+    [router, toast, user],
   );
 
   const isAdmin = user?.role === "admin";
@@ -453,8 +457,6 @@ export default function LaptopLoansPage() {
 
   if (loading) return <AppShellLoading />;
 
-  if (!user) return null;
-
   const showReturningSidebar = startDate && returningSoon.length > 0;
 
   return (
@@ -469,7 +471,7 @@ export default function LaptopLoansPage() {
         >
           <button
             className="btn btn-sm btn-outline"
-            onClick={() => router.push("/inventory")}
+            onClick={() => router.push("/home")}
             style={{ flexShrink: 0 }}
           >
             <RiArrowLeftLine />
@@ -537,17 +539,16 @@ export default function LaptopLoansPage() {
                         ? "linear-gradient(135deg, var(--accent), #818cf8)"
                         : "transparent",
                     color:
-                      loanType === "temporary"
-                        ? "white"
-                        : "var(--text-muted)",
+                      loanType === "temporary" ? "white" : "var(--text-muted)",
                     transition: "all 0.18s",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 6,
-                    boxShadow: loanType === "temporary"
-                      ? "0 2px 8px rgba(99,102,241,0.35)"
-                      : "none",
+                    boxShadow:
+                      loanType === "temporary"
+                        ? "0 2px 8px rgba(99,102,241,0.35)"
+                        : "none",
                   }}
                 >
                   <RiTimeLine style={{ fontSize: 14 }} />
@@ -580,9 +581,10 @@ export default function LaptopLoansPage() {
                       alignItems: "center",
                       justifyContent: "center",
                       gap: 6,
-                      boxShadow: loanType === "permanent"
-                        ? "0 2px 8px rgba(139,92,246,0.35)"
-                        : "none",
+                      boxShadow:
+                        loanType === "permanent"
+                          ? "0 2px 8px rgba(139,92,246,0.35)"
+                          : "none",
                     }}
                   >
                     <RiPushpinLine style={{ fontSize: 14 }} />
@@ -622,7 +624,11 @@ export default function LaptopLoansPage() {
                       setStartDate(val);
                       if (endDate && val && endDate < val) setEndDate("");
                     }}
-                    style={{ width: "100%", boxSizing: "border-box", minWidth: 0 }}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      minWidth: 0,
+                    }}
                   />
                 </div>
                 {loanType === "temporary" && (
@@ -733,6 +739,7 @@ export default function LaptopLoansPage() {
                               canSeeSpecs={canPermanent}
                               onNotify={handleNotify}
                               isInCart={cartLaptopIds.has(laptop.id)}
+                              canManageNotifications={!!user}
                             />
                           ))}
                         </div>

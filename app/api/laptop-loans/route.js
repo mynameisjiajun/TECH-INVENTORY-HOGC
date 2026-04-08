@@ -98,8 +98,6 @@ function normalizeLaptopIds(laptopIds) {
 
 export async function GET(request) {
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const view = searchParams.get("view") || "my";
@@ -120,6 +118,10 @@ export async function GET(request) {
     return NextResponse.json({ error: "Invalid view" }, { status: 400 });
   }
 
+  if (!user && view !== "active") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (status && !VALID_LOAN_STATUSES.has(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
@@ -127,7 +129,7 @@ export async function GET(request) {
   const isOverdueFilter = status === "overdue";
   const sanitizedSearch = sanitizeSearchTerm(search);
 
-  if (countOnly && user.role === "admin") {
+  if (countOnly && user?.role === "admin") {
     let cq = supabase
       .from("laptop_loan_requests")
       .select("id", { count: "exact", head: true });
@@ -175,7 +177,7 @@ export async function GET(request) {
   if (sanitizedSearch) {
     const [matchingLoanIds, matchingUserIds] = await Promise.all([
       getMatchingLaptopLoanIds(sanitizedSearch),
-      getMatchingUserIds(sanitizedSearch),
+      user ? getMatchingUserIds(sanitizedSearch) : Promise.resolve([]),
     ]);
 
     const orPattern = `*${sanitizedSearch}*`;
@@ -188,7 +190,11 @@ export async function GET(request) {
       searchClauses.push(`id.in.(${matchingLoanIds.join(",")})`);
     }
 
-    if ((view === "all" || view === "active") && matchingUserIds.length > 0) {
+    if (
+      user &&
+      (view === "all" || view === "active") &&
+      matchingUserIds.length > 0
+    ) {
       searchClauses.push(`user_id.in.(${matchingUserIds.join(",")})`);
     }
 
@@ -203,8 +209,8 @@ export async function GET(request) {
 
   const loans = (loanRows || []).map((lr) => ({
     ...lr,
-    requester_name: lr.users?.display_name || null,
-    requester_username: lr.users?.username || null,
+    requester_name: user ? lr.users?.display_name || null : null,
+    requester_username: user ? lr.users?.username || null : null,
     users: undefined,
     laptops: [],
     _source: "laptop",

@@ -54,10 +54,42 @@ export default async function RootLayout({ children }) {
   const headerStore = await headers();
   const userAgent = headerStore.get("user-agent") || "";
   const initialShell = detectInitialShell(userAgent);
+  const serviceWorkerBootstrap =
+    process.env.NODE_ENV === "production"
+      ? `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+              navigator.serviceWorker
+                .register('/sw.js')
+                .then((registration) => {
+                  registration.update().catch(() => {});
+                })
+                .catch(() => {});
+            });
+          }
+        `
+      : `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+              navigator.serviceWorker.getRegistrations().then((registrations) => {
+                registrations.forEach((registration) => registration.unregister());
+              }).catch(() => {});
+
+              if ('caches' in window) {
+                caches.keys().then((keys) => {
+                  keys
+                    .filter((key) => key.startsWith('tech-inventory'))
+                    .forEach((key) => caches.delete(key));
+                }).catch(() => {});
+              }
+            });
+          }
+        `;
 
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       data-shell={initialShell.shell}
       data-device={initialShell.device}
       data-platform={initialShell.platform}
@@ -155,18 +187,7 @@ export default async function RootLayout({ children }) {
         </AuthProvider>
         <script
           dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker
-                    .register('/sw.js')
-                    .then((registration) => {
-                      registration.update().catch(() => {});
-                    })
-                    .catch(() => {});
-                });
-              }
-            `,
+            __html: serviceWorkerBootstrap,
           }}
         />
       </body>

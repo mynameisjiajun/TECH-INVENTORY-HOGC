@@ -5,6 +5,10 @@ import {
   drainSheetWriteOutbox,
   getSheetWriteOutboxPendingCount,
 } from "@/lib/services/inventorySheetSync";
+import {
+  getCronSecretFromRequest,
+  hasValidCronSecret,
+} from "@/lib/utils/cronAuth";
 
 const CRON_SECRET = process.env.CRON_SECRET?.trim();
 const DEFAULT_MAX_BATCHES = 10;
@@ -20,31 +24,8 @@ function parseBoundedInt(value, fallback, max) {
   return Math.min(parsed, max);
 }
 
-function getCronSecretFromRequest(request) {
-  const headerSecret = request.headers.get("x-cron-secret");
-  if (headerSecret) {
-    return headerSecret;
-  }
-
-  const authorization = request.headers.get("authorization") || "";
-  if (authorization.startsWith("Bearer ")) {
-    return authorization.slice("Bearer ".length).trim();
-  }
-
-  return "";
-}
-
-function hasValidCronSecret(request) {
-  if (!CRON_SECRET) {
-    return false;
-  }
-
-  const secret = getCronSecretFromRequest(request);
-  return !!secret && secret === CRON_SECRET;
-}
-
 async function authorizeManualDrain(request) {
-  if (hasValidCronSecret(request)) {
+  if (hasValidCronSecret(request, CRON_SECRET)) {
     return { ok: true, source: "cron" };
   }
 
@@ -80,7 +61,7 @@ export async function GET(request) {
     );
   }
 
-  if (!hasValidCronSecret(request)) {
+  if (!hasValidCronSecret(request, CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

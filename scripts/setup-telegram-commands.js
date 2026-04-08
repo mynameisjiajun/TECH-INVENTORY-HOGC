@@ -9,11 +9,15 @@ if (!BOT_TOKEN) {
 }
 
 const commands = [
+  { command: "start", description: "Link your Telegram chat to the app" },
   { command: "loans", description: "View your active & pending loans" },
   { command: "returns", description: "Items you need to return" },
   { command: "overdue", description: "Overdue items needing attention" },
   { command: "status", description: "Check a specific loan (e.g. /status 5)" },
   { command: "history", description: "Your recent loan history" },
+  { command: "unlink", description: "Unlink this Telegram chat" },
+  { command: "mute", description: "Mute Telegram notifications" },
+  { command: "unmute", description: "Re-enable Telegram notifications" },
   { command: "help", description: "Show all commands" },
 ];
 

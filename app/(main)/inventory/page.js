@@ -26,17 +26,13 @@ export default function InventoryLanding() {
   );
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
-
-  useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
     const handler = (e) => setIsMobile(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  if (loading || !user) return <AppShellLoading />;
+  if (loading) return <AppShellLoading />;
 
   const floatingIcons = [
     { Icon: RiCpuLine, top: "12%", left: "8%", size: 28, delay: 0, dur: 20 },

@@ -16,7 +16,9 @@ export async function POST(request) {
   try {
     const clientId = getRequestClientIdentifier(request);
     // Separate rate limit key from login so they don't interfere with each other
-    const { limited, retryAfterSeconds } = checkRateLimit(`reset:${clientId}`);
+    const { limited, retryAfterSeconds } = await checkRateLimit(
+      `reset:${clientId}`,
+    );
     if (limited) {
       return NextResponse.json(
         {

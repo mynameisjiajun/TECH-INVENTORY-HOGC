@@ -4,6 +4,152 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
+import {
+  insertRowsBestEffort,
+  isNotFoundError,
+  mutationError,
+  withWarnings,
+} from "@/lib/utils/mutationSafety";
+
+function restoreApprovedLoanInventoryTx(db, oldItems, loanId, wasPermanent) {
+  return db.transaction((items, currentLoanId, permanentLoan) => {
+    const restoreChanges = [];
+
+    for (const oldItem of items || []) {
+      const storageItem = oldItem.sheet_row
+        ? db
+            .prepare(
+              "SELECT id, sheet_row FROM storage_items WHERE sheet_row = ?",
+            )
+            .get(oldItem.sheet_row)
+        : db
+            .prepare("SELECT id, sheet_row FROM storage_items WHERE id = ?")
+            .get(oldItem.item_id);
+
+      if (!storageItem) {
+        throw new Error(
+          `Item no longer exists in inventory: ${oldItem.item_name}`,
+        );
+      }
+
+      db.prepare(
+        "UPDATE storage_items SET current = current + ? WHERE id = ?",
+      ).run(oldItem.quantity, storageItem.id);
+
+      restoreChanges.push({
+        sheetRow: storageItem.sheet_row || oldItem.sheet_row,
+        delta: oldItem.quantity,
+      });
+    }
+
+    if (permanentLoan) {
+      db.prepare("DELETE FROM deployed_items WHERE remarks LIKE ?").run(
+        `Perm loan #${currentLoanId}%`,
+      );
+    }
+
+    return restoreChanges;
+  })(oldItems, loanId, wasPermanent);
+}
+
+function rollbackInventoryRestoreTx(db, oldItems, deployedRows) {
+  db.transaction((items, priorDeployedRows) => {
+    for (const oldItem of items || []) {
+      const storageItem = oldItem.sheet_row
+        ? db
+            .prepare("SELECT id FROM storage_items WHERE sheet_row = ?")
+            .get(oldItem.sheet_row)
+        : db
+            .prepare("SELECT id FROM storage_items WHERE id = ?")
+            .get(oldItem.item_id);
+
+      if (!storageItem) continue;
+
+      db.prepare(
+        "UPDATE storage_items SET current = current - ? WHERE id = ?",
+      ).run(oldItem.quantity, storageItem.id);
+    }
+
+    if (priorDeployedRows.length) {
+      for (const row of priorDeployedRows) {
+        db.prepare(
+          `INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          row.item,
+          row.type,
+          row.brand,
+          row.model,
+          row.quantity,
+          row.location,
+          row.allocation,
+          row.status,
+          row.remarks,
+        );
+      }
+    }
+  })(oldItems, deployedRows);
+}
+
+async function rollbackLoanRequestState({
+  loanId,
+  requestSnapshot,
+  itemSnapshot,
+}) {
+  const warnings = [];
+
+  const { error: requestRollbackError } = await supabase
+    .from("loan_requests")
+    .update(requestSnapshot)
+    .eq("id", loanId);
+  if (requestRollbackError) {
+    warnings.push(
+      mutationError(
+        "Failed to restore tech loan request",
+        requestRollbackError,
+      ),
+    );
+  }
+
+  const { error: deleteItemsError } = await supabase
+    .from("loan_items")
+    .delete()
+    .eq("loan_request_id", loanId);
+  if (deleteItemsError) {
+    warnings.push(
+      mutationError(
+        "Failed to clear replacement tech loan items",
+        deleteItemsError,
+      ),
+    );
+    return warnings;
+  }
+
+  if (itemSnapshot.length > 0) {
+    const { error: restoreItemsError } = await supabase
+      .from("loan_items")
+      .insert(
+        itemSnapshot.map((item) => ({
+          loan_request_id: loanId,
+          item_id: item.item_id,
+          sheet_row: item.sheet_row,
+          item_name: item.item_name,
+          quantity: item.quantity,
+        })),
+      );
+
+    if (restoreItemsError) {
+      warnings.push(
+        mutationError(
+          "Failed to restore original tech loan items",
+          restoreItemsError,
+        ),
+      );
+    }
+  }
+
+  return warnings;
+}
 
 // PUT: Modify an existing loan request
 export async function PUT(request, { params }) {
@@ -14,6 +160,7 @@ export async function PUT(request, { params }) {
   startSyncIfNeeded();
 
   try {
+    const warnings = [];
     const {
       loan_type,
       purpose,
@@ -84,11 +231,20 @@ export async function PUT(request, { params }) {
     }
 
     // Fetch existing loan
-    const { data: existingLoan } = await supabase
+    const { data: existingLoan, error: existingLoanError } = await supabase
       .from("loan_requests")
-      .select("id, user_id, loan_type, status, admin_notes")
+      .select(
+        "id, user_id, loan_type, purpose, department, location, start_date, end_date, status, admin_notes, updated_at",
+      )
       .eq("id", loanId)
       .single();
+
+    if (existingLoanError && !isNotFoundError(existingLoanError)) {
+      return NextResponse.json(
+        { error: mutationError("Failed to load loan", existingLoanError) },
+        { status: 500 },
+      );
+    }
 
     if (!existingLoan)
       return NextResponse.json({ error: "Loan not found" }, { status: 404 });
@@ -111,13 +267,45 @@ export async function PUT(request, { params }) {
       );
     }
 
-    const { data: oldItems } = await supabase
+    const { data: oldItems, error: oldItemsError } = await supabase
       .from("loan_items")
       .select("item_id, sheet_row, item_name, quantity")
       .eq("loan_request_id", loanId);
 
+    if (oldItemsError) {
+      return NextResponse.json(
+        {
+          error: mutationError(
+            "Failed to load current loan items",
+            oldItemsError,
+          ),
+        },
+        { status: 500 },
+      );
+    }
+
     await waitForSync();
     const db = getDb();
+    const requestSnapshot = {
+      loan_type: existingLoan.loan_type,
+      purpose: existingLoan.purpose,
+      department: existingLoan.department,
+      location: existingLoan.location,
+      start_date: existingLoan.start_date,
+      end_date: existingLoan.end_date,
+      status: existingLoan.status,
+      admin_notes: existingLoan.admin_notes,
+      updated_at: existingLoan.updated_at,
+    };
+    const deployedSnapshot =
+      existingLoan.status === "approved" &&
+      existingLoan.loan_type === "permanent"
+        ? db
+            .prepare(
+              "SELECT item, type, brand, model, quantity, location, allocation, status, remarks FROM deployed_items WHERE remarks LIKE ?",
+            )
+            .all(`Perm loan #${loanId}%`)
+        : [];
 
     // If loan is approved, we calculate in-memory refunds to validate new stock
     const refundMap = new Map(); // item_id -> quantity
@@ -161,38 +349,6 @@ export async function PUT(request, { params }) {
       });
     }
 
-    const restoreChanges = [];
-    // If loan was approved, we must actually process the refunds since the loan will revert to pending.
-    if (existingLoan.status === "approved") {
-      for (const oldItem of oldItems || []) {
-        const si = oldItem.sheet_row
-          ? db
-              .prepare("SELECT id FROM storage_items WHERE sheet_row = ?")
-              .get(oldItem.sheet_row)
-          : db
-              .prepare("SELECT id FROM storage_items WHERE id = ?")
-              .get(oldItem.item_id);
-
-        if (si) {
-          db.prepare(
-            "UPDATE storage_items SET current = current + ? WHERE id = ?",
-          ).run(oldItem.quantity, si.id);
-          restoreChanges.push({
-            sheetRow: oldItem.sheet_row,
-            delta: oldItem.quantity,
-          });
-        }
-      }
-
-      // If it was a permanent loan, remove the deployed items
-      if (existingLoan.loan_type === "permanent") {
-        db.prepare("DELETE FROM deployed_items WHERE remarks LIKE ?").run(
-          `Perm loan #${loanId}%`,
-        );
-      }
-    }
-
-    // Update loan record to 'pending'
     const { error: updateError } = await supabase
       .from("loan_requests")
       .update({
@@ -209,14 +365,34 @@ export async function PUT(request, { params }) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", loanId);
-    if (updateError) throw updateError;
+    if (updateError) {
+      return NextResponse.json(
+        { error: mutationError("Failed to update loan request", updateError) },
+        { status: 500 },
+      );
+    }
 
-    // Replace items
     const { error: deleteItemsError } = await supabase
       .from("loan_items")
       .delete()
       .eq("loan_request_id", loanId);
-    if (deleteItemsError) throw deleteItemsError;
+    if (deleteItemsError) {
+      const rollbackWarnings = await rollbackLoanRequestState({
+        loanId,
+        requestSnapshot,
+        itemSnapshot: oldItems || [],
+      });
+      return NextResponse.json(
+        {
+          error: mutationError(
+            "Failed to replace loan items",
+            deleteItemsError,
+          ),
+          details: rollbackWarnings,
+        },
+        { status: 500 },
+      );
+    }
 
     const { error: insertItemsError } = await supabase
       .from("loan_items")
@@ -229,25 +405,87 @@ export async function PUT(request, { params }) {
           quantity: i.quantity,
         })),
       );
-    if (insertItemsError) throw insertItemsError;
-
-    if (restoreChanges.length > 0) {
-      await syncAuthoritativeStockToSheets(db, restoreChanges);
+    if (insertItemsError) {
+      const rollbackWarnings = await rollbackLoanRequestState({
+        loanId,
+        requestSnapshot,
+        itemSnapshot: oldItems || [],
+      });
+      return NextResponse.json(
+        {
+          error: mutationError(
+            "Failed to save replacement loan items",
+            insertItemsError,
+          ),
+          details: rollbackWarnings,
+        },
+        { status: 500 },
+      );
     }
 
-    // Notify admins
+    let restoreChanges = [];
+    if (existingLoan.status === "approved") {
+      try {
+        restoreChanges = restoreApprovedLoanInventoryTx(
+          db,
+          oldItems || [],
+          loanId,
+          existingLoan.loan_type === "permanent",
+        );
+      } catch (inventoryError) {
+        const rollbackWarnings = await rollbackLoanRequestState({
+          loanId,
+          requestSnapshot,
+          itemSnapshot: oldItems || [],
+        });
+        return NextResponse.json(
+          {
+            error:
+              inventoryError.message ||
+              "Failed to restore inventory for modified loan",
+            details: rollbackWarnings,
+          },
+          { status: 500 },
+        );
+      }
+    }
+
+    if (restoreChanges.length > 0) {
+      try {
+        await syncAuthoritativeStockToSheets(db, restoreChanges);
+      } catch (sheetError) {
+        rollbackInventoryRestoreTx(db, oldItems || [], deployedSnapshot);
+        const rollbackWarnings = await rollbackLoanRequestState({
+          loanId,
+          requestSnapshot,
+          itemSnapshot: oldItems || [],
+        });
+        return NextResponse.json(
+          {
+            error: sheetError.message || "Failed to sync restored inventory",
+            details: rollbackWarnings,
+          },
+          { status: 500 },
+        );
+      }
+    }
+
     const { data: admins } = await supabase
       .from("users")
       .select("id, mute_telegram")
       .eq("role", "admin");
     if (admins && admins.length > 0) {
-      await supabase.from("notifications").insert(
-        admins.map((admin) => ({
+      await insertRowsBestEffort({
+        client: supabase,
+        table: "notifications",
+        entries: admins.map((admin) => ({
           user_id: admin.id,
           message: `${user.display_name} modified their ${loan_type} loan request #${loanId}.`,
           link: "/admin",
         })),
-      );
+        warnings,
+        context: "admin loan modification",
+      });
 
       const itemListStr = resolvedItems
         .map((i) => `${i.item_name} × ${i.quantity}`)
@@ -262,17 +500,27 @@ export async function PUT(request, { params }) {
       }
     }
 
-    // Log activity
-    await supabase.from("activity_feed").insert({
-      user_id: user.id,
-      action: "modify",
-      description: `Modified loan #${loanId}`,
-      link: "/admin",
+    await insertRowsBestEffort({
+      client: supabase,
+      table: "activity_feed",
+      entries: [
+        {
+          user_id: user.id,
+          action: "modify",
+          description: `Modified loan #${loanId}`,
+          link: "/admin",
+        },
+      ],
+      warnings,
+      context: "loan activity",
     });
 
-    return NextResponse.json({
-      message: "Loan modified successfully and is now pending approval.",
-    });
+    return NextResponse.json(
+      withWarnings(
+        { message: "Loan modified successfully and is now pending approval." },
+        warnings,
+      ),
+    );
   } catch (error) {
     console.error("Loan modification error:", error);
     return NextResponse.json(
@@ -288,13 +536,24 @@ export async function DELETE(_request, { params }) {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const warnings = [];
+
   const { id } = await params;
 
-  const { data: loan } = await supabase
+  const { data: loan, error: loanError } = await supabase
     .from("loan_requests")
-    .select("id, user_id, status")
+    .select(
+      "id, user_id, status, loan_items(item_id, sheet_row, item_name, quantity)",
+    )
     .eq("id", id)
     .single();
+
+  if (loanError && !isNotFoundError(loanError)) {
+    return NextResponse.json(
+      { error: mutationError("Failed to load loan", loanError) },
+      { status: 500 },
+    );
+  }
 
   if (!loan)
     return NextResponse.json({ error: "Loan not found" }, { status: 404 });
@@ -308,16 +567,6 @@ export async function DELETE(_request, { params }) {
     );
   }
 
-  const { error: cancelItemsError } = await supabase
-    .from("loan_items")
-    .delete()
-    .eq("loan_request_id", id);
-  if (cancelItemsError)
-    return NextResponse.json(
-      { error: cancelItemsError.message || "Failed to cancel loan items" },
-      { status: 500 },
-    );
-
   const { error: cancelLoanError } = await supabase
     .from("loan_requests")
     .delete()
@@ -328,11 +577,21 @@ export async function DELETE(_request, { params }) {
       { status: 500 },
     );
 
-  await supabase.from("notifications").insert({
-    user_id: user.id,
-    message: `Your loan request #${id} has been cancelled.`,
-    link: "/loans",
+  await insertRowsBestEffort({
+    client: supabase,
+    table: "notifications",
+    entries: [
+      {
+        user_id: user.id,
+        message: `Your loan request #${id} has been cancelled.`,
+        link: "/loans",
+      },
+    ],
+    warnings,
+    context: "loan cancellation",
   });
 
-  return NextResponse.json({ message: "Loan cancelled successfully." });
+  return NextResponse.json(
+    withWarnings({ message: "Loan cancelled successfully." }, warnings),
+  );
 }

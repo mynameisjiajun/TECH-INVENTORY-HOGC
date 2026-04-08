@@ -16,8 +16,9 @@ const VALID_LOAN_STATUSES = new Set([
   "rejected",
   "returned",
 ]);
-const DEFAULT_LOAN_PAGE_SIZE = 200;
-const MAX_LOAN_PAGE_SIZE = 200;
+const DEFAULT_LOAN_PAGE_SIZE = 100;
+const MAX_LOAN_PAGE_SIZE = 100;
+const RELATED_SEARCH_MIN_LENGTH = 2;
 const TECH_LOAN_SELECT = `
       id,
       user_id,
@@ -65,6 +66,23 @@ async function getMatchingUserIds(searchTerm) {
   return [...new Set((data || []).map((entry) => entry.id))];
 }
 
+function canSearchRequesterFields(view, user) {
+  return view === "all" || view === "active" || user.role === "admin";
+}
+
+async function getRelatedSearchMatches({ searchTerm, includeUsers }) {
+  if (!searchTerm || searchTerm.length < RELATED_SEARCH_MIN_LENGTH) {
+    return { matchingLoanIds: [], matchingUserIds: [] };
+  }
+
+  const [matchingLoanIds, matchingUserIds] = await Promise.all([
+    getMatchingTechLoanIds(searchTerm),
+    includeUsers ? getMatchingUserIds(searchTerm) : Promise.resolve([]),
+  ]);
+
+  return { matchingLoanIds, matchingUserIds };
+}
+
 function parseBoundedInt(value, fallback, max) {
   const parsed = Number.parseInt(value || "", 10);
   if (!Number.isFinite(parsed) || parsed < 1) {
@@ -77,8 +95,6 @@ function parseBoundedInt(value, fallback, max) {
 // GET: fetch loan requests
 export async function GET(request) {
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") || "";
@@ -99,6 +115,10 @@ export async function GET(request) {
     return NextResponse.json({ error: "Invalid view" }, { status: 400 });
   }
 
+  if (!user && view !== "active") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (status && !VALID_LOAN_STATUSES.has(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
@@ -107,7 +127,7 @@ export async function GET(request) {
   const sanitizedSearch = sanitizeSearchTerm(search);
 
   // Lightweight count path — admin only, no payload
-  if (countOnly && user.role === "admin") {
+  if (countOnly && user?.role === "admin") {
     let cq = supabase
       .from("loan_requests")
       .select("id", { count: "exact", head: true });
@@ -134,7 +154,7 @@ export async function GET(request) {
   if (view === "active") {
     // Any authenticated user can see all approved loans (team visibility)
     query = query.in("status", ["approved", "pending"]);
-  } else if (view !== "all" || user.role !== "admin") {
+  } else if (view !== "all" || user?.role !== "admin") {
     query = query.eq("user_id", user.id);
   }
   if (isOverdueFilter) {
@@ -151,10 +171,13 @@ export async function GET(request) {
   if (dateTo) query = query.lte("start_date", dateTo);
 
   if (sanitizedSearch) {
-    const [matchingLoanIds, matchingUserIds] = await Promise.all([
-      getMatchingTechLoanIds(sanitizedSearch),
-      getMatchingUserIds(sanitizedSearch),
-    ]);
+    const includeUserSearch = user
+      ? canSearchRequesterFields(view, user)
+      : false;
+    const { matchingLoanIds, matchingUserIds } = await getRelatedSearchMatches({
+      searchTerm: sanitizedSearch,
+      includeUsers: includeUserSearch,
+    });
 
     const orPattern = `*${sanitizedSearch}*`;
     const searchClauses = [
@@ -167,7 +190,7 @@ export async function GET(request) {
       searchClauses.push(`id.in.(${matchingLoanIds.join(",")})`);
     }
 
-    if ((view === "all" || view === "active") && matchingUserIds.length > 0) {
+    if (includeUserSearch && matchingUserIds.length > 0) {
       searchClauses.push(`user_id.in.(${matchingUserIds.join(",")})`);
     }
 
@@ -179,8 +202,8 @@ export async function GET(request) {
   const { data: loanRows, count } = await query;
   let loans = (loanRows || []).map((lr) => ({
     ...lr,
-    requester_name: lr.users?.display_name || null,
-    requester_username: lr.users?.username || null,
+    requester_name: user ? lr.users?.display_name || null : null,
+    requester_username: user ? lr.users?.username || null : null,
     users: undefined,
     items: [],
   }));

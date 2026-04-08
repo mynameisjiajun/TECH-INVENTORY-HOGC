@@ -146,6 +146,43 @@ html[data-shell="pwa"] .filter-select-compact {
   padding: 7px 28px 7px 10px;
 }
 
+html[data-shell="pwa"] .loans-page .loans-filter-toolbar {
+  gap: 6px;
+}
+
+html[data-shell="pwa"] .loans-page .filter-shell {
+  padding: 10px;
+  border-radius: 12px;
+}
+
+html[data-shell="pwa"] .loans-page .search-input-wrap input {
+  padding: 6px 10px 6px 31px !important;
+}
+
+html[data-shell="pwa"] .loans-page .search-input-wrap .search-icon {
+  left: 10px;
+  font-size: 12px;
+}
+
+html[data-shell="pwa"] .loans-page .loans-status-filter-chips {
+  gap: 5px;
+}
+
+html[data-shell="pwa"] .loans-page .loans-status-filter-chip {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 9px;
+}
+
+html[data-shell="pwa"] .loans-page .filter-date-range {
+  padding: 6px 8px;
+}
+
+html[data-shell="pwa"] .loans-page .filter-date-input {
+  min-height: 30px;
+  padding: 5px 8px;
+}
+
 html[data-shell="pwa"] .inventory-tech-page .page-header {
   margin-bottom: 16px;
 }
@@ -506,7 +543,10 @@ html[data-shell="pwa"] .mobile-nav {
   justify-content: space-around;
   min-height: var(--shell-mobile-nav-min-height);
   padding-top: 10px;
-  padding-bottom: max(var(--shell-mobile-nav-padding-bottom), env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(
+    var(--shell-mobile-nav-padding-bottom),
+    env(safe-area-inset-bottom, 0px)
+  );
   background: #0b1120;
   border-top-color: rgba(148, 163, 184, 0.12);
   box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.03);

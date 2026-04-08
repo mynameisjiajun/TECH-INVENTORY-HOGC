@@ -81,7 +81,7 @@ export default function LoginPage() {
     if (result.ok) {
       // Trigger inventory sync in the background so data is fresh
       fetch("/api/items/sync", { method: "POST" }).catch(() => {});
-      router.push("/inventory");
+      router.push("/home");
     } else {
       setError(result.error);
     }

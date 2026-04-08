@@ -56,6 +56,12 @@ export default function DashboardPage() {
   const [calendarTypeFilter, setCalendarTypeFilter] = useState("my"); // 'my' | 'all' | 'tech' | 'laptop'
   const [isMobile, setIsMobile] = useState(false);
 
+  useEffect(() => {
+    if (!user) {
+      setCalendarTypeFilter((prev) => (prev === "my" ? "all" : prev));
+    }
+  }, [user]);
+
   // Mobile detection for compact calendar layout
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
@@ -69,10 +75,6 @@ export default function DashboardPage() {
   useEffect(() => {
     import("recharts").then(setRc);
   }, []);
-
-  useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
 
   // Admin: fetch full dashboard
   const fetchDashboard = useCallback(async () => {
@@ -169,7 +171,11 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      fetchAllActiveLoans();
+      return;
+    }
+
     if (user.role === "admin") {
       fetchDashboard();
     } else {
@@ -177,6 +183,13 @@ export default function DashboardPage() {
       fetchAllActiveLoans();
     }
   }, [user, fetchDashboard, fetchMyLoans, fetchAllActiveLoans]);
+
+  useEffect(() => {
+    if (user) return;
+
+    const fallback = setInterval(fetchAllActiveLoans, 60000);
+    return () => clearInterval(fallback);
+  }, [fetchAllActiveLoans, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -293,6 +306,12 @@ export default function DashboardPage() {
         })
       : allActiveLoans.filter((l) => {
           if (l.loan_type === "permanent") return false;
+          if (!user) {
+            if (calendarTypeFilter === "tech") return l._loanKind !== "laptop";
+            if (calendarTypeFilter === "laptop")
+              return l._loanKind === "laptop";
+            return true;
+          }
           const isOwn = l.user_id === user?.id;
           if (calendarTypeFilter === "my") return isOwn;
           if (calendarTypeFilter === "tech") return l._loanKind !== "laptop";
@@ -366,7 +385,11 @@ export default function DashboardPage() {
           week: w,
           startCol: segStart,
           endCol: segEnd,
-          label: loan.requester_name,
+          label: user
+            ? loan.requester_name
+            : loan._loanKind === "laptop"
+              ? "Laptop"
+              : "Booked",
           type: loan.loan_type,
           status: loan.status,
           isOverdue,
@@ -386,7 +409,7 @@ export default function DashboardPage() {
     calendarTypeFilter,
   ]);
 
-  if (loading || !user) return <AppShellLoading />;
+  if (loading) return <AppShellLoading />;
 
   const prevMonth = () =>
     setCalendarMonth((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1));
@@ -458,6 +481,142 @@ export default function DashboardPage() {
       </span>
     );
   };
+
+  if (!user) {
+    const activeTemporaryLoans = allActiveLoans.filter(
+      (loan) => loan.loan_type === "temporary",
+    );
+    const guestCalendarLegend = [
+      {
+        label: "Booked",
+        background: "rgba(59,130,246,0.3)",
+        border: "#3b82f6",
+      },
+      {
+        label: "Pending",
+        background: "rgba(245,158,11,0.3)",
+        border: "#f59e0b",
+      },
+      {
+        label: "Overdue",
+        background: "rgba(239,68,68,0.35)",
+        border: "#ef4444",
+      },
+    ];
+    const guestFilterOptions = [
+      { value: "all", getLabel: () => "All" },
+      {
+        value: "tech",
+        getLabel: (mobile) => (mobile ? "📦" : "📦 Tech"),
+      },
+      {
+        value: "laptop",
+        getLabel: (mobile) => (mobile ? "💻" : "💻 Laptop"),
+      },
+    ];
+
+    return (
+      <>
+        <Navbar />
+        <CartPanel />
+        <div className="page-container">
+          <div className="page-header">
+            <h1>Dashboard</h1>
+            <p>
+              Check current availability before you borrow. Login is optional
+              until you want tracking and alerts.
+            </p>
+          </div>
+
+          <div
+            className="stats-grid dashboard-stats-grid"
+            style={{ marginBottom: 24 }}
+          >
+            <div className="stat-card dashboard-stat-card">
+              <div className="stat-icon" style={{ color: "var(--info)" }}>
+                <RiArchiveLine />
+              </div>
+              <div className="stat-value" style={{ color: "var(--info)" }}>
+                {
+                  activeTemporaryLoans.filter(
+                    (loan) => loan._loanKind !== "laptop",
+                  ).length
+                }
+              </div>
+              <div className="stat-label">Tech Reservations</div>
+            </div>
+            <div className="stat-card dashboard-stat-card">
+              <div className="stat-icon" style={{ color: "var(--accent)" }}>
+                <RiHandHeartLine />
+              </div>
+              <div className="stat-value" style={{ color: "var(--accent)" }}>
+                {
+                  activeTemporaryLoans.filter(
+                    (loan) => loan._loanKind === "laptop",
+                  ).length
+                }
+              </div>
+              <div className="stat-label">Laptop Reservations</div>
+            </div>
+            <div className="stat-card dashboard-stat-card">
+              <div className="stat-icon" style={{ color: "var(--warning)" }}>
+                <RiTimeLine />
+              </div>
+              <div className="stat-value" style={{ color: "var(--warning)" }}>
+                {
+                  activeTemporaryLoans.filter(
+                    (loan) => loan.status === "pending",
+                  ).length
+                }
+              </div>
+              <div className="stat-label">Pending Review</div>
+            </div>
+          </div>
+
+          <div
+            className="glass-card"
+            style={{
+              marginBottom: 24,
+              padding: 20,
+              border: "1px solid var(--border)",
+              background: "rgba(255,255,255,0.03)",
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: 8 }}>
+              Guest view
+            </strong>
+            <p
+              style={{
+                margin: 0,
+                color: "var(--text-secondary)",
+                lineHeight: 1.6,
+              }}
+            >
+              This calendar only shows reservation windows and availability.
+              Borrower identity, private notes, and request tracking stay locked
+              until you sign in.
+            </p>
+          </div>
+
+          <LoanCalendar
+            isMobile={isMobile}
+            calendarMonth={calendarMonth}
+            typeFilter={calendarTypeFilter}
+            onTypeFilterChange={setCalendarTypeFilter}
+            prevMonth={prevMonth}
+            nextMonth={nextMonth}
+            goToday={goToday}
+            calendarData={calendarData}
+            isToday={isToday}
+            barColor={barColor}
+            onSelectLoan={() => {}}
+            legendItems={guestCalendarLegend}
+            filterOptions={guestFilterOptions}
+          />
+        </div>
+      </>
+    );
+  }
 
   // ====== NORMAL USER DASHBOARD ======
   if (!isAdmin) {

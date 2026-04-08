@@ -59,6 +59,7 @@ export default function LoanCalendar({
   barColor,
   onSelectLoan,
   legendItems,
+  filterOptions = FILTER_OPTIONS,
 }) {
   return (
     <div className="gantt-container">
@@ -89,7 +90,7 @@ export default function LoanCalendar({
               gap: 2,
             }}
           >
-            {FILTER_OPTIONS.map(({ value, getLabel }) => (
+            {filterOptions.map(({ value, getLabel }) => (
               <button
                 key={value}
                 onClick={() => onTypeFilterChange(value)}

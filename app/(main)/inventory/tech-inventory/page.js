@@ -41,12 +41,7 @@ export default function InventoryPage() {
   const [offline, setOffline] = useState(false);
   const [initialSyncChecked, setInitialSyncChecked] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !user) router.replace("/login");
-  }, [user, loading, router]);
-
   const fetchItems = useCallback(async () => {
-    if (!user) return;
     setFetching(true);
     setError("");
     try {
@@ -71,14 +66,14 @@ export default function InventoryPage() {
     } finally {
       setFetching(false);
     }
-  }, [user, tab, search, typeFilter, brandFilter]);
+  }, [tab, search, typeFilter, brandFilter]);
 
   useEffect(() => {
-    if (!user || initialSyncChecked) return;
+    if (initialSyncChecked) return;
     let cancelled = false;
 
     const runInitialSync = async () => {
-      if (user.role !== "admin") {
+      if (!user || user.role !== "admin") {
         if (!cancelled) setInitialSyncChecked(true);
         return;
       }
@@ -177,8 +172,6 @@ export default function InventoryPage() {
 
   if (loading) return <AppShellLoading />;
 
-  if (!user) return null;
-
   const allTabs = [
     { id: "presets", label: "Presets" },
     { id: "storage", label: "Storage Spare" },
@@ -188,13 +181,14 @@ export default function InventoryPage() {
     { id: "low_stock", label: "Low in Stock" },
   ];
   const tabs =
-    user.role === "admin"
+    user?.role === "admin"
       ? allTabs
       : [
           { id: "presets", label: "Presets" },
           { id: "storage", label: "Storage Spare" },
         ];
   const isTableTab = TABLE_TABS.includes(tab);
+  const showStorageTypeColumn = user?.role === "admin";
 
   return (
     <>
@@ -502,7 +496,7 @@ export default function InventoryPage() {
                   <thead>
                     <tr>
                       <th>Item</th>
-                      <th>Type</th>
+                      {showStorageTypeColumn && <th>Type</th>}
                       {user.role === "admin" && (
                         <>
                           <th>Brand</th>
@@ -523,9 +517,11 @@ export default function InventoryPage() {
                       return (
                         <tr key={`storage-${item.id}-${i}`}>
                           <td style={{ fontWeight: 500 }}>{item.item}</td>
-                          <td>
-                            <TypeBadge type={item.type} />
-                          </td>
+                          {showStorageTypeColumn && (
+                            <td>
+                              <TypeBadge type={item.type} />
+                            </td>
+                          )}
                           {user.role === "admin" && (
                             <>
                               <td>{item.brand}</td>

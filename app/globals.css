@@ -894,20 +894,26 @@ tr:hover td {
   background: rgba(99, 102, 241, 0.04);
 }
 
-@media (min-width: 769px) {
-  .storage-table th:last-child,
-  .storage-table td:last-child {
-    background: #111827;
-    border-left: 1px solid #1f2937;
-  }
+.storage-table th:last-child,
+.storage-table td:last-child {
+  position: sticky;
+  right: 0;
+  background: #111827;
+  border-left: 1px solid #1f2937;
+  box-shadow: -10px 0 18px rgba(2, 6, 23, 0.22);
+}
 
-  .storage-table th:last-child {
-    background: #0f1629;
-  }
+.storage-table th:last-child {
+  z-index: 4;
+  background: #0f1629;
+}
 
-  .storage-table tr:hover td:last-child {
-    background: #1b2436;
-  }
+.storage-table td:last-child {
+  z-index: 2;
+}
+
+.storage-table tr:hover td:last-child {
+  background: #1b2436;
 }
 
 tr:last-child td {

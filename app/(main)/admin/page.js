@@ -78,6 +78,21 @@ function readAdminQueryState() {
   };
 }
 
+function getNextLoanStatus(action) {
+  if (action === "approve") return "approved";
+  if (action === "reject") return "rejected";
+  if (action === "return") return "returned";
+  return action;
+}
+
+function getLoanClientKey(sourceOrLoan, loanId) {
+  if (typeof sourceOrLoan === "object" && sourceOrLoan !== null) {
+    return `${sourceOrLoan._source || "tech"}:${sourceOrLoan.id}`;
+  }
+
+  return `${sourceOrLoan || "tech"}:${loanId}`;
+}
+
 async function readApiResponse(res) {
   const contentType = res.headers.get("content-type") || "";
 
@@ -284,6 +299,39 @@ function AdminPageContent() {
     });
   }, [loans, searchQuery]);
 
+  const updateVisibleLoanAfterAction = useCallback(
+    (loanClientKey, action) => {
+      const nextStatus = getNextLoanStatus(action);
+
+      setLoans((prev) => {
+        if (action === "delete") {
+          return prev.filter(
+            (loan) => getLoanClientKey(loan) !== loanClientKey,
+          );
+        }
+
+        return prev.flatMap((loan) => {
+          if (getLoanClientKey(loan) !== loanClientKey) {
+            return [loan];
+          }
+
+          const nextLoan = { ...loan, status: nextStatus };
+          const matchesStatusFilter =
+            statusFilter === "" ||
+            nextStatus === statusFilter ||
+            (statusFilter === "overdue" &&
+              nextStatus === "approved" &&
+              nextLoan.loan_type === "temporary" &&
+              nextLoan.end_date &&
+              nextLoan.end_date < new Date().toISOString().split("T")[0]);
+
+          return matchesStatusFilter ? [nextLoan] : [];
+        });
+      });
+    },
+    [statusFilter],
+  );
+
   // Laptops tab state
   const [laptopsData, setLaptopsData] = useState([]); // tiers with laptops
   const [laptopsFetching, setLaptopsFetching] = useState(false);
@@ -365,26 +413,22 @@ function AdminPageContent() {
 
       if (loanSource !== "laptop") {
         const params = new URLSearchParams({ view: "all", status: apiStatus });
-        const res = await fetch(`/api/loans?${params}`);
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          setError(data.error || `Failed to load loans (${res.status})`);
-          return;
-        }
-        const data = await res.json();
-        techLoans = (data.loans || []).map((l) => ({ ...l, _source: "tech" }));
+        const data = await fetchJson(`/api/loans?${params}`);
+        techLoans = (data.loans || []).map((loan) => ({
+          ...loan,
+          _source: "tech",
+          _clientKey: getLoanClientKey("tech", loan.id),
+        }));
       }
 
       if (loanSource !== "tech") {
         const params = new URLSearchParams({ view: "all", status: apiStatus });
-        const res = await fetch(`/api/laptop-loans?${params}`);
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          setError(data.error || `Failed to load laptop loans (${res.status})`);
-          return;
-        }
-        const data = await res.json();
-        laptopLoansArr = data.loans || [];
+        const data = await fetchJson(`/api/laptop-loans?${params}`);
+        laptopLoansArr = (data.loans || []).map((loan) => ({
+          ...loan,
+          _source: "laptop",
+          _clientKey: getLoanClientKey("laptop", loan.id),
+        }));
       }
 
       let merged = [...techLoans, ...laptopLoansArr].sort(
@@ -401,7 +445,7 @@ function AdminPageContent() {
 
       setLoans(merged);
     } catch (err) {
-      setError("Network error — could not load loans");
+      setError(err.message || "Network error — could not load loans");
     } finally {
       setFetching(false);
     }
@@ -521,11 +565,10 @@ function AdminPageContent() {
   const fetchCurrentlyOut = useCallback(async () => {
     setCurrentlyOutFetching(true);
     try {
-      const res = await fetch("/api/laptop-loans?view=all&status=approved");
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentlyOut(data.loans || []);
-      }
+      const data = await fetchJson(
+        "/api/laptop-loans?view=all&status=approved",
+      );
+      setCurrentlyOut(data.loans || []);
     } catch {
       /* silent */
     } finally {
@@ -535,36 +578,46 @@ function AdminPageContent() {
 
   const fetchPendingCount = useCallback(async () => {
     try {
-      const [r1, r2] = await Promise.all([
-        fetch("/api/loans?view=all&status=pending&count_only=true"),
-        fetch("/api/laptop-loans?view=all&status=pending&count_only=true"),
+      const [d1, d2] = await Promise.all([
+        fetchJson("/api/loans?view=all&status=pending&count_only=true"),
+        fetchJson("/api/laptop-loans?view=all&status=pending&count_only=true"),
       ]);
-      const d1 = r1.ok ? await r1.json() : {};
-      const d2 = r2.ok ? await r2.json() : {};
       setPendingCount((d1.count || 0) + (d2.count || 0));
     } catch {
       /* silent */
     }
   }, []);
 
-  const refreshLoansTab = useCallback(() => {
-    fetchLoans();
-    fetchPendingCount();
+  const refreshLoansTab = useCallback(async () => {
+    await Promise.all([fetchLoans(), fetchPendingCount()]);
   }, [fetchLoans, fetchPendingCount]);
 
-  const handleLaptopLoanAction = async (loanId, action) => {
-    setActionLoading(loanId);
+  const handleLaptopLoanAction = async (loanClientKey, loanId, action) => {
+    setActionLoading(loanClientKey);
     setError("");
     try {
       const res = await fetch(`/api/laptop-loans/${loanId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, admin_notes: adminNotes[loanId] || "" }),
+        body: JSON.stringify({
+          action,
+          admin_notes: adminNotes[loanClientKey] || "",
+        }),
       });
       if (res.ok) {
-        fetchLoans();
-        fetchPendingCount();
-        setAdminNotes((p) => ({ ...p, [loanId]: "" }));
+        updateVisibleLoanAfterAction(loanClientKey, action);
+        await refreshLoansTab();
+        setAdminNotes((prev) => ({ ...prev, [loanClientKey]: "" }));
+        setSelectedLoans((prev) => {
+          const next = new Set(prev);
+          next.delete(loanClientKey);
+          return next;
+        });
+        setSelectedPendingLoans((prev) => {
+          const next = new Set(prev);
+          next.delete(loanClientKey);
+          return next;
+        });
         toast.success(
           `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : "returned"} successfully`,
         );
@@ -662,8 +715,8 @@ function AdminPageContent() {
     };
   }, [user, activeTab, refreshLoansTab]);
 
-  const handleAction = async (loanId, action) => {
-    setActionLoading(loanId);
+  const handleAction = async (loanClientKey, loanId, action) => {
+    setActionLoading(loanClientKey);
     setError("");
     try {
       const res = await fetch("/api/admin", {
@@ -672,29 +725,23 @@ function AdminPageContent() {
         body: JSON.stringify({
           loan_id: loanId,
           action,
-          admin_notes: adminNotes[loanId] || "",
+          admin_notes: adminNotes[loanClientKey] || "",
         }),
       });
       if (res.ok) {
-        // Optimistically update the UI to prevent stale data
-        if (action === "delete") {
-          setLoans((prev) => prev.filter((l) => l.id !== loanId));
-        } else {
-          setLoans((prev) =>
-            prev.map((l) =>
-              l.id === loanId
-                ? {
-                    ...l,
-                    status: action === "return" ? "returned" : action + "d",
-                  }
-                : l,
-            ),
-          );
-        }
-
-        fetchLoans();
-        fetchPendingCount();
-        setAdminNotes((p) => ({ ...p, [loanId]: "" }));
+        updateVisibleLoanAfterAction(loanClientKey, action);
+        await refreshLoansTab();
+        setAdminNotes((prev) => ({ ...prev, [loanClientKey]: "" }));
+        setSelectedLoans((prev) => {
+          const next = new Set(prev);
+          next.delete(loanClientKey);
+          return next;
+        });
+        setSelectedPendingLoans((prev) => {
+          const next = new Set(prev);
+          next.delete(loanClientKey);
+          return next;
+        });
         toast.success(
           `Loan ${action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "return" ? "returned" : action + "d"} successfully`,
         );
@@ -714,13 +761,17 @@ function AdminPageContent() {
     setBulkApproveLoading(true);
     setError("");
     try {
-      const selectedIds = Array.from(selectedPendingLoans);
-      const techIds = selectedIds.filter(
-        (id) => loans.find((l) => l.id === id)?._source !== "laptop",
+      const selectedKeys = Array.from(selectedPendingLoans);
+      const selectedLoanEntries = selectedKeys
+        .map((key) => loans.find((loan) => getLoanClientKey(loan) === key))
+        .filter(Boolean);
+      const techLoansToApprove = selectedLoanEntries.filter(
+        (loan) => loan._source !== "laptop",
       );
-      const laptopIds = selectedIds.filter(
-        (id) => loans.find((l) => l.id === id)?._source === "laptop",
+      const laptopLoansToApprove = selectedLoanEntries.filter(
+        (loan) => loan._source === "laptop",
       );
+      const techIds = techLoansToApprove.map((loan) => loan.id);
 
       const tasks = [];
       if (techIds.length > 0) {
@@ -731,40 +782,40 @@ function AdminPageContent() {
             body: JSON.stringify({ action: "bulk_approve", loan_ids: techIds }),
           }).then(async (res) => ({
             ok: res.ok,
-            ids: techIds,
+            loanKeys: techLoansToApprove.map((loan) => getLoanClientKey(loan)),
             body: await res.json().catch(() => ({})),
           })),
         );
       }
-      for (const lid of laptopIds) {
+      for (const loan of laptopLoansToApprove) {
         tasks.push(
-          fetch(`/api/laptop-loans/${lid}`, {
+          fetch(`/api/laptop-loans/${loan.id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "approve" }),
           }).then(async (res) => ({
             ok: res.ok,
-            ids: [lid],
+            loanKeys: [getLoanClientKey(loan)],
             body: await res.json().catch(() => ({})),
           })),
         );
       }
 
       const results = await Promise.all(tasks);
-      const failedIds = results
+      const failedKeys = results
         .filter((result) => !result.ok)
-        .flatMap((result) => result.ids);
-      const succeededCount = selectedIds.length - failedIds.length;
+        .flatMap((result) => result.loanKeys);
+      const succeededCount = selectedKeys.length - failedKeys.length;
 
-      if (failedIds.length === 0) {
+      if (failedKeys.length === 0) {
         setSelectedPendingLoans(new Set());
-        toast.success(`${selectedIds.length} loan(s) approved successfully`);
+        toast.success(`${selectedKeys.length} loan(s) approved successfully`);
       } else {
-        setSelectedPendingLoans(new Set(failedIds));
+        setSelectedPendingLoans(new Set(failedKeys));
         const firstError = results.find((result) => !result.ok)?.body?.error;
         toast.error(
           firstError ||
-            `${failedIds.length} approval(s) failed. Failed requests stayed selected.`,
+            `${failedKeys.length} approval(s) failed. Failed requests stayed selected.`,
         );
         if (succeededCount > 0) {
           toast.success(`${succeededCount} loan(s) approved successfully`);
@@ -784,12 +835,16 @@ function AdminPageContent() {
     setBulkLoading(true);
     setError("");
     try {
+      const selectedLoanIds = Array.from(selectedLoans)
+        .map((key) => loans.find((loan) => getLoanClientKey(loan) === key))
+        .filter(Boolean)
+        .map((loan) => loan.id);
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "bulk_return",
-          loan_ids: Array.from(selectedLoans),
+          loan_ids: selectedLoanIds,
         }),
       });
       if (res.ok) {
@@ -807,11 +862,11 @@ function AdminPageContent() {
     }
   };
 
-  const toggleSelect = (id) => {
+  const toggleSelect = (loanClientKey) => {
     setSelectedLoans((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(loanClientKey)) next.delete(loanClientKey);
+      else next.add(loanClientKey);
       return next;
     });
   };
@@ -824,15 +879,15 @@ function AdminPageContent() {
           l.loan_type === "temporary" &&
           l._source !== "laptop",
       )
-      .map((l) => l.id);
+      .map((loan) => getLoanClientKey(loan));
     setSelectedLoans(new Set(ids));
   };
 
-  const toggleSelectPending = (id) => {
+  const toggleSelectPending = (loanClientKey) => {
     setSelectedPendingLoans((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(loanClientKey)) next.delete(loanClientKey);
+      else next.add(loanClientKey);
       return next;
     });
   };
@@ -840,7 +895,7 @@ function AdminPageContent() {
   const selectAllPending = () => {
     const ids = filteredLoans
       .filter((l) => l.status === "pending")
-      .map((l) => l.id);
+      .map((loan) => getLoanClientKey(loan));
     setSelectedPendingLoans(new Set(ids));
   };
 
@@ -1389,6 +1444,7 @@ function AdminPageContent() {
               </div>
             ) : (
               filteredLoans.map((loan) => {
+                const loanKey = loan._clientKey || getLoanClientKey(loan);
                 const todayStr = new Date().toISOString().split("T")[0];
                 const isOverdue =
                   loan.status === "approved" &&
@@ -1411,7 +1467,7 @@ function AdminPageContent() {
 
                 return (
                   <div
-                    key={loan.id}
+                    key={loanKey}
                     className="admin-loan-card"
                     style={{
                       background: "var(--bg-card)",
@@ -1510,7 +1566,7 @@ function AdminPageContent() {
                           <button
                             type="button"
                             aria-label={`Select loan ${loan.id} for bulk approval`}
-                            aria-pressed={selectedPendingLoans.has(loan.id)}
+                            aria-pressed={selectedPendingLoans.has(loanKey)}
                             style={{
                               cursor: "pointer",
                               display: "flex",
@@ -1523,17 +1579,17 @@ function AdminPageContent() {
                               border: "none",
                               padding: 0,
                             }}
-                            onClick={() => toggleSelectPending(loan.id)}
+                            onClick={() => toggleSelectPending(loanKey)}
                           >
                             <div
                               style={{
                                 width: 18,
                                 height: 18,
                                 borderRadius: 5,
-                                border: selectedPendingLoans.has(loan.id)
+                                border: selectedPendingLoans.has(loanKey)
                                   ? "none"
                                   : "1.5px solid var(--border)",
-                                background: selectedPendingLoans.has(loan.id)
+                                background: selectedPendingLoans.has(loanKey)
                                   ? "#10b981"
                                   : "transparent",
                                 display: "flex",
@@ -1542,7 +1598,7 @@ function AdminPageContent() {
                                 transition: "all 0.15s",
                               }}
                             >
-                              {selectedPendingLoans.has(loan.id) && (
+                              {selectedPendingLoans.has(loanKey) && (
                                 <RiCheckLine color="white" size={13} />
                               )}
                             </div>
@@ -1555,7 +1611,7 @@ function AdminPageContent() {
                             <button
                               type="button"
                               aria-label={`Select loan ${loan.id} for bulk return`}
-                              aria-pressed={selectedLoans.has(loan.id)}
+                              aria-pressed={selectedLoans.has(loanKey)}
                               style={{
                                 cursor: "pointer",
                                 display: "flex",
@@ -1568,29 +1624,29 @@ function AdminPageContent() {
                                 border: "none",
                                 padding: 0,
                               }}
-                              onClick={() => toggleSelect(loan.id)}
+                              onClick={() => toggleSelect(loanKey)}
                             >
                               <div
                                 style={{
                                   width: 18,
                                   height: 18,
                                   borderRadius: 5,
-                                  border: selectedLoans.has(loan.id)
+                                  border: selectedLoans.has(loanKey)
                                     ? "none"
                                     : "1.5px solid var(--border)",
-                                  background: selectedLoans.has(loan.id)
+                                  background: selectedLoans.has(loanKey)
                                     ? "var(--accent)"
                                     : "transparent",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
                                   transition: "all 0.15s",
-                                  boxShadow: selectedLoans.has(loan.id)
+                                  boxShadow: selectedLoans.has(loanKey)
                                     ? "0 2px 6px rgba(99,102,241,0.25)"
                                     : "none",
                                 }}
                               >
-                                {selectedLoans.has(loan.id) && (
+                                {selectedLoans.has(loanKey) && (
                                   <RiCheckLine color="white" size={13} />
                                 )}
                               </div>
@@ -1674,15 +1730,15 @@ function AdminPageContent() {
                         <input
                           type="text"
                           aria-label={`Admin notes for loan ${loan.id}`}
-                          name={`admin_notes_${loan.id}`}
+                          name={`admin_notes_${loanKey}`}
                           autoComplete="off"
                           className="admin-notes-input"
                           placeholder="Admin notes (optional — sent to requester)"
-                          value={adminNotes[loan.id] || ""}
+                          value={adminNotes[loanKey] || ""}
                           onChange={(e) =>
                             setAdminNotes((p) => ({
                               ...p,
-                              [loan.id]: e.target.value,
+                              [loanKey]: e.target.value,
                             }))
                           }
                         />
@@ -1691,11 +1747,15 @@ function AdminPageContent() {
                           style={{ display: "flex", gap: 8, marginTop: 10 }}
                         >
                           <button
-                            disabled={actionLoading === loan.id}
+                            disabled={actionLoading === loanKey}
                             onClick={() =>
                               loan._source === "laptop"
-                                ? handleLaptopLoanAction(loan.id, "approve")
-                                : handleAction(loan.id, "approve")
+                                ? handleLaptopLoanAction(
+                                    loanKey,
+                                    loan.id,
+                                    "approve",
+                                  )
+                                : handleAction(loanKey, loan.id, "approve")
                             }
                             style={{
                               flex: 1,
@@ -1705,7 +1765,7 @@ function AdminPageContent() {
                               fontWeight: 700,
                               fontSize: 13,
                               cursor:
-                                actionLoading === loan.id
+                                actionLoading === loanKey
                                   ? "not-allowed"
                                   : "pointer",
                               background:
@@ -1715,11 +1775,11 @@ function AdminPageContent() {
                               alignItems: "center",
                               justifyContent: "center",
                               gap: 6,
-                              opacity: actionLoading === loan.id ? 0.7 : 1,
+                              opacity: actionLoading === loanKey ? 0.7 : 1,
                               boxShadow: "0 2px 8px rgba(16,185,129,0.25)",
                             }}
                           >
-                            {actionLoading === loan.id ? (
+                            {actionLoading === loanKey ? (
                               <span className="btn-spinner" />
                             ) : (
                               <RiCheckLine />
@@ -1727,11 +1787,15 @@ function AdminPageContent() {
                             Approve
                           </button>
                           <button
-                            disabled={actionLoading === loan.id}
+                            disabled={actionLoading === loanKey}
                             onClick={() =>
                               loan._source === "laptop"
-                                ? handleLaptopLoanAction(loan.id, "reject")
-                                : handleAction(loan.id, "reject")
+                                ? handleLaptopLoanAction(
+                                    loanKey,
+                                    loan.id,
+                                    "reject",
+                                  )
+                                : handleAction(loanKey, loan.id, "reject")
                             }
                             style={{
                               flex: 1,
@@ -1740,7 +1804,7 @@ function AdminPageContent() {
                               fontWeight: 700,
                               fontSize: 13,
                               cursor:
-                                actionLoading === loan.id
+                                actionLoading === loanKey
                                   ? "not-allowed"
                                   : "pointer",
                               background: "rgba(239,68,68,0.08)",
@@ -1750,10 +1814,10 @@ function AdminPageContent() {
                               alignItems: "center",
                               justifyContent: "center",
                               gap: 6,
-                              opacity: actionLoading === loan.id ? 0.7 : 1,
+                              opacity: actionLoading === loanKey ? 0.7 : 1,
                             }}
                           >
-                            {actionLoading === loan.id ? (
+                            {actionLoading === loanKey ? (
                               <span className="btn-spinner" />
                             ) : (
                               <RiCloseLine />
@@ -1776,11 +1840,15 @@ function AdminPageContent() {
                           }}
                         >
                           <button
-                            disabled={actionLoading === loan.id}
+                            disabled={actionLoading === loanKey}
                             onClick={() =>
                               loan._source === "laptop"
-                                ? handleLaptopLoanAction(loan.id, "return")
-                                : handleAction(loan.id, "return")
+                                ? handleLaptopLoanAction(
+                                    loanKey,
+                                    loan.id,
+                                    "return",
+                                  )
+                                : handleAction(loanKey, loan.id, "return")
                             }
                             className="admin-loan-return-btn"
                             style={{
@@ -1792,7 +1860,7 @@ function AdminPageContent() {
                               fontWeight: 700,
                               fontSize: 13,
                               cursor:
-                                actionLoading === loan.id
+                                actionLoading === loanKey
                                   ? "not-allowed"
                                   : "pointer",
                               border: "none",
@@ -1800,13 +1868,13 @@ function AdminPageContent() {
                                 ? "linear-gradient(135deg, #ef4444, #dc2626)"
                                 : "linear-gradient(135deg, #10b981, #059669)",
                               color: "white",
-                              opacity: actionLoading === loan.id ? 0.7 : 1,
+                              opacity: actionLoading === loanKey ? 0.7 : 1,
                               boxShadow: isOverdue
                                 ? "0 2px 8px rgba(239,68,68,0.35)"
                                 : "0 2px 8px rgba(16,185,129,0.3)",
                             }}
                           >
-                            {actionLoading === loan.id ? (
+                            {actionLoading === loanKey ? (
                               <>
                                 <span className="btn-spinner" /> Returning…
                               </>
@@ -1879,7 +1947,7 @@ function AdminPageContent() {
                         {loan._source !== "laptop" && (
                           <button
                             className="admin-loan-card-delete"
-                            disabled={actionLoading === loan.id}
+                            disabled={actionLoading === loanKey}
                             aria-label={`Delete loan ${loan.id}`}
                             style={{
                               color: "var(--error)",
@@ -1899,7 +1967,7 @@ function AdminPageContent() {
                                   `Delete loan #${loan.id}?${loan.status === "approved" ? " Stock will be restored." : ""}`,
                                 )
                               )
-                                handleAction(loan.id, "delete");
+                                handleAction(loanKey, loan.id, "delete");
                             }}
                           >
                             <RiDeleteBinLine /> Delete
@@ -3112,7 +3180,7 @@ function AdminPageContent() {
                       const isPerm = loan.loan_type === "permanent";
                       return (
                         <div
-                          key={loan.id}
+                          key={`currently-out:${loan.id}`}
                           style={{
                             padding: "12px 14px",
                             borderBottom:

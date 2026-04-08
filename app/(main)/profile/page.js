@@ -2,7 +2,7 @@
 import { useAuth } from "@/lib/context/AuthContext";
 import { useToast } from "@/lib/context/ToastContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import AppShellLoading from "@/components/AppShellLoading";
 import {
@@ -20,6 +20,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
+  const [telegramHandle, setTelegramHandle] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -32,6 +33,33 @@ export default function ProfilePage() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [unlinkLoading, setUnlinkLoading] = useState(false);
+  const [linkStatusLoading, setLinkStatusLoading] = useState(false);
+
+  const loadProfile = useCallback(
+    async (options = {}) => {
+      const { silent = false } = options;
+      if (!user) return;
+
+      if (!silent) {
+        setProfileErr("");
+      }
+
+      const res = await fetch("/api/profile", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load profile");
+      }
+
+      setProfile(data.profile);
+      setDisplayName(data.profile.display_name);
+      setEmail(data.profile.email || "");
+      setTelegramHandle(data.profile.telegram_handle || "");
+      setMuteEmails(!!data.profile.mute_emails);
+      setMuteTelegram(!!data.profile.mute_telegram);
+      return data.profile;
+    },
+    [user],
+  );
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -39,22 +67,28 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
-    fetch("/api/profile")
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to load profile");
-        return r.json();
-      })
-      .then((data) => {
-        setProfile(data.profile);
-        setDisplayName(data.profile.display_name);
-        setEmail(data.profile.email || "");
-        setMuteEmails(!!data.profile.mute_emails);
-        setMuteTelegram(!!data.profile.mute_telegram);
-      })
-      .catch((err) => {
-        setProfileErr(err.message || "Could not load profile");
-      });
-  }, [user]);
+    loadProfile().catch((err) => {
+      setProfileErr(err.message || "Could not load profile");
+    });
+  }, [loadProfile, user]);
+
+  const handleRefreshTelegramStatus = async () => {
+    setLinkStatusLoading(true);
+    try {
+      const freshProfile = await loadProfile({ silent: true });
+      if (freshProfile?.telegram_chat_id) {
+        toast.success("Telegram linked successfully.");
+      } else {
+        toast.error(
+          "Telegram is still not linked. Open the bot and press Start first.",
+        );
+      }
+    } catch (err) {
+      toast.error(err.message || "Could not refresh Telegram link status");
+    } finally {
+      setLinkStatusLoading(false);
+    }
+  };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -69,6 +103,7 @@ export default function ProfilePage() {
           action: "update_profile",
           display_name: displayName,
           email: email.trim() || null,
+          telegram_handle: telegramHandle.trim() || null,
           mute_emails: muteEmails,
           mute_telegram: muteTelegram,
         }),
@@ -142,7 +177,7 @@ export default function ProfilePage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setProfile((p) => ({ ...p, telegram_chat_id: null }));
+        setProfile((p) => (p ? { ...p, telegram_chat_id: null } : p));
         toast.success(data.message || "Telegram unlinked");
       } else {
         toast.error(data.error || "Failed to unlink Telegram");
@@ -331,6 +366,45 @@ export default function ProfilePage() {
                   letterSpacing: "0.5px",
                 }}
               >
+                Telegram Handle{" "}
+                <span style={{ fontWeight: 400, fontSize: 12 }}>
+                  (optional)
+                </span>
+              </label>
+              <input
+                className="profile-input"
+                type="text"
+                value={telegramHandle}
+                onChange={(e) => setTelegramHandle(e.target.value)}
+                placeholder="@yourhandle"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                style={{
+                  width: "100%",
+                  padding: "14px 18px",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                  color: "var(--text-primary)",
+                  fontSize: 16,
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label
+                className="profile-label"
+                style={{
+                  display: "block",
+                  marginBottom: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  letterSpacing: "0.5px",
+                }}
+              >
                 <RiMailLine
                   style={{ verticalAlign: "middle", marginRight: 6 }}
                 />
@@ -491,6 +565,15 @@ export default function ProfilePage() {
                   >
                     Open Telegram to Link
                   </a>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={handleRefreshTelegramStatus}
+                    disabled={linkStatusLoading}
+                    style={{ marginLeft: 10 }}
+                  >
+                    {linkStatusLoading ? "Checking..." : "Check Link Status"}
+                  </button>
                 </div>
               )}
             </div>

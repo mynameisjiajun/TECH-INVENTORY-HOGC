@@ -1,8 +1,36 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/db/supabase";
+import { normalizeTelegramHandle } from "@/lib/utils/telegramHandle";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
+
+function hasValidWebhookSecret(request) {
+  if (!WEBHOOK_SECRET) {
+    console.warn(
+      "TELEGRAM_WEBHOOK_SECRET is not configured; accepting Telegram webhook without secret validation",
+    );
+    return true;
+  }
+
+  return (
+    request.headers.get("x-telegram-bot-api-secret-token") === WEBHOOK_SECRET
+  );
+}
+
+function buildLinkInstructions() {
+  const profileUrl = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/profile`
+    : null;
+
+  return [
+    "Open your <b>Profile</b> page in the app and tap <b>Open Telegram to Link</b>.",
+    "When Telegram opens, press <b>Start</b> in this chat.",
+    profileUrl ? `<a href=\"${profileUrl}\">Open Profile →</a>` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 async function reply(chatId, text) {
   if (!BOT_TOKEN) return;
@@ -44,27 +72,52 @@ function daysUntil(dateStr) {
 // ── Command Handlers ────────────────────────────────────────────
 
 async function handleStart(chatId, userId) {
-  const { data: user } = await supabase
+  const currentChatId = String(chatId);
+  const { data: user, error: userError } = await supabase
     .from("users")
     .select("id, username, telegram_chat_id")
     .eq("id", userId)
     .single();
 
-  if (!user) {
+  if (userError || !user) {
     await reply(
       chatId,
-      "❌ Invalid link. Please use the link from your Profile page.",
+      `❌ Invalid or expired link.\n\n${buildLinkInstructions()}`,
+    );
+    return;
+  }
+
+  if (user.telegram_chat_id === currentChatId) {
+    await reply(
+      chatId,
+      `✅ Already linked! Your Telegram is connected to <b>@${user.username}</b>.`,
+    );
+    return;
+  }
+
+  if (user.telegram_chat_id && user.telegram_chat_id !== currentChatId) {
+    await reply(
+      chatId,
+      "⚠️ This app account is already linked to another Telegram chat.\n\nUnlink it first from the app Profile page or send /unlink from the currently linked chat, then try again.",
     );
     return;
   }
 
   // Check if this Telegram account is already linked to a different user
-  const { data: alreadyLinked } = await supabase
+  const { data: alreadyLinked, error: alreadyLinkedError } = await supabase
     .from("users")
     .select("id")
-    .eq("telegram_chat_id", String(chatId))
+    .eq("telegram_chat_id", currentChatId)
     .neq("id", userId)
     .maybeSingle();
+
+  if (alreadyLinkedError) {
+    await reply(
+      chatId,
+      "⚠️ We couldn't verify your existing Telegram link right now. Please try again in a moment.",
+    );
+    return;
+  }
 
   if (alreadyLinked) {
     await reply(
@@ -74,24 +127,75 @@ async function handleStart(chatId, userId) {
     return;
   }
 
-  // Already linked to this same user — just confirm
-  if (user.telegram_chat_id === String(chatId)) {
+  const { error: updateError } = await supabase
+    .from("users")
+    .update({ telegram_chat_id: currentChatId })
+    .eq("id", userId);
+
+  if (updateError) {
     await reply(
       chatId,
-      `✅ Already linked! Your Telegram is connected to <b>@${user.username}</b>.`,
+      updateError.code === "23505"
+        ? "⚠️ This Telegram chat is already linked elsewhere. Unlink it first, then try again."
+        : "⚠️ We couldn't link your Telegram account right now. Please try again later or use the app Profile page to retry.",
     );
     return;
   }
-
-  await supabase
-    .from("users")
-    .update({ telegram_chat_id: String(chatId) })
-    .eq("id", userId);
 
   await reply(
     chatId,
     `✅ Successfully linked! Welcome, <b>@${user.username}</b>.\n\nYou will now receive instant notifications about your Tech Inventory loans here.\n\nSend /help to see available commands.`,
   );
+}
+
+async function handleStartByTelegramHandle(chatId, username) {
+  const normalizedHandle = normalizeTelegramHandle(username);
+
+  if (!normalizedHandle) {
+    await reply(
+      chatId,
+      `👋 I'm the Tech Inventory Bot!\n\n${buildLinkInstructions()}`,
+    );
+    return;
+  }
+
+  const { data: matchedUser, error } = await supabase
+    .from("users")
+    .select("id")
+    .eq("telegram_handle", normalizedHandle)
+    .maybeSingle();
+
+  if (error) {
+    await reply(
+      chatId,
+      "⚠️ We couldn't check your saved Telegram handle right now. Please try again in a moment.",
+    );
+    return;
+  }
+
+  if (!matchedUser) {
+    await reply(
+      chatId,
+      [
+        `👋 I couldn't find an app account saved with <b>${normalizedHandle}</b>.`,
+        "",
+        "Save this exact Telegram handle on your Profile page, then send /start again, or use the Open Telegram to Link button from the app.",
+        "",
+        buildLinkInstructions(),
+      ].join("\n"),
+    );
+    return;
+  }
+
+  await handleStart(chatId, matchedUser.id);
+}
+
+function parseCommand(text) {
+  const [rawCommand = "", ...args] = text.trim().split(/\s+/);
+  return {
+    command: rawCommand.split("@")[0].toLowerCase(),
+    args,
+  };
 }
 
 async function handleHelp(chatId) {
@@ -105,10 +209,63 @@ async function handleHelp(chatId) {
       "/overdue — Overdue items (need immediate attention)",
       "/status &lt;id&gt; — Check a specific loan (e.g. /status 5)",
       "/history — Your recent loan history",
+      "/unlink — Unlink this Telegram chat from your app account",
       "/mute — Mute Telegram notifications",
       "/unmute — Unmute Telegram notifications",
       "/help — Show this message",
     ].join("\n"),
+  );
+}
+
+async function handleUnlink(chatId, userId) {
+  const currentChatId = String(chatId);
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("telegram_chat_id")
+    .eq("id", userId)
+    .single();
+
+  if (userError || !user) {
+    await reply(
+      chatId,
+      "⚠️ We couldn't load your Telegram link status right now. Please try again later.",
+    );
+    return;
+  }
+
+  if (!user.telegram_chat_id) {
+    await reply(
+      chatId,
+      `ℹ️ No app account is currently linked to this Telegram chat.\n\n${buildLinkInstructions()}`,
+    );
+    return;
+  }
+
+  if (user.telegram_chat_id !== currentChatId) {
+    await reply(
+      chatId,
+      "⚠️ This Telegram chat is not the one currently linked to your app account. Please unlink from the app Profile page instead.",
+    );
+    return;
+  }
+
+  const { error: unlinkError } = await supabase
+    .from("users")
+    .update({ telegram_chat_id: null })
+    .eq("id", userId)
+    .eq("telegram_chat_id", currentChatId);
+
+  if (unlinkError) {
+    await reply(
+      chatId,
+      "⚠️ We couldn't unlink this Telegram chat right now. Please try again later or unlink from the app Profile page.",
+    );
+    return;
+  }
+
+  await reply(
+    chatId,
+    "🔌 This Telegram chat has been unlinked from your Tech Inventory account. Commands and alerts are now disabled until you relink from Profile.",
   );
 }
 
@@ -323,17 +480,7 @@ async function handleHistory(chatId, userId) {
 
 export async function POST(request) {
   try {
-    if (!WEBHOOK_SECRET) {
-      console.error("TELEGRAM_WEBHOOK_SECRET is not configured");
-      return NextResponse.json(
-        { error: "Server misconfiguration" },
-        { status: 500 },
-      );
-    }
-
-    if (
-      request.headers.get("x-telegram-bot-api-secret-token") !== WEBHOOK_SECRET
-    ) {
+    if (!hasValidWebhookSecret(request)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -345,15 +492,38 @@ export async function POST(request) {
 
     const chatId = body.message.chat.id;
     const text = body.message.text.trim();
+    const telegramUsername = body.message.from?.username || null;
+    const { command, args } = parseCommand(text);
 
-    // Handle /start <userId> (account linking)
-    if (text.startsWith("/start ")) {
-      const userIdRaw = text.split(" ")[1];
-      const userId = parseInt(userIdRaw, 10);
-      if (!isNaN(userId)) {
+    if (command === "/start" && args[0]) {
+      const userId = args[0].trim();
+
+      if (userId) {
         await handleStart(chatId, userId);
         return NextResponse.json({ ok: true });
       }
+
+      await reply(
+        chatId,
+        `❌ That link code is invalid.\n\n${buildLinkInstructions()}`,
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    if (command === "/start") {
+      const { data: linkedUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("telegram_chat_id", String(chatId))
+        .maybeSingle();
+
+      if (linkedUser) {
+        await handleHelp(chatId);
+        return NextResponse.json({ ok: true });
+      }
+
+      await handleStartByTelegramHandle(chatId, telegramUsername);
+      return NextResponse.json({ ok: true });
     }
 
     // All other commands require a linked account
@@ -366,28 +536,30 @@ export async function POST(request) {
     if (!user) {
       await reply(
         chatId,
-        "👋 I'm the Tech Inventory Bot!\n\nLink your account via your <b>Profile</b> page in the app to get started.",
+        `👋 I'm the Tech Inventory Bot!\n\n${buildLinkInstructions()}`,
       );
       return NextResponse.json({ ok: true });
     }
 
     // Route commands
-    if (text === "/help" || text === "/start") {
+    if (command === "/help") {
       await handleHelp(chatId);
-    } else if (text === "/loans") {
+    } else if (command === "/loans") {
       await handleLoans(chatId, user.id);
-    } else if (text === "/returns") {
+    } else if (command === "/returns") {
       await handleReturns(chatId, user.id);
-    } else if (text === "/overdue") {
+    } else if (command === "/overdue") {
       await handleOverdue(chatId, user.id);
-    } else if (text.startsWith("/status")) {
-      const arg = text.split(/\s+/)[1] || "";
+    } else if (command === "/status") {
+      const arg = args[0] || "";
       await handleStatus(chatId, user.id, arg);
-    } else if (text === "/history") {
+    } else if (command === "/history") {
       await handleHistory(chatId, user.id);
-    } else if (text === "/mute") {
+    } else if (command === "/unlink") {
+      await handleUnlink(chatId, user.id);
+    } else if (command === "/mute") {
       await handleMute(chatId, user.id, true);
-    } else if (text === "/unmute") {
+    } else if (command === "/unmute") {
       await handleMute(chatId, user.id, false);
     } else {
       await reply(

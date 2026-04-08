@@ -38,6 +38,9 @@ export default function CartPanel() {
   const [submitted, setSubmitted] = useState(false);
   const [techLoanType, setTechLoanType] = useState("temporary");
   const [formData, setFormData] = useState({
+    guest_name: "",
+    telegram_handle: "",
+    email: "",
     purpose: "",
     department: "",
     start_date: "",
@@ -70,6 +73,9 @@ export default function CartPanel() {
     if (modifyingLoan) {
       setTechLoanType(modifyingLoan.loan_type);
       setFormData({
+        guest_name: "",
+        telegram_handle: "",
+        email: "",
         purpose: modifyingLoan.purpose || "",
         department: modifyingLoan.department || "",
         start_date: modifyingLoan.start_date || "",
@@ -91,6 +97,9 @@ export default function CartPanel() {
   const openCheckoutForm = () => {
     setError("");
     const today = new Date().toISOString().split("T")[0];
+    if (!user) {
+      setTechLoanType("temporary");
+    }
     if (!modifyingLoan) {
       setFormData((prev) => ({ ...prev, start_date: today }));
     }
@@ -115,6 +124,57 @@ export default function CartPanel() {
           setLoading(false);
           return;
         }
+      }
+
+      if (!user) {
+        if (techLoanType !== "temporary") {
+          setError("Guest checkout only supports temporary loans.");
+          setLoading(false);
+          return;
+        }
+
+        const loan_groups = laptopGroups.map((group) => ({
+          start_date: group.start_date,
+          end_date: group.end_date || null,
+          laptop_ids: group.laptops.map((laptop) => laptop.id),
+        }));
+
+        const res = await fetch("/api/guest/requests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            guest_name: formData.guest_name,
+            telegram_handle: formData.telegram_handle || null,
+            email: formData.email || null,
+            purpose: formData.purpose,
+            department: formData.department,
+            start_date: techItems.length > 0 ? formData.start_date : null,
+            end_date: techItems.length > 0 ? formData.end_date : null,
+            tech_items: techItems.map((item) => ({
+              item_id: item.id,
+              quantity: item.quantity,
+            })),
+            laptop_groups: loan_groups,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const msg = data.error || "Guest checkout failed";
+          setError(msg);
+          toast.error(msg);
+          setLoading(false);
+          return;
+        }
+
+        clearCart();
+        setShowForm(false);
+        setSubmitted(true);
+        toast.success(
+          data.linked_user_id
+            ? "Request linked to your account and sent for approval."
+            : "Guest request submitted for review.",
+        );
+        return;
       }
 
       const errors = [];
@@ -441,9 +501,10 @@ export default function CartPanel() {
                             alignItems: "stretch",
                             gap: 10,
                             padding: "14px 16px",
-                            borderColor: item.loan_type === "permanent"
-                              ? "rgba(139,92,246,0.25)"
-                              : "var(--border)",
+                            borderColor:
+                              item.loan_type === "permanent"
+                                ? "rgba(139,92,246,0.25)"
+                                : "var(--border)",
                           }}
                         >
                           <div
@@ -453,31 +514,70 @@ export default function CartPanel() {
                               alignItems: "center",
                             }}
                           >
-                            <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-                              <div style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: 9,
-                                flexShrink: 0,
-                                background: item.loan_type === "permanent"
-                                  ? "rgba(139,92,246,0.12)"
-                                  : "rgba(99,102,241,0.1)",
+                            <div
+                              style={{
                                 display: "flex",
                                 alignItems: "center",
-                                justifyContent: "center",
-                                color: item.loan_type === "permanent" ? "#8b5cf6" : "var(--accent)",
-                                fontSize: 18,
-                              }}>
+                                gap: 10,
+                                flex: 1,
+                                minWidth: 0,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: 9,
+                                  flexShrink: 0,
+                                  background:
+                                    item.loan_type === "permanent"
+                                      ? "rgba(139,92,246,0.12)"
+                                      : "rgba(99,102,241,0.1)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color:
+                                    item.loan_type === "permanent"
+                                      ? "#8b5cf6"
+                                      : "var(--accent)",
+                                  fontSize: 18,
+                                }}
+                              >
                                 <RiMacbookLine />
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <div
+                                  style={{
+                                    fontWeight: 600,
+                                    fontSize: 13,
+                                    marginBottom: 2,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
                                   {item.name}
                                 </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
                                   {(item.screen_size || item.cpu) && (
-                                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                                      {item.screen_size}{item.screen_size && item.cpu ? " · " : ""}{item.cpu}
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        color: "var(--text-muted)",
+                                      }}
+                                    >
+                                      {item.screen_size}
+                                      {item.screen_size && item.cpu
+                                        ? " · "
+                                        : ""}
+                                      {item.cpu}
                                     </span>
                                   )}
                                   <span
@@ -501,9 +601,15 @@ export default function CartPanel() {
                                     }}
                                   >
                                     {item.loan_type === "permanent" ? (
-                                      <><RiPushpinLine />Permanent</>
+                                      <>
+                                        <RiPushpinLine />
+                                        Permanent
+                                      </>
                                     ) : (
-                                      <><RiTimeLine />Temporary</>
+                                      <>
+                                        <RiTimeLine />
+                                        Temporary
+                                      </>
                                     )}
                                   </span>
                                 </div>
@@ -512,7 +618,9 @@ export default function CartPanel() {
                             <button
                               aria-label="Remove laptop"
                               className="cart-delete-btn"
-                              onClick={() => removeItem(item.id, item.start_date)}
+                              onClick={() =>
+                                removeItem(item.id, item.start_date)
+                              }
                               title="Remove"
                               style={{ flexShrink: 0, marginLeft: 4 }}
                             >
@@ -891,6 +999,73 @@ export default function CartPanel() {
               </div>
 
               {/* Shared fields — apply to all loan types */}
+              {!user && (
+                <>
+                  <div className="input-group">
+                    <label>Borrower Full Name *</label>
+                    <input
+                      type="text"
+                      value={formData.guest_name}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          guest_name: e.target.value,
+                        }))
+                      }
+                      placeholder="Your full name"
+                      required
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Telegram Handle</label>
+                    <input
+                      type="text"
+                      value={formData.telegram_handle}
+                      onChange={(e) =>
+                        setFormData((p) => ({
+                          ...p,
+                          telegram_handle: e.target.value,
+                        }))
+                      }
+                      placeholder="@yourhandle for auto-linking and alerts"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, email: e.target.value }))
+                      }
+                      placeholder="Optional backup contact"
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      padding: 12,
+                      marginBottom: 16,
+                      background: "rgba(99,102,241,0.08)",
+                      border: "1px solid rgba(99,102,241,0.18)",
+                      borderRadius: 10,
+                      fontSize: 12,
+                      color: "var(--text-secondary)",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Guest checkout stays temporary-only. If your Telegram handle
+                    matches an existing account, the request will appear in My
+                    Loans automatically after you log in.
+                  </div>
+                </>
+              )}
+
               <div className="input-group">
                 <label>Purpose *</label>
                 <textarea
@@ -939,7 +1114,7 @@ export default function CartPanel() {
                     </p>
 
                     {/* Loan type toggle */}
-                    {!modifyingLoan && (
+                    {!modifyingLoan && user && (
                       <div
                         style={{
                           display: "flex",
@@ -974,9 +1149,10 @@ export default function CartPanel() {
                             alignItems: "center",
                             justifyContent: "center",
                             gap: 6,
-                            boxShadow: techLoanType === "temporary"
-                              ? "0 2px 8px rgba(99,102,241,0.3)"
-                              : "none",
+                            boxShadow:
+                              techLoanType === "temporary"
+                                ? "0 2px 8px rgba(99,102,241,0.3)"
+                                : "none",
                             transition: "all 0.18s",
                           }}
                         >
@@ -1007,9 +1183,10 @@ export default function CartPanel() {
                               alignItems: "center",
                               justifyContent: "center",
                               gap: 6,
-                              boxShadow: techLoanType === "permanent"
-                                ? "0 2px 8px rgba(139,92,246,0.3)"
-                                : "none",
+                              boxShadow:
+                                techLoanType === "permanent"
+                                  ? "0 2px 8px rgba(139,92,246,0.3)"
+                                  : "none",
                               transition: "all 0.18s",
                             }}
                           >
@@ -1017,6 +1194,23 @@ export default function CartPanel() {
                             Permanent
                           </button>
                         )}
+                      </div>
+                    )}
+
+                    {!user && (
+                      <div
+                        style={{
+                          padding: 12,
+                          marginBottom: 16,
+                          background: "rgba(245,158,11,0.08)",
+                          borderRadius: 8,
+                          border: "1px solid rgba(245,158,11,0.18)",
+                          fontSize: 12,
+                          color: "var(--warning)",
+                        }}
+                      >
+                        Guest tech checkout is temporary only and still needs
+                        admin approval.
                       </div>
                     )}
 

@@ -10,8 +10,6 @@ function isValidIsoDate(value) {
 
 export async function GET(request) {
   const user = await getCurrentUser();
-  if (!user)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get("start_date");
@@ -61,7 +59,7 @@ export async function GET(request) {
     supabase
       .from("laptop_notifications")
       .select("laptop_id")
-      .eq("user_id", user.id),
+      .eq("user_id", user?.id || -1),
   ]);
 
   // Build maps: which laptops are unavailable for the requested dates, and their return dates
@@ -119,14 +117,14 @@ export async function GET(request) {
     return {
       ...laptop,
       // Strip sensitive fields from regular users; tech team and admins can see specs
-      ram: ["admin", "tech"].includes(user.role) ? laptop.ram : undefined,
-      storage: ["admin", "tech"].includes(user.role)
+      ram: ["admin", "tech"].includes(user?.role) ? laptop.ram : undefined,
+      storage: ["admin", "tech"].includes(user?.role)
         ? laptop.storage
         : undefined,
       availability,
       return_date: returnDateMap.get(laptop.id) || null,
-      borrower_name: borrowerMap.get(laptop.id) || null,
-      notify_me: notifiedIds.has(laptop.id),
+      borrower_name: user ? borrowerMap.get(laptop.id) || null : null,
+      notify_me: user ? notifiedIds.has(laptop.id) : false,
     };
   });
 

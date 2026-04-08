@@ -1,10 +1,10 @@
-const CACHE_NAME = "tech-inventory-v25";
+const CACHE_NAME = "tech-inventory-v27";
 const API_CACHE = "tech-inventory-api-v3";
 
 // App shell — pages & assets to pre-cache on install
 const APP_SHELL = [
   "/",
-  "/inventory",
+  "/home",
   "/loans",
   "/dashboard",
   "/manifest.json",
@@ -18,9 +18,11 @@ const CACHEABLE_API = ["/api/items"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.allSettled(APP_SHELL.map((asset) => cache.add(asset))),
-    ),
+    caches
+      .open(CACHE_NAME)
+      .then((cache) =>
+        Promise.allSettled(APP_SHELL.map((asset) => cache.add(asset))),
+      ),
   );
   self.skipWaiting();
 });
@@ -43,6 +45,13 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET") return;
+
+  // Never cache Next.js build assets. Stale chunks can cause hydration mismatches
+  // after deploys or while developing locally.
+  if (url.pathname.startsWith("/_next/")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   // --- Cacheable API routes: network-first, fall back to cache ---
   if (CACHEABLE_API.some((p) => url.pathname.startsWith(p))) {
@@ -131,7 +140,7 @@ self.addEventListener("push", (event) => {
       badge: "/icons/icon-192.png",
       tag: data.tag || "general",
       data: { url: data.url || "/dashboard" },
-    })
+    }),
   );
 });
 
@@ -147,6 +156,6 @@ self.addEventListener("notificationclick", (event) => {
         }
       }
       return self.clients.openWindow(url);
-    })
+    }),
   );
 });

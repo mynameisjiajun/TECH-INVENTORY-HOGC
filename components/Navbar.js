@@ -13,6 +13,8 @@ import {
   RiNotification3Line,
   RiShoppingCart2Line,
   RiLogoutBoxLine,
+  RiLoginBoxLine,
+  RiUserAddLine,
   RiServerLine,
 } from "react-icons/ri";
 import InstallPrompt from "./InstallPrompt";
@@ -203,7 +205,7 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     await logout();
-    router.push("/login");
+    router.push("/home");
   };
 
   const markOneRead = async (id) => {
@@ -298,20 +300,23 @@ export default function Navbar() {
     );
   }
 
-  if (!user) return null;
-
   const navLinks = [
-    { href: "/inventory", label: "Home", icon: <RiArchiveLine /> },
+    { href: "/home", label: "Home", icon: <RiArchiveLine /> },
     { href: "/dashboard", label: "Dashboard", icon: <RiDashboardLine /> },
     { href: "/loans", label: "My Loans", icon: <RiFileListLine /> },
   ];
-  if (user.role === "admin") {
+  if (user?.role === "admin") {
     navLinks.push({
       href: "/admin",
       label: "Admin",
       icon: <RiShieldUserLine />,
     });
   }
+  const displayName = user?.display_name || user?.username || "Guest";
+  const accountMeta = user
+    ? `@${user.username}${user.role === "admin" ? " · admin" : ""}`
+    : "Browse first, log in when you need it";
+  const avatarLabel = displayName[0]?.toUpperCase() || "G";
 
   const timeAgo = (dateStr) => {
     const d = new Date(dateStr);
@@ -327,7 +332,7 @@ export default function Navbar() {
     <>
       <nav className="navbar">
         <div className="navbar-inner">
-          <Link href="/inventory" className="navbar-brand">
+          <Link href="/home" className="navbar-brand">
             <RiServerLine className="brand-icon" />
             <span className="navbar-brand-text">Tech Inventory</span>
           </Link>
@@ -345,109 +350,111 @@ export default function Navbar() {
           </div>
 
           <div className="navbar-right">
-            <div style={{ position: "relative" }} ref={notifRef}>
-              <button
-                aria-label="Notifications"
-                className="notification-btn"
-                onClick={() => {
-                  setShowNotifs((v) => !v);
-                  setShowAccountMenu(false);
-                }}
-              >
-                <RiNotification3Line />
-                {unreadCount > 0 && (
-                  <span className="notification-badge">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </button>
-              {showNotifs && (
-                <div className="notification-dropdown">
-                  <div className="notification-dropdown-header">
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>
-                      Notifications
+            {user && (
+              <div style={{ position: "relative" }} ref={notifRef}>
+                <button
+                  aria-label="Notifications"
+                  className="notification-btn"
+                  onClick={() => {
+                    setShowNotifs((v) => !v);
+                    setShowAccountMenu(false);
+                  }}
+                >
+                  <RiNotification3Line />
+                  {unreadCount > 0 && (
+                    <span className="notification-badge">
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {unreadCount > 0 && (
-                        <button
-                          className="btn btn-sm btn-outline"
-                          onClick={markAllRead}
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                      {notifications.length > 0 && (
-                        <button
-                          className="btn btn-sm btn-outline"
-                          onClick={clearAllNotifs}
-                          style={{
-                            color: "var(--error)",
-                            borderColor: "var(--error)",
+                  )}
+                </button>
+                {showNotifs && (
+                  <div className="notification-dropdown">
+                    <div className="notification-dropdown-header">
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>
+                        Notifications
+                      </span>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {unreadCount > 0 && (
+                          <button
+                            className="btn btn-sm btn-outline"
+                            onClick={markAllRead}
+                          >
+                            Mark all read
+                          </button>
+                        )}
+                        {notifications.length > 0 && (
+                          <button
+                            className="btn btn-sm btn-outline"
+                            onClick={clearAllNotifs}
+                            style={{
+                              color: "var(--error)",
+                              borderColor: "var(--error)",
+                            }}
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {notifications.length === 0 ? (
+                      <div
+                        style={{
+                          padding: 24,
+                          textAlign: "center",
+                          color: "var(--text-muted)",
+                          fontSize: 13,
+                        }}
+                      >
+                        No notifications yet
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className={`notification-item ${n.read ? "" : "unread"}`}
+                          onClick={() => {
+                            if (!n.read) markOneRead(n.id);
+                            if (n.link) router.push(n.link);
+                            setShowNotifs(false);
                           }}
                         >
-                          Clear all
+                          <div>
+                            <p>{n.message}</p>
+                            <span className="notif-time">
+                              {timeAgo(n.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    {notifPermission !== "granted" &&
+                      typeof Notification !== "undefined" && (
+                        <button
+                          onClick={async () => {
+                            const perm = await Notification.requestPermission();
+                            setNotifPermission(perm);
+                          }}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            padding: "10px",
+                            background: "rgba(99,102,241,0.1)",
+                            border: "none",
+                            borderTop: "1px solid var(--border)",
+                            color: "var(--accent)",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            fontFamily: "inherit",
+                          }}
+                        >
+                          🔔 Enable Push Notifications
                         </button>
                       )}
-                    </div>
                   </div>
-                  {notifications.length === 0 ? (
-                    <div
-                      style={{
-                        padding: 24,
-                        textAlign: "center",
-                        color: "var(--text-muted)",
-                        fontSize: 13,
-                      }}
-                    >
-                      No notifications yet
-                    </div>
-                  ) : (
-                    notifications.map((n) => (
-                      <div
-                        key={n.id}
-                        className={`notification-item ${n.read ? "" : "unread"}`}
-                        onClick={() => {
-                          if (!n.read) markOneRead(n.id);
-                          if (n.link) router.push(n.link);
-                          setShowNotifs(false);
-                        }}
-                      >
-                        <div>
-                          <p>{n.message}</p>
-                          <span className="notif-time">
-                            {timeAgo(n.created_at)}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  {notifPermission !== "granted" &&
-                    typeof Notification !== "undefined" && (
-                      <button
-                        onClick={async () => {
-                          const perm = await Notification.requestPermission();
-                          setNotifPermission(perm);
-                        }}
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          padding: "10px",
-                          background: "rgba(99,102,241,0.1)",
-                          border: "none",
-                          borderTop: "1px solid var(--border)",
-                          color: "var(--accent)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                        }}
-                      >
-                        🔔 Enable Push Notifications
-                      </button>
-                    )}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {isCompactShell ? (
               <div className="account-menu-shell" ref={accountRef}>
@@ -459,69 +466,148 @@ export default function Navbar() {
                     setShowNotifs(false);
                   }}
                 >
-                  <div className="user-avatar">
-                    {(user.display_name || user.username)[0].toUpperCase()}
-                  </div>
+                  <div className="user-avatar">{avatarLabel}</div>
                 </button>
                 {showAccountMenu && (
                   <div className="account-menu-dropdown">
                     <button
                       className="account-menu-profile"
                       onClick={() => {
-                        router.push("/profile");
+                        if (user) {
+                          router.push("/profile");
+                        } else {
+                          router.push("/login");
+                        }
                         setShowAccountMenu(false);
                       }}
                     >
                       <div className="user-avatar account-menu-avatar">
-                        {(user.display_name || user.username)[0].toUpperCase()}
+                        {avatarLabel}
                       </div>
                       <div className="account-menu-copy">
-                        <strong>{user.display_name || user.username}</strong>
-                        <span>
-                          @{user.username}
-                          {user.role === "admin" ? " · admin" : ""}
-                        </span>
+                        <strong>{displayName}</strong>
+                        <span>{accountMeta}</span>
                       </div>
                     </button>
-                    <button
-                      className="account-menu-item"
-                      onClick={() => {
-                        router.push("/profile");
-                        setShowAccountMenu(false);
-                      }}
-                    >
-                      Profile
-                    </button>
-                    <button
-                      className="account-menu-item account-menu-item-danger"
-                      onClick={handleLogout}
-                    >
-                      <RiLogoutBoxLine /> Logout
-                    </button>
+                    {user ? (
+                      <>
+                        <button
+                          className="account-menu-item"
+                          onClick={() => {
+                            router.push("/profile");
+                            setShowAccountMenu(false);
+                          }}
+                        >
+                          Profile
+                        </button>
+                        <button
+                          className="account-menu-item account-menu-item-danger"
+                          onClick={handleLogout}
+                        >
+                          <RiLogoutBoxLine /> Logout
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="account-menu-item"
+                          onClick={() => {
+                            router.push("/login");
+                            setShowAccountMenu(false);
+                          }}
+                        >
+                          <RiLoginBoxLine /> Log In
+                        </button>
+                        <button
+                          className="account-menu-item"
+                          onClick={() => {
+                            router.push("/register");
+                            setShowAccountMenu(false);
+                          }}
+                        >
+                          <RiUserAddLine /> Register
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
             ) : (
-              <>
-                <div
-                  className="user-menu"
-                  onClick={() => router.push("/profile")}
-                  style={{ cursor: "pointer" }}
-                  title="Edit profile"
-                >
-                  <div className="user-avatar">
-                    {(user.display_name || user.username)[0].toUpperCase()}
-                  </div>
-                  <span>{user.display_name || user.username}</span>
-                </div>
+              <div className="account-menu-shell" ref={accountRef}>
                 <button
-                  aria-label="Logout"
-                  className="logout-btn"
-                  onClick={handleLogout}
+                  aria-label="Account menu"
+                  className="account-btn"
+                  onClick={() => {
+                    setShowAccountMenu((v) => !v);
+                    setShowNotifs(false);
+                  }}
                 >
-                  <RiLogoutBoxLine />
+                  <div className="user-avatar">{avatarLabel}</div>
                 </button>
-              </>
+                {showAccountMenu && (
+                  <div className="account-menu-dropdown">
+                    <button
+                      className="account-menu-profile"
+                      onClick={() => {
+                        if (user) {
+                          router.push("/profile");
+                        } else {
+                          router.push("/login");
+                        }
+                        setShowAccountMenu(false);
+                      }}
+                    >
+                      <div className="user-avatar account-menu-avatar">
+                        {avatarLabel}
+                      </div>
+                      <div className="account-menu-copy">
+                        <strong>{displayName}</strong>
+                        <span>{accountMeta}</span>
+                      </div>
+                    </button>
+                    {user ? (
+                      <>
+                        <button
+                          className="account-menu-item"
+                          onClick={() => {
+                            router.push("/profile");
+                            setShowAccountMenu(false);
+                          }}
+                        >
+                          Profile
+                        </button>
+                        <button
+                          className="account-menu-item account-menu-item-danger"
+                          onClick={handleLogout}
+                        >
+                          <RiLogoutBoxLine /> Logout
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="account-menu-item"
+                          onClick={() => {
+                            router.push("/login");
+                            setShowAccountMenu(false);
+                          }}
+                        >
+                          <RiLoginBoxLine /> Log In
+                        </button>
+                        <button
+                          className="account-menu-item"
+                          onClick={() => {
+                            router.push("/register");
+                            setShowAccountMenu(false);
+                          }}
+                        >
+                          <RiUserAddLine /> Register
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -1,52 +1,46 @@
 import { NextResponse } from "next/server";
-
-const COOKIE_NAME = "tech-inventory-token";
+import { COOKIE_NAME, verifyJwtHs256 } from "@/lib/utils/jwt";
 
 // Routes that require authentication
-const PROTECTED_ROUTES = [
-  "/dashboard",
-  "/inventory",
-  "/loans",
-  "/profile",
-  "/admin",
-];
+const PROTECTED_ROUTES = ["/profile", "/admin"];
 // Routes that require admin role
 const ADMIN_ROUTES = ["/admin"];
 // Routes only for unauthenticated users
 const AUTH_ROUTES = ["/login", "/register"];
 
-function parseJwtPayload(token) {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(
-      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
-    );
-    // Check expiry
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+function redirectWithClearedCookie(path, request) {
+  const response = NextResponse.redirect(new URL(path, request.url));
+  response.cookies.set(COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+  return response;
 }
 
-export default function proxy(request) {
+export default async function proxy(request) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(COOKIE_NAME)?.value;
-  const user = token ? parseJwtPayload(token) : null;
+  const user = token ? await verifyJwtHs256(token) : null;
 
   // Redirect authenticated users away from login/register
   if (AUTH_ROUTES.some((r) => pathname.startsWith(r))) {
     if (user) {
-      return NextResponse.redirect(new URL("/inventory", request.url));
+      return NextResponse.redirect(new URL("/home", request.url));
     }
     return NextResponse.next();
+  }
+
+  if (pathname === "/inventory") {
+    return NextResponse.redirect(new URL("/home", request.url));
   }
 
   // Protect authenticated routes
   if (PROTECTED_ROUTES.some((r) => pathname.startsWith(r))) {
     if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return redirectWithClearedCookie("/login", request);
     }
     // Admin-only routes
     if (
@@ -63,6 +57,7 @@ export default function proxy(request) {
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/home/:path*",
     "/inventory/:path*",
     "/loans/:path*",
     "/profile/:path*",
