@@ -83,6 +83,16 @@ async function insertNotifications(entries, warnings, contextLabel) {
   }
 }
 
+async function updatePermanentLaptopAssignment(laptopIds, payload) {
+  if (!laptopIds.length) return null;
+
+  const { error } = await supabase
+    .from("laptops")
+    .update(payload)
+    .in("id", laptopIds);
+  return error || null;
+}
+
 // PUT: Modify an existing laptop loan request
 export async function PUT(request, { params }) {
   const user = await getCurrentUser();
@@ -178,6 +188,12 @@ export async function PUT(request, { params }) {
       );
     }
 
+    const isAdminEditing = user.role === "admin";
+    const nextStatus = isAdminEditing ? existingLoan.status : "pending";
+    const oldLaptopIds = (existingLoan.laptop_loan_items || []).map(
+      (item) => item.laptop_id,
+    );
+
     const { data: laptops, error: laptopsError } = await supabase
       .from("laptops")
       .select("id, name, is_perm_loaned")
@@ -200,7 +216,12 @@ export async function PUT(request, { params }) {
     }
 
     for (const laptop of laptops || []) {
-      if (laptop.is_perm_loaned) {
+      const isExistingPermanentAssignment =
+        existingLoan.status === "approved" &&
+        existingLoan.loan_type === "permanent" &&
+        oldLaptopIds.includes(laptop.id);
+
+      if (laptop.is_perm_loaned && !isExistingPermanentAssignment) {
         return NextResponse.json(
           { error: `Laptop "${laptop.name}" is permanently loaned` },
           { status: 400 },
@@ -247,9 +268,6 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const oldLaptopIds = (existingLoan.laptop_loan_items || []).map(
-      (i) => i.laptop_id,
-    );
     const requestSnapshot = {
       loan_type: existingLoan.loan_type,
       start_date: existingLoan.start_date,
@@ -271,10 +289,12 @@ export async function PUT(request, { params }) {
         purpose: purpose.trim(),
         remarks: remarks?.trim() || null,
         department: department?.trim() || null,
-        status: "pending",
-        admin_notes: existingLoan.admin_notes
-          ? `${existingLoan.admin_notes} (Modified by user)`
-          : "Modified by user",
+        status: nextStatus,
+        admin_notes: isAdminEditing
+          ? existingLoan.admin_notes
+          : existingLoan.admin_notes
+            ? `${existingLoan.admin_notes} (Modified by user)`
+            : "Modified by user",
       })
       .eq("id", id);
 
@@ -340,19 +360,34 @@ export async function PUT(request, { params }) {
       );
     }
 
+    let requesterRecord = null;
+    if (
+      (existingLoan.status === "approved" &&
+        existingLoan.loan_type === "permanent") ||
+      (nextStatus === "approved" && loan_type === "permanent") ||
+      isAdminEditing
+    ) {
+      const { data: requester } = await supabase
+        .from("users")
+        .select("id, display_name, username")
+        .eq("id", existingLoan.user_id)
+        .maybeSingle();
+      requesterRecord = requester || null;
+    }
+
     if (
       existingLoan.status === "approved" &&
       existingLoan.loan_type === "permanent" &&
       oldLaptopIds.length > 0
     ) {
-      const { error: releaseOldLaptopsError } = await supabase
-        .from("laptops")
-        .update({
+      const releaseOldLaptopsError = await updatePermanentLaptopAssignment(
+        oldLaptopIds,
+        {
           is_perm_loaned: false,
           perm_loan_person: null,
           perm_loan_reason: null,
-        })
-        .in("id", oldLaptopIds);
+        },
+      );
 
       if (releaseOldLaptopsError) {
         const rollbackWarnings = await rollbackLoanRequestState({
@@ -373,56 +408,135 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const { data: admins, error: adminsError } = await supabase
-      .from("users")
-      .select("id, mute_telegram")
-      .eq("role", "admin");
-
-    if (adminsError) {
-      warnings.push(
-        errorMessage("Failed to load admin recipients", adminsError),
-      );
-    }
-
-    const laptopNames = (laptops || []).map((entry) => entry.name).join(", ");
-    if (admins?.length) {
-      await insertNotifications(
-        admins.map((admin) => ({
-          user_id: admin.id,
-          message: `${user.display_name} modified laptop loan request #${id} (now pending approval).`,
-          link: "/admin",
-        })),
-        warnings,
-        "admin",
+    if (nextStatus === "approved" && loan_type === "permanent") {
+      const assigneeName =
+        requesterRecord?.display_name || requesterRecord?.username || null;
+      const assignNewLaptopsError = await updatePermanentLaptopAssignment(
+        normalizedLaptopIds,
+        {
+          is_perm_loaned: true,
+          perm_loan_person: assigneeName,
+          perm_loan_reason: purpose.trim(),
+        },
       );
 
-      for (const admin of admins) {
-        if (!admin.mute_telegram) {
-          sendTelegramMessage(
-            admin.id,
-            `📝 <b>Laptop Loan Modified</b>\n<b>${user.display_name}</b> modified loan #${id}.\nLaptops: ${laptopNames}`,
-          ).catch(() => {});
+      if (assignNewLaptopsError) {
+        if (
+          existingLoan.status === "approved" &&
+          existingLoan.loan_type === "permanent"
+        ) {
+          await updatePermanentLaptopAssignment(oldLaptopIds, {
+            is_perm_loaned: true,
+            perm_loan_person:
+              requesterRecord?.display_name ||
+              requesterRecord?.username ||
+              null,
+            perm_loan_reason: existingLoan.purpose,
+          });
         }
+
+        const rollbackWarnings = await rollbackLoanRequestState({
+          loanId: id,
+          requestSnapshot,
+          itemSnapshot,
+        });
+        return NextResponse.json(
+          {
+            error: errorMessage(
+              "Failed to assign permanent laptops for updated loan",
+              assignNewLaptopsError,
+            ),
+            details: rollbackWarnings,
+          },
+          { status: 500 },
+        );
       }
     }
 
-    await insertNotifications(
-      [
-        {
-          user_id: user.id,
-          message: `Your laptop loan request #${id} has been updated and is pending approval.`,
-          link: "/loans",
-        },
-      ],
-      warnings,
-      "requester",
-    );
+    if (isAdminEditing) {
+      await insertNotifications(
+        [
+          {
+            user_id: existingLoan.user_id,
+            message:
+              nextStatus === "approved"
+                ? `An admin updated your approved laptop loan #${id}.`
+                : `An admin updated your laptop loan request #${id}. It is still pending review.`,
+            link: "/loans",
+          },
+        ],
+        warnings,
+        "requester",
+      );
+
+      const { error: auditError } = await supabase.from("audit_log").insert({
+        user_id: user.id,
+        action: "modify",
+        target_type: "laptop_loan",
+        target_id: Number(id),
+        details: `Admin modified ${nextStatus} laptop loan request.`,
+      });
+
+      if (auditError) {
+        warnings.push(
+          errorMessage("Failed to write laptop loan audit log", auditError),
+        );
+      }
+    } else {
+      const { data: admins, error: adminsError } = await supabase
+        .from("users")
+        .select("id, mute_telegram")
+        .eq("role", "admin");
+
+      if (adminsError) {
+        warnings.push(
+          errorMessage("Failed to load admin recipients", adminsError),
+        );
+      }
+
+      const laptopNames = (laptops || []).map((entry) => entry.name).join(", ");
+      if (admins?.length) {
+        await insertNotifications(
+          admins.map((admin) => ({
+            user_id: admin.id,
+            message: `${user.display_name} modified laptop loan request #${id} (now pending approval).`,
+            link: "/admin",
+          })),
+          warnings,
+          "admin",
+        );
+
+        for (const admin of admins) {
+          if (!admin.mute_telegram) {
+            sendTelegramMessage(
+              admin.id,
+              `📝 <b>Laptop Loan Modified</b>\n<b>${user.display_name}</b> modified loan #${id}.\nLaptops: ${laptopNames}`,
+            ).catch(() => {});
+          }
+        }
+      }
+
+      await insertNotifications(
+        [
+          {
+            user_id: user.id,
+            message: `Your laptop loan request #${id} has been updated and is pending approval.`,
+            link: "/loans",
+          },
+        ],
+        warnings,
+        "requester",
+      );
+    }
 
     return NextResponse.json(
       withWarnings(
         {
-          message:
-            "Laptop loan modified successfully and is now pending approval.",
+          message: isAdminEditing
+            ? nextStatus === "approved"
+              ? "Laptop loan updated successfully and remains approved."
+              : "Laptop loan updated successfully and remains pending."
+            : "Laptop loan modified successfully and is now pending approval.",
         },
         warnings,
       ),

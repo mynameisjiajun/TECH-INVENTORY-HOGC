@@ -91,6 +91,209 @@ function rollbackInventoryRestoreTx(db, oldItems, deployedRows) {
   })(oldItems, deployedRows);
 }
 
+function applyApprovedLoanInventoryUpdateTx(
+  db,
+  oldItems,
+  newItems,
+  loanId,
+  oldWasPermanent,
+  newLoanType,
+  purpose,
+  department,
+  location,
+) {
+  return db.transaction(
+    (
+      priorItems,
+      replacementItems,
+      currentLoanId,
+      priorPermanent,
+      currentLoanType,
+      currentPurpose,
+      currentDepartment,
+      currentLocation,
+    ) => {
+      const sheetChangeMap = new Map();
+
+      if (priorPermanent) {
+        db.prepare("DELETE FROM deployed_items WHERE remarks LIKE ?").run(
+          `Perm loan #${currentLoanId}%`,
+        );
+      }
+
+      for (const oldItem of priorItems || []) {
+        const storageItem = oldItem.sheet_row
+          ? db
+              .prepare(
+                "SELECT id, sheet_row FROM storage_items WHERE sheet_row = ?",
+              )
+              .get(oldItem.sheet_row)
+          : db
+              .prepare("SELECT id, sheet_row FROM storage_items WHERE id = ?")
+              .get(oldItem.item_id);
+
+        if (!storageItem) {
+          throw new Error(
+            `Item no longer exists in inventory: ${oldItem.item_name}`,
+          );
+        }
+
+        db.prepare(
+          "UPDATE storage_items SET current = current + ? WHERE id = ?",
+        ).run(oldItem.quantity, storageItem.id);
+
+        const priorDelta = sheetChangeMap.get(storageItem.sheet_row) || 0;
+        sheetChangeMap.set(
+          storageItem.sheet_row,
+          priorDelta + oldItem.quantity,
+        );
+      }
+
+      for (const item of replacementItems || []) {
+        const storageItem = item.sheet_row
+          ? db
+              .prepare("SELECT * FROM storage_items WHERE sheet_row = ?")
+              .get(item.sheet_row)
+          : db
+              .prepare("SELECT * FROM storage_items WHERE id = ?")
+              .get(item.item_id);
+
+        if (!storageItem) {
+          throw new Error(`Item not found in inventory: ${item.item_name}`);
+        }
+
+        if (storageItem.current < item.quantity) {
+          throw new Error(
+            `Not enough stock for \"${storageItem.item}\". Available: ${storageItem.current}`,
+          );
+        }
+
+        const result = db
+          .prepare(
+            "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
+          )
+          .run(item.quantity, storageItem.id, item.quantity);
+
+        if (result.changes === 0) {
+          throw new Error(
+            `Stock changed while updating \"${storageItem.item}\". Please retry.`,
+          );
+        }
+
+        const priorDelta = sheetChangeMap.get(storageItem.sheet_row) || 0;
+        sheetChangeMap.set(storageItem.sheet_row, priorDelta - item.quantity);
+
+        if (currentLoanType === "permanent") {
+          db.prepare(
+            `INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(
+            storageItem.item,
+            storageItem.type,
+            storageItem.brand,
+            storageItem.model,
+            item.quantity,
+            currentLocation || storageItem.location,
+            currentDepartment || currentPurpose,
+            "DEPLOYED",
+            `Perm loan #${currentLoanId} — ${currentPurpose}`,
+          );
+        }
+      }
+
+      return [...sheetChangeMap.entries()].map(([sheetRow, delta]) => ({
+        sheetRow,
+        delta,
+      }));
+    },
+  )(
+    oldItems,
+    newItems,
+    loanId,
+    oldWasPermanent,
+    newLoanType,
+    purpose,
+    department,
+    location,
+  );
+}
+
+function rollbackApprovedLoanInventoryUpdateTx(
+  db,
+  oldItems,
+  newItems,
+  loanId,
+  oldDeployedRows,
+  newLoanType,
+) {
+  db.transaction(
+    (
+      priorItems,
+      replacementItems,
+      currentLoanId,
+      priorDeployedRows,
+      currentLoanType,
+    ) => {
+      if (currentLoanType === "permanent") {
+        db.prepare("DELETE FROM deployed_items WHERE remarks LIKE ?").run(
+          `Perm loan #${currentLoanId}%`,
+        );
+      }
+
+      for (const item of replacementItems || []) {
+        const storageItem = item.sheet_row
+          ? db
+              .prepare("SELECT id FROM storage_items WHERE sheet_row = ?")
+              .get(item.sheet_row)
+          : db
+              .prepare("SELECT id FROM storage_items WHERE id = ?")
+              .get(item.item_id);
+
+        if (!storageItem) continue;
+
+        db.prepare(
+          "UPDATE storage_items SET current = current + ? WHERE id = ?",
+        ).run(item.quantity, storageItem.id);
+      }
+
+      if (priorDeployedRows.length > 0) {
+        for (const row of priorDeployedRows) {
+          db.prepare(
+            `INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).run(
+            row.item,
+            row.type,
+            row.brand,
+            row.model,
+            row.quantity,
+            row.location,
+            row.allocation,
+            row.status,
+            row.remarks,
+          );
+        }
+      }
+
+      for (const oldItem of priorItems || []) {
+        const storageItem = oldItem.sheet_row
+          ? db
+              .prepare("SELECT id FROM storage_items WHERE sheet_row = ?")
+              .get(oldItem.sheet_row)
+          : db
+              .prepare("SELECT id FROM storage_items WHERE id = ?")
+              .get(oldItem.item_id);
+
+        if (!storageItem) continue;
+
+        db.prepare(
+          "UPDATE storage_items SET current = current - ? WHERE id = ?",
+        ).run(oldItem.quantity, storageItem.id);
+      }
+    },
+  )(oldItems, newItems, loanId, oldDeployedRows, newLoanType);
+}
+
 async function rollbackLoanRequestState({
   loanId,
   requestSnapshot,
@@ -268,6 +471,9 @@ export async function PUT(request, { params }) {
       );
     }
 
+    const isAdminEditing = user.role === "admin";
+    const nextStatus = isAdminEditing ? existingLoan.status : "pending";
+
     const { data: oldItems, error: oldItemsError } = await supabase
       .from("loan_items")
       .select("item_id, sheet_row, item_name, quantity")
@@ -361,10 +567,12 @@ export async function PUT(request, { params }) {
         location: location || "",
         start_date,
         end_date: end_date || null,
-        status: "pending",
-        admin_notes: existingLoan.admin_notes
-          ? `${existingLoan.admin_notes} (Modified by user)`
-          : "Modified by user",
+        status: nextStatus,
+        admin_notes: isAdminEditing
+          ? existingLoan.admin_notes
+          : existingLoan.admin_notes
+            ? `${existingLoan.admin_notes} (Modified by user)`
+            : "Modified by user",
         updated_at: new Date().toISOString(),
       })
       .eq("id", loanId);
@@ -426,8 +634,38 @@ export async function PUT(request, { params }) {
       );
     }
 
-    let restoreChanges = [];
-    if (existingLoan.status === "approved") {
+    let inventorySheetChanges = [];
+    if (existingLoan.status === "approved" && nextStatus === "approved") {
+      try {
+        inventorySheetChanges = applyApprovedLoanInventoryUpdateTx(
+          db,
+          oldItems || [],
+          resolvedItems,
+          loanId,
+          existingLoan.loan_type === "permanent",
+          loan_type,
+          purpose.trim(),
+          department || "",
+          location || "",
+        );
+      } catch (inventoryError) {
+        const rollbackWarnings = await rollbackLoanRequestState({
+          loanId,
+          requestSnapshot,
+          itemSnapshot: oldItems || [],
+        });
+        return NextResponse.json(
+          {
+            error:
+              inventoryError.message ||
+              "Failed to refresh inventory for modified approved loan",
+            details: rollbackWarnings,
+          },
+          { status: 500 },
+        );
+      }
+    } else if (existingLoan.status === "approved") {
+      let restoreChanges = [];
       try {
         restoreChanges = restoreApprovedLoanInventoryTx(
           db,
@@ -451,13 +689,26 @@ export async function PUT(request, { params }) {
           { status: 500 },
         );
       }
+
+      inventorySheetChanges = restoreChanges;
     }
 
-    if (restoreChanges.length > 0) {
+    if (inventorySheetChanges.length > 0) {
       try {
-        await syncAuthoritativeStockToSheets(db, restoreChanges);
+        await syncAuthoritativeStockToSheets(db, inventorySheetChanges);
       } catch (sheetError) {
-        rollbackInventoryRestoreTx(db, oldItems || [], deployedSnapshot);
+        if (existingLoan.status === "approved" && nextStatus === "approved") {
+          rollbackApprovedLoanInventoryUpdateTx(
+            db,
+            oldItems || [],
+            resolvedItems,
+            loanId,
+            deployedSnapshot,
+            loan_type,
+          );
+        } else {
+          rollbackInventoryRestoreTx(db, oldItems || [], deployedSnapshot);
+        }
         const rollbackWarnings = await rollbackLoanRequestState({
           loanId,
           requestSnapshot,
@@ -473,54 +724,95 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const { data: admins } = await supabase
-      .from("users")
-      .select("id, mute_telegram")
-      .eq("role", "admin");
-    if (admins && admins.length > 0) {
+    if (isAdminEditing) {
       await insertRowsBestEffort({
         client: supabase,
         table: "notifications",
-        entries: admins.map((admin) => ({
-          user_id: admin.id,
-          message: `${user.display_name} modified their ${loan_type} loan request #${loanId}.`,
-          link: "/admin",
-        })),
+        entries: [
+          {
+            user_id: existingLoan.user_id,
+            message:
+              nextStatus === "approved"
+                ? `An admin updated your approved loan #${loanId}.`
+                : `An admin updated your loan request #${loanId}. It is still pending review.`,
+            link: "/loans",
+          },
+        ],
         warnings,
-        context: "admin loan modification",
+        context: "loan requester notification",
       });
 
-      const itemListStr = resolvedItems
-        .map((i) => `${i.item_name} × ${i.quantity}`)
-        .join(", ");
-      for (const admin of admins) {
-        if (!admin.mute_telegram) {
-          sendTelegramMessage(
-            admin.id,
-            `📝 <b>Loan Modified</b>\n<b>${user.display_name}</b> modified loan request #${loanId} (now pending).\n\nNew Items: ${itemListStr}`,
-          ).catch(() => {});
+      await insertRowsBestEffort({
+        client: supabase,
+        table: "audit_log",
+        entries: [
+          {
+            user_id: user.id,
+            action: "modify",
+            target_type: "loan",
+            target_id: Number(loanId),
+            details: `Admin modified ${nextStatus} tech loan request.`,
+          },
+        ],
+        warnings,
+        context: "loan audit log",
+      });
+    } else {
+      const { data: admins } = await supabase
+        .from("users")
+        .select("id, mute_telegram")
+        .eq("role", "admin");
+      if (admins && admins.length > 0) {
+        await insertRowsBestEffort({
+          client: supabase,
+          table: "notifications",
+          entries: admins.map((admin) => ({
+            user_id: admin.id,
+            message: `${user.display_name} modified their ${loan_type} loan request #${loanId}.`,
+            link: "/admin",
+          })),
+          warnings,
+          context: "admin loan modification",
+        });
+
+        const itemListStr = resolvedItems
+          .map((i) => `${i.item_name} × ${i.quantity}`)
+          .join(", ");
+        for (const admin of admins) {
+          if (!admin.mute_telegram) {
+            sendTelegramMessage(
+              admin.id,
+              `📝 <b>Loan Modified</b>\n<b>${user.display_name}</b> modified loan request #${loanId} (now pending).\n\nNew Items: ${itemListStr}`,
+            ).catch(() => {});
+          }
         }
       }
-    }
 
-    await insertRowsBestEffort({
-      client: supabase,
-      table: "activity_feed",
-      entries: [
-        {
-          user_id: user.id,
-          action: "modify",
-          description: `Modified loan #${loanId}`,
-          link: "/admin",
-        },
-      ],
-      warnings,
-      context: "loan activity",
-    });
+      await insertRowsBestEffort({
+        client: supabase,
+        table: "activity_feed",
+        entries: [
+          {
+            user_id: user.id,
+            action: "modify",
+            description: `Modified loan #${loanId}`,
+            link: "/admin",
+          },
+        ],
+        warnings,
+        context: "loan activity",
+      });
+    }
 
     return NextResponse.json(
       withWarnings(
-        { message: "Loan modified successfully and is now pending approval." },
+        {
+          message: isAdminEditing
+            ? nextStatus === "approved"
+              ? "Loan updated successfully and remains approved."
+              : "Loan updated successfully and remains pending."
+            : "Loan modified successfully and is now pending approval.",
+        },
         warnings,
       ),
     );

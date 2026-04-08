@@ -46,14 +46,22 @@ function getCalendarRowMetrics(isMobile, visibleLaneCount, hasOverflow) {
   const barGap = isMobile ? 22 : 24;
   const barHeight = isMobile ? 18 : 20;
   const overflowHeight = hasOverflow ? (isMobile ? 18 : 20) : 0;
+  const bottomPadding = isMobile ? 14 : 18;
+  const minCellHeight = isMobile ? 72 : 90;
   const stackedBarHeight =
     visibleLaneCount > 0 ? (visibleLaneCount - 1) * barGap + barHeight : 0;
-  const rowHeight = Math.max(
-    isMobile ? 72 : 90,
-    topOffset + stackedBarHeight + (hasOverflow ? overflowHeight + 12 : 10),
-  );
+  const contentHeight =
+    topOffset + stackedBarHeight + (hasOverflow ? overflowHeight + 10 : 0);
+  const rowHeight = Math.max(minCellHeight, contentHeight + bottomPadding);
 
-  return { topOffset, barGap, barHeight, rowHeight };
+  return {
+    topOffset,
+    barGap,
+    barHeight,
+    bottomPadding,
+    minCellHeight,
+    rowHeight,
+  };
 }
 
 function assignWeekBarLanes(weekBars) {
@@ -233,12 +241,13 @@ export default function LoanCalendar({
                 0,
               ),
             );
-            const { topOffset, barGap, barHeight, rowHeight } =
+            const { topOffset, barGap, barHeight, minCellHeight, rowHeight } =
               getCalendarRowMetrics(
                 isMobile,
                 visibleLaneCount,
                 hiddenBars.length > 0,
               );
+            const cellHeight = Math.max(minCellHeight, rowHeight);
             const hiddenSummary = hiddenBars
               .map(
                 (bar) =>
@@ -257,6 +266,7 @@ export default function LoanCalendar({
                     display: "grid",
                     gridTemplateColumns: "repeat(7, 1fr)",
                     borderBottom: "1px solid var(--border)",
+                    minHeight: cellHeight,
                   }}
                 >
                   {week.map((cell, cellIndex) => (
@@ -264,7 +274,7 @@ export default function LoanCalendar({
                       key={cellIndex}
                       style={{
                         padding: isMobile ? "3px 2px" : "6px 8px",
-                        minHeight: isMobile ? 48 : 80,
+                        minHeight: cellHeight,
                         borderRight:
                           cellIndex < 6
                             ? "1px solid rgba(255,255,255,0.03)"

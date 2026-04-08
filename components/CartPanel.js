@@ -36,6 +36,7 @@ export default function CartPanel() {
 
   const [showForm, setShowForm] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [successState, setSuccessState] = useState(null);
   const [techLoanType, setTechLoanType] = useState("temporary");
   const [formData, setFormData] = useState({
     guest_name: "",
@@ -91,6 +92,7 @@ export default function CartPanel() {
   useEffect(() => {
     if (isOpen) {
       setSubmitted(false);
+      setSuccessState(null);
       setShowForm(false);
       setError("");
     }
@@ -170,6 +172,22 @@ export default function CartPanel() {
         }
 
         clearCart();
+        setSuccessState({
+          title: "Request Submitted!",
+          message:
+            data.message ||
+            (data.linked_user_id
+              ? "Your request has been linked to your account."
+              : "Your guest request has been submitted for review."),
+          primaryLabel: data.linked_user_id
+            ? "View My Loans →"
+            : "Continue Browsing",
+          primaryAction: () => {
+            setSubmitted(false);
+            setIsOpen(false);
+            if (data.linked_user_id) router.push("/loans");
+          },
+        });
         setShowForm(false);
         setSubmitted(true);
         toast.success(
@@ -184,6 +202,7 @@ export default function CartPanel() {
       const errors = [];
       const results = [];
       const autoApprovedResults = [];
+      const successMessages = [];
 
       // Modifying an existing laptop loan
       if (modifyingLoan?._loanKind === "laptop") {
@@ -214,6 +233,7 @@ export default function CartPanel() {
           errors.push(data.error || "Laptop loan modification failed");
         else {
           results.push("laptop");
+          if (data.message) successMessages.push(data.message);
           if (data.auto_approved) autoApprovedResults.push("laptop");
         }
       } else {
@@ -254,6 +274,7 @@ export default function CartPanel() {
           if (!res.ok) errors.push(data.error || "Tech loan failed");
           else {
             results.push("tech");
+            if (data.message) successMessages.push(data.message);
             if (data.auto_approved) autoApprovedResults.push("tech");
           }
         }
@@ -289,6 +310,7 @@ export default function CartPanel() {
           if (!res.ok) errors.push(data.error || "Laptop loan failed");
           else {
             results.push("laptop");
+            if (data.message) successMessages.push(data.message);
             if (data.auto_approved) autoApprovedResults.push("laptop");
           }
         }
@@ -307,13 +329,30 @@ export default function CartPanel() {
       const allAutoApproved =
         results.length > 0 && autoApprovedResults.length === results.length;
       const someAutoApproved = autoApprovedResults.length > 0;
-      toast.success(
-        allAutoApproved
+      const isAdminEditingOtherUser =
+        user?.role === "admin" &&
+        modifyingLoan &&
+        Number(modifyingLoan.user_id) !== Number(user.id);
+      const successMessage =
+        successMessages[0] ||
+        (allAutoApproved
           ? "Request auto-approved and active now."
           : someAutoApproved
             ? "Request submitted. Some loans were auto-approved immediately."
-            : "Request submitted! We'll notify you when it's reviewed.",
-      );
+            : "Request submitted! We'll notify you when it's reviewed.");
+      setSuccessState({
+        title: modifyingLoan ? "Loan Updated!" : "Request Submitted!",
+        message: successMessage,
+        primaryLabel: isAdminEditingOtherUser
+          ? "Back to Admin →"
+          : "View My Loans →",
+        primaryAction: () => {
+          setSubmitted(false);
+          setIsOpen(false);
+          router.push(isAdminEditingOtherUser ? "/admin" : "/loans");
+        },
+      });
+      toast.success(successMessage);
     } catch (err) {
       setError(err.message);
       toast.error(err.message || "Submission failed. Please try again.");
@@ -381,7 +420,7 @@ export default function CartPanel() {
               className="cart-success-title"
               style={{ fontSize: 20, fontWeight: 700, margin: 0 }}
             >
-              Request Submitted!
+              {successState?.title || "Request Submitted!"}
             </h3>
             <p
               className="cart-success-copy"
@@ -392,8 +431,8 @@ export default function CartPanel() {
                 margin: 0,
               }}
             >
-              Your loan request has been sent for approval. We&apos;ll notify
-              you when it&apos;s reviewed.
+              {successState?.message ||
+                "Your loan request has been sent for approval. We'll notify you when it's reviewed."}
             </p>
             <div
               className="cart-success-actions"
@@ -408,13 +447,16 @@ export default function CartPanel() {
               <button
                 className="btn btn-primary"
                 style={{ width: "100%" }}
-                onClick={() => {
-                  setSubmitted(false);
-                  setIsOpen(false);
-                  router.push("/loans");
-                }}
+                onClick={
+                  successState?.primaryAction ||
+                  (() => {
+                    setSubmitted(false);
+                    setIsOpen(false);
+                    router.push("/loans");
+                  })
+                }
               >
-                View My Loans →
+                {successState?.primaryLabel || "View My Loans →"}
               </button>
               <button
                 className="btn btn-outline"

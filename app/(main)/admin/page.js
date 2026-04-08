@@ -1,5 +1,6 @@
 "use client";
 import { useAuth } from "@/lib/context/AuthContext";
+import { useCart } from "@/lib/context/CartContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabaseClient } from "@/lib/db/supabaseClient";
@@ -20,6 +21,7 @@ import {
   RiTimeLine,
   RiBookmarkLine,
   RiAddLine,
+  RiEditLine,
   RiDragMove2Fill,
   RiCameraLine,
 } from "react-icons/ri";
@@ -226,6 +228,7 @@ function AdminPageContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const toast = useToast();
+  const { setIsOpen, setItems, setModifyingLoan } = useCart();
   const initialQueryState = readAdminQueryState();
   const [loans, setLoans] = useState([]);
   const [statusFilter, setStatusFilter] = useState(
@@ -238,6 +241,7 @@ function AdminPageContent() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [selectedPendingLoans, setSelectedPendingLoans] = useState(new Set());
   const [bulkApproveLoading, setBulkApproveLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(null);
   const [userActionLoading, setUserActionLoading] = useState(null);
   const [inviteCodeLoading, setInviteCodeLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(() => initialQueryState.tab);
@@ -413,15 +417,15 @@ function AdminPageContent() {
   const fetchLoans = useCallback(async () => {
     setFetching(true);
     setError("");
-    // "overdue" is a client-side pseudo-filter; fetch approved loans from API
-    const apiStatus = statusFilter === "overdue" ? "approved" : statusFilter;
-    const today = new Date().toISOString().split("T")[0];
     try {
       let techLoans = [];
       let laptopLoansArr = [];
 
       if (loanSource !== "laptop") {
-        const params = new URLSearchParams({ view: "all", status: apiStatus });
+        const params = new URLSearchParams({
+          view: "all",
+          status: statusFilter,
+        });
         const data = await fetchJson(`/api/loans?${params}`);
         techLoans = (data.loans || []).map((loan) => ({
           ...loan,
@@ -431,7 +435,10 @@ function AdminPageContent() {
       }
 
       if (loanSource !== "tech") {
-        const params = new URLSearchParams({ view: "all", status: apiStatus });
+        const params = new URLSearchParams({
+          view: "all",
+          status: statusFilter,
+        });
         const data = await fetchJson(`/api/laptop-loans?${params}`);
         laptopLoansArr = (data.loans || []).map((loan) => ({
           ...loan,
@@ -440,17 +447,9 @@ function AdminPageContent() {
         }));
       }
 
-      let merged = [...techLoans, ...laptopLoansArr].sort(
+      const merged = [...techLoans, ...laptopLoansArr].sort(
         (a, b) => new Date(b.created_at) - new Date(a.created_at),
       );
-
-      // Client-side filter for overdue: approved + temporary + end_date < today
-      if (statusFilter === "overdue") {
-        merged = merged.filter(
-          (l) =>
-            l.loan_type === "temporary" && l.end_date && l.end_date < today,
-        );
-      }
 
       setLoans(merged);
     } catch (err) {
@@ -838,6 +837,108 @@ function AdminPageContent() {
       toast.error("Network error — bulk approve could not be completed");
     } finally {
       setBulkApproveLoading(false);
+    }
+  };
+
+  const handleModifyLaptopLoan = async (loan) => {
+    const loanKey = loan._clientKey || getLoanClientKey(loan);
+    setEditLoading(loanKey);
+    try {
+      const data = await fetchJson("/api/laptops");
+      const allLaptops = (data.tiers || []).flatMap(
+        (tier) => tier.laptops || [],
+      );
+      const cartItems = [];
+      let missing = 0;
+
+      for (const item of loan.laptops || []) {
+        const laptop = allLaptops.find((entry) => entry.id === item.laptop_id);
+        if (laptop) {
+          cartItems.push({
+            id: laptop.id,
+            name: laptop.name,
+            screen_size: laptop.screen_size,
+            cpu: laptop.cpu,
+            loan_type: loan.loan_type,
+            start_date: loan.start_date || "",
+            end_date: loan.end_date || "",
+            _cartType: "laptop",
+          });
+        } else {
+          missing += 1;
+        }
+      }
+
+      setModifyingLoan({ ...loan, _loanKind: "laptop" });
+      setItems(cartItems);
+      setIsOpen(true);
+
+      if (missing > 0) {
+        toast.error(
+          `${missing} laptop(s) could not be loaded for modification.`,
+        );
+      }
+    } catch {
+      toast.error("Could not load laptops for modification — please try again");
+    } finally {
+      setEditLoading(null);
+    }
+  };
+
+  const handleModifyLoan = async (loan) => {
+    const loanKey = loan._clientKey || getLoanClientKey(loan);
+    setEditLoading(loanKey);
+    try {
+      const data = await fetchJson("/api/items?tab=storage");
+      const storageItems = data.items || [];
+      const nextCart = [];
+      let missing = 0;
+
+      for (const loanItem of loan.items || []) {
+        const storageItem = loanItem.sheet_row
+          ? storageItems.find((entry) => entry.sheet_row === loanItem.sheet_row)
+          : storageItems.find((entry) => entry.id === loanItem.item_id);
+
+        if (!storageItem) {
+          missing += 1;
+          continue;
+        }
+
+        const maxAllowed =
+          loan.status === "approved"
+            ? storageItem.current + loanItem.quantity
+            : storageItem.current;
+
+        if (maxAllowed < loanItem.quantity) {
+          missing += 1;
+          continue;
+        }
+
+        nextCart.push({
+          id: storageItem.id,
+          item: storageItem.item,
+          type: storageItem.type,
+          brand: storageItem.brand,
+          current: storageItem.current,
+          quantity: loanItem.quantity,
+          max: maxAllowed,
+          _cartType: "tech",
+        });
+      }
+
+      setModifyingLoan({ ...loan, _loanKind: loan._source || "tech" });
+      setItems(nextCart);
+      setIsOpen(true);
+
+      if (missing > 0) {
+        toast.error(`${missing} item(s) could not be loaded for modification.`);
+      }
+    } catch {
+      toast.error(
+        "Could not load inventory for modification — please try again",
+      );
+    } finally {
+      setEditLoading(null);
     }
   };
 
@@ -1825,6 +1926,40 @@ function AdminPageContent() {
                           style={{ display: "flex", gap: 8, marginTop: 10 }}
                         >
                           <button
+                            disabled={editLoading === loanKey}
+                            onClick={() =>
+                              loan._source === "laptop"
+                                ? handleModifyLaptopLoan(loan)
+                                : handleModifyLoan(loan)
+                            }
+                            style={{
+                              flex: 1,
+                              padding: "10px 0",
+                              borderRadius: 10,
+                              fontWeight: 700,
+                              fontSize: 13,
+                              cursor:
+                                editLoading === loanKey
+                                  ? "not-allowed"
+                                  : "pointer",
+                              background: "rgba(99,102,241,0.08)",
+                              color: "var(--accent)",
+                              border: "1.5px solid rgba(99,102,241,0.25)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 6,
+                              opacity: editLoading === loanKey ? 0.7 : 1,
+                            }}
+                          >
+                            {editLoading === loanKey ? (
+                              <span className="btn-spinner" />
+                            ) : (
+                              <RiEditLine />
+                            )}{" "}
+                            Edit
+                          </button>
+                          <button
                             disabled={actionLoading === loanKey}
                             onClick={() =>
                               loan._source === "laptop"
@@ -1907,16 +2042,47 @@ function AdminPageContent() {
                     )}
 
                     {/* Approved: return button */}
-                    {loan.status === "approved" &&
-                      (loan.loan_type === "temporary" ||
-                        loan._source === "laptop") && (
-                        <div
-                          className="admin-loan-card-return"
+                    {loan.status === "approved" && (
+                      <div
+                        className="admin-loan-card-return"
+                        style={{
+                          padding: "12px 18px",
+                          borderTop: "1px solid var(--border)",
+                        }}
+                      >
+                        <button
+                          disabled={editLoading === loanKey}
+                          onClick={() =>
+                            loan._source === "laptop"
+                              ? handleModifyLaptopLoan(loan)
+                              : handleModifyLoan(loan)
+                          }
+                          className="btn btn-outline"
                           style={{
-                            padding: "12px 18px",
-                            borderTop: "1px solid var(--border)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "8px 18px",
+                            marginRight: 8,
+                            borderRadius: 10,
+                            fontWeight: 700,
+                            fontSize: 13,
+                            cursor:
+                              editLoading === loanKey
+                                ? "not-allowed"
+                                : "pointer",
+                            opacity: editLoading === loanKey ? 0.7 : 1,
                           }}
                         >
+                          {editLoading === loanKey ? (
+                            <span className="btn-spinner" />
+                          ) : (
+                            <RiEditLine />
+                          )}{" "}
+                          Edit Loan
+                        </button>
+                        {(loan.loan_type === "temporary" ||
+                          loan._source === "laptop") && (
                           <button
                             disabled={actionLoading === loanKey}
                             onClick={() =>
@@ -1965,8 +2131,9 @@ function AdminPageContent() {
                               </>
                             )}
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                    )}
 
                     {/* Footer: notes, photo, delete */}
                     {hasFooter && (

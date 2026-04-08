@@ -21,8 +21,6 @@ import {
   RiArrowGoBackLine,
   RiEyeOffLine,
 } from "react-icons/ri";
-import {} from // recharts is loaded dynamically below — no static import
-"recharts";
 
 const COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"];
 const ACTIVE_CALENDAR_PAGE_LIMIT = 200;
