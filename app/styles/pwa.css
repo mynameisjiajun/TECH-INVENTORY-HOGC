@@ -657,6 +657,8 @@ html[data-shell="pwa"] .mobile-nav {
   display: flex;
   align-items: center;
   justify-content: space-around;
+  /* Lock to an exact height so the bar never shifts during loading transitions */
+  height: var(--shell-mobile-nav-min-height);
   min-height: var(--shell-mobile-nav-min-height);
   padding-top: 10px;
   padding-bottom: max(
@@ -668,9 +670,13 @@ html[data-shell="pwa"] .mobile-nav {
   box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.03);
   z-index: 100;
   -webkit-tap-highlight-color: transparent;
-  /* GPU layer prevents iOS repaint from moving the nav during scroll */
+  /* GPU compositing layer — prevents iOS from repositioning fixed elements on reflow */
   transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
   will-change: transform;
+  /* Prevent content from expanding the nav */
+  overflow: hidden;
 }
 
 /* Sentinel that fills any gap below the nav (e.g. home indicator area) */

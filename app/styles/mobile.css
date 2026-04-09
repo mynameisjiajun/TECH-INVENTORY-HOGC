@@ -682,6 +682,7 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     display: flex;
     align-items: center;
     justify-content: space-around;
+    height: var(--shell-mobile-nav-min-height);
     min-height: var(--shell-mobile-nav-min-height);
     padding-top: 10px;
     padding-bottom: max(
@@ -693,9 +694,11 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.03);
     z-index: 100;
     -webkit-tap-highlight-color: transparent;
-    /* GPU layer prevents iOS repaint from moving the nav during scroll */
     transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
     will-change: transform;
+    overflow: hidden;
   }
 
   /* Extend background below nav to cover any safe-area gaps */
@@ -1152,6 +1155,26 @@ html[data-shell="mobile-web"][data-platform="ios"] {
 
   html[data-shell="mobile-web"] .laptop-sticky-bar {
     top: var(--shell-sticky-top-mobile);
+    /* Allow native date picker UI to render outside the clip boundary */
+    overflow: visible;
+  }
+
+  html[data-shell="mobile-web"] .laptop-date-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  html[data-shell="mobile-web"] .laptop-date-grid.single-col {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-shell="mobile-web"] .laptop-date-grid input[type="date"] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    /* Keep at 16px — iOS Safari zooms the viewport if font-size < 16px */
+    font-size: 16px;
+    padding: 8px 10px;
   }
 }
 

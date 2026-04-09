@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import { sendLoanStatusEmail } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
+import { getTodaySingaporeDateString } from "@/lib/utils/date";
 import { NextResponse } from "next/server";
 
 const VALID_LOAN_VIEWS = new Set(["my", "all", "active"]);
@@ -137,7 +138,7 @@ export async function GET(request) {
       .from("laptop_loan_requests")
       .select("id", { count: "exact", head: true });
     if (isOverdueFilter) {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getTodaySingaporeDateString();
       cq = cq
         .eq("status", "approved")
         .eq("loan_type", "temporary")
@@ -163,7 +164,7 @@ export async function GET(request) {
       query = query.eq("user_id", user.id);
     }
     if (isOverdueFilter) {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getTodaySingaporeDateString();
       query = query
         .eq("status", "approved")
         .eq("loan_type", "temporary")

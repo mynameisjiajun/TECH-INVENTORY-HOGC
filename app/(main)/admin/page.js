@@ -9,6 +9,10 @@ import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import AppShellLoading from "@/components/AppShellLoading";
 import {
+  getSingaporeDateOffsetString,
+  getTodaySingaporeDateString,
+} from "@/lib/utils/date";
+import {
   RiCheckLine,
   RiCloseLine,
   RiArrowGoBackLine,
@@ -287,6 +291,7 @@ function AdminPageContent() {
   const [loanSource, setLoanSource] = useState(() => initialQueryState.source); // 'all' | 'tech' | 'laptop'
   const [pendingCount, setPendingCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState(() => initialQueryState.q);
+  const todayStr = getTodaySingaporeDateString();
 
   const filteredLoans = useMemo(() => {
     if (!searchQuery.trim()) return loans;
@@ -336,13 +341,13 @@ function AdminPageContent() {
               nextStatus === "approved" &&
               nextLoan.loan_type === "temporary" &&
               nextLoan.end_date &&
-              nextLoan.end_date < new Date().toISOString().split("T")[0]);
+              nextLoan.end_date < todayStr);
 
           return matchesStatusFilter ? [nextLoan] : [];
         });
       });
     },
-    [statusFilter],
+    [statusFilter, todayStr],
   );
 
   // Laptops tab state
@@ -1623,7 +1628,6 @@ function AdminPageContent() {
             ) : (
               filteredLoans.map((loan) => {
                 const loanKey = loan._clientKey || getLoanClientKey(loan);
-                const todayStr = new Date().toISOString().split("T")[0];
                 const isOverdue =
                   loan.status === "approved" &&
                   loan.loan_type === "temporary" &&
@@ -3573,10 +3577,8 @@ function AdminPageContent() {
                   }}
                 >
                   {(() => {
-                    const today = new Date().toISOString().split("T")[0];
-                    const in3Days = new Date();
-                    in3Days.setDate(in3Days.getDate() + 3);
-                    const in3DaysStr = in3Days.toISOString().split("T")[0];
+                    const today = todayStr;
+                    const in3DaysStr = getSingaporeDateOffsetString(3);
                     return currentlyOut.map((loan, i) => {
                       const laptopNames = (loan.laptops || [])
                         .map(

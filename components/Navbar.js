@@ -206,8 +206,8 @@ export default function Navbar() {
   const handleLogout = async () => {
     setShowAccountMenu(false);
     setShowNotifs(false);
-    router.replace("/home");
     await logout();
+    router.replace("/home");
   };
 
   const markOneRead = async (id) => {
