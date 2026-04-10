@@ -302,7 +302,9 @@ function AdminPageContent() {
         loan.requester_name ||
         loan.requester_username ||
         ""
-      ).toLowerCase().includes(q);
+      )
+        .toLowerCase()
+        .includes(q);
       const deptMatch = (loan.department || "").toLowerCase().includes(q);
       const purposeMatch = (loan.purpose || "").toLowerCase().includes(q);
       const remarksMatch = (loan.remarks || "").toLowerCase().includes(q);
@@ -693,6 +695,7 @@ function AdminPageContent() {
     if (user?.role !== "admin" || activeTab !== "loans") return;
 
     let channel;
+    let realtimeActive = false;
     try {
       channel = supabaseClient
         .channel("admin-loan-requests")
@@ -710,7 +713,8 @@ function AdminPageContent() {
             refreshLoansTab();
           },
         )
-        .subscribe((_status, err) => {
+        .subscribe((status, err) => {
+          realtimeActive = status === "SUBSCRIBED";
           if (err)
             console.warn(
               "Realtime unavailable, using polling fallback:",
@@ -724,8 +728,10 @@ function AdminPageContent() {
       );
     }
 
-    // Fallback poll every 60s in case Realtime drops
-    const fallback = setInterval(refreshLoansTab, 60000);
+    // Fallback poll every 60s only when Realtime is not connected
+    const fallback = setInterval(() => {
+      if (!realtimeActive) refreshLoansTab();
+    }, 60000);
 
     return () => {
       if (channel) supabaseClient.removeChannel(channel);
@@ -1724,7 +1730,8 @@ function AdminPageContent() {
                               fontSize: 12,
                             }}
                           >
-                            {loan.requester_telegram || `@${loan.requester_username}`}
+                            {loan.requester_telegram ||
+                              `@${loan.requester_username}`}
                           </span>
                         </div>
                       </div>
@@ -3642,7 +3649,12 @@ function AdminPageContent() {
                               >
                                 {loan.requester_name || "—"}
                                 {loan.requester_telegram && (
-                                  <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>
+                                  <span
+                                    style={{
+                                      color: "var(--text-muted)",
+                                      marginLeft: 4,
+                                    }}
+                                  >
                                     {loan.requester_telegram}
                                   </span>
                                 )}

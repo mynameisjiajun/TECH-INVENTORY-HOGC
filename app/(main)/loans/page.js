@@ -348,8 +348,23 @@ export default function LoansPage() {
         fetch(`/api/laptop-loans?view=my`, { cache: "no-store" }),
       ]);
 
-      const techData = techRes.ok ? await techRes.json() : { loans: [] };
-      const laptopData = laptopRes.ok ? await laptopRes.json() : { loans: [] };
+      let techData = { loans: [] };
+      let laptopData = { loans: [] };
+      let fetchError = "";
+
+      if (techRes.ok) {
+        techData = await techRes.json();
+      } else {
+        const d = await techRes.json().catch(() => ({}));
+        fetchError = d.error || `Failed to load loans (${techRes.status})`;
+      }
+
+      if (laptopRes.ok) {
+        laptopData = await laptopRes.json();
+      } else {
+        const d = await laptopRes.json().catch(() => ({}));
+        fetchError = fetchError || d.error || `Failed to load laptop loans (${laptopRes.status})`;
+      }
 
       const techLoans = (techData.loans || []).map((l) => ({
         ...l,
@@ -373,11 +388,7 @@ export default function LoansPage() {
       );
 
       setAllLoans(allLoans);
-
-      if (!techRes.ok) {
-        const d = await techRes.json().catch(() => ({}));
-        setError(d.error || `Failed to load loans (${techRes.status})`);
-      }
+      if (fetchError) setError(fetchError);
     } catch {
       setError("Network error — could not load your loans");
     } finally {

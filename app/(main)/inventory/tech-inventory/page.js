@@ -110,18 +110,13 @@ export default function InventoryPage() {
 
   useEffect(() => {
     if (!user) return;
-    fetch("/api/admin/templates")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d) setTemplates(d.templates);
-      })
-      .catch(() => {});
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.overdueCount) setOverdueCount(d.overdueCount);
-      })
-      .catch(() => {});
+    Promise.all([
+      fetch("/api/admin/templates").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch("/api/loans?view=my&status=overdue").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([templateData, overdueData]) => {
+      if (templateData) setTemplates(templateData.templates || []);
+      if (overdueData?.loans) setOverdueCount(overdueData.loans.length);
+    });
   }, [user]);
 
   const handleTemplateRequest = useCallback(

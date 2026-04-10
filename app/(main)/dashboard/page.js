@@ -234,13 +234,15 @@ export default function DashboardPage() {
       : { event: "*", schema: "public", table: "loan_requests" };
 
     let channel;
+    let realtimeActive = false;
     try {
       channel = supabaseClient
         .channel(`dashboard-${user.id}`)
         .on("postgres_changes", channelOpts, () => {
           fetch();
         })
-        .subscribe((_status, err) => {
+        .subscribe((status, err) => {
+          realtimeActive = status === "SUBSCRIBED";
           if (err)
             console.warn(
               "Realtime unavailable, using polling fallback:",
@@ -254,7 +256,7 @@ export default function DashboardPage() {
         err.message,
       );
     }
-    const fallback = setInterval(fetch, 60000);
+    const fallback = setInterval(() => { if (!realtimeActive) fetch(); }, 60000);
 
     return () => {
       if (channel) supabaseClient.removeChannel(channel);
