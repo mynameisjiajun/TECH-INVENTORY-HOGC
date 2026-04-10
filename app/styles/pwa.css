@@ -38,7 +38,7 @@ html[data-shell="pwa"] body {
 html[data-shell="pwa"] .page-container {
   padding: calc(14px + 66px + var(--shell-navbar-safe-top)) 14px
     var(--shell-page-mobile-bottom);
-  min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top));
+  min-height: 100dvh;
   overflow-x: clip;
 }
 
@@ -1228,11 +1228,11 @@ html[data-shell="pwa"][data-platform="ios"] .notification-badge {
 }
 
 html[data-shell="pwa"] .inventory-landing {
-  min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top));
+  min-height: 100dvh;
 }
 
 html[data-shell="pwa"][data-platform="ios"] .inventory-landing {
-  min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top));
+  min-height: 100dvh;
   padding-top: 0;
 }
 
@@ -1402,7 +1402,7 @@ html[data-shell="pwa"][data-platform="ios"] .modal-footer {
     max-width: 1280px;
     margin: 0 auto;
     padding: calc(20px + 66px + var(--shell-navbar-safe-top)) 24px 32px;
-    min-height: calc(100dvh - 66px - var(--shell-navbar-safe-top));
+    min-height: 100dvh;
   }
 
   html[data-shell="pwa"] .navbar {
