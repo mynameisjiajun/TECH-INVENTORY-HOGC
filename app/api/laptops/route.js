@@ -53,7 +53,7 @@ export async function GET(request) {
     supabase
       .from("laptop_loan_requests")
       .select(
-        "id, start_date, end_date, loan_type, users(display_name, username), laptop_loan_items(laptop_id)",
+        "id, start_date, end_date, loan_type, users(display_name, username, telegram_handle), laptop_loan_items(laptop_id)",
       )
       .in("status", ["approved", "pending"]),
     supabase
@@ -65,7 +65,8 @@ export async function GET(request) {
   // Build maps: which laptops are unavailable for the requested dates, and their return dates
   const unavailableIds = new Set();
   const returnDateMap = new Map(); // laptop_id -> earliest return date
-  const borrowerMap = new Map(); // laptop_id -> borrower display name
+  const borrowerNameMap = new Map(); // laptop_id -> borrower display name
+  const borrowerTelegramMap = new Map(); // laptop_id -> borrower telegram handle
 
   for (const loan of activeLoans || []) {
     // For overdue approved loans, treat effective end as "today" so they remain
@@ -91,9 +92,10 @@ export async function GET(request) {
         const displayDate = loan.end_date >= today ? loan.end_date : today;
         if (!returnDateMap.has(lid) || displayDate < returnDateMap.get(lid)) {
           returnDateMap.set(lid, loan.end_date);
-          const borrower =
-            loan.users?.display_name || loan.users?.username || null;
-          if (borrower) borrowerMap.set(lid, borrower);
+          const name = loan.users?.display_name || null;
+          const telegram = loan.users?.telegram_handle || null; // already stored with @ prefix
+          if (name) borrowerNameMap.set(lid, name);
+          if (telegram) borrowerTelegramMap.set(lid, telegram);
         }
       }
     }
@@ -123,7 +125,8 @@ export async function GET(request) {
         : undefined,
       availability,
       return_date: returnDateMap.get(laptop.id) || null,
-      borrower_name: user ? borrowerMap.get(laptop.id) || null : null,
+      borrower_name: user ? borrowerNameMap.get(laptop.id) || null : null,
+      borrower_telegram: user ? borrowerTelegramMap.get(laptop.id) || null : null,
       notify_me: user ? notifiedIds.has(laptop.id) : false,
     };
   });

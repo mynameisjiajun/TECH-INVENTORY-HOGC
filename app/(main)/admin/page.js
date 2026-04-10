@@ -297,9 +297,12 @@ function AdminPageContent() {
     if (!searchQuery.trim()) return loans;
     const q = searchQuery.toLowerCase();
     return loans.filter((loan) => {
-      const nameMatch = (loan.requester_name || loan.requester_username || "")
-        .toLowerCase()
-        .includes(q);
+      const nameMatch = (
+        loan.requester_telegram ||
+        loan.requester_name ||
+        loan.requester_username ||
+        ""
+      ).toLowerCase().includes(q);
       const deptMatch = (loan.department || "").toLowerCase().includes(q);
       const purposeMatch = (loan.purpose || "").toLowerCase().includes(q);
       const remarksMatch = (loan.remarks || "").toLowerCase().includes(q);
@@ -1721,7 +1724,7 @@ function AdminPageContent() {
                               fontSize: 12,
                             }}
                           >
-                            @{loan.requester_username}
+                            {loan.requester_telegram || `@${loan.requester_username}`}
                           </span>
                         </div>
                       </div>
@@ -3638,6 +3641,11 @@ function AdminPageContent() {
                                 }}
                               >
                                 {loan.requester_name || "—"}
+                                {loan.requester_telegram && (
+                                  <span style={{ color: "var(--text-muted)", marginLeft: 4 }}>
+                                    {loan.requester_telegram}
+                                  </span>
+                                )}
                                 {loan.department ? (
                                   <span style={{ color: "var(--text-muted)" }}>
                                     {" "}

@@ -218,7 +218,7 @@ const LaptopCard = memo(function LaptopCard({
         )}
 
         {/* Temp loan borrower */}
-        {isTempLoaned && laptop.borrower_name && (
+        {isTempLoaned && (laptop.borrower_name || laptop.borrower_telegram) && (
           <div
             className="laptop-loan-card-assignee"
             style={{
@@ -231,6 +231,11 @@ const LaptopCard = memo(function LaptopCard({
             <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
               {laptop.borrower_name}
             </span>
+            {laptop.borrower_telegram && (
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                {laptop.borrower_telegram}
+              </div>
+            )}
           </div>
         )}
       </div>

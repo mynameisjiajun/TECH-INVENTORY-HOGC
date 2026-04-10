@@ -688,6 +688,12 @@ export default function InventoryPage() {
                     ))}
                   </tbody>
                 </table>
+                {items.length === 0 && (
+                  <div className="empty-state">
+                    <h3>No data</h3>
+                    <p>No inventory types found</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -735,6 +741,12 @@ export default function InventoryPage() {
                     ))}
                   </tbody>
                 </table>
+                {items.length === 0 && (
+                  <div className="empty-state">
+                    <h3>No items found</h3>
+                    <p>Try adjusting your search or filters</p>
+                  </div>
+                )}
               </div>
             )}
 

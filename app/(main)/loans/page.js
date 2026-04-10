@@ -1210,15 +1210,36 @@ export default function LoansPage() {
             <div className="empty-icon">
               <RiShoppingBag3Line />
             </div>
-            <h3>No loans yet</h3>
-            <p>Browse the inventory to borrow equipment</p>
-            <button
-              className="btn btn-primary"
-              style={{ marginTop: 12 }}
-              onClick={() => router.push("/home")}
-            >
-              Browse Inventory
-            </button>
+            {allLoans.length > 0 ? (
+              <>
+                <h3>No loans match your filters</h3>
+                <p>Try clearing the search or changing the status filter</p>
+                <button
+                  className="btn btn-outline"
+                  style={{ marginTop: 12 }}
+                  onClick={() => {
+                    setSearch("");
+                    setStatusFilter("");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                >
+                  Clear Filters
+                </button>
+              </>
+            ) : (
+              <>
+                <h3>No loans yet</h3>
+                <p>Browse the inventory to borrow equipment</p>
+                <button
+                  className="btn btn-primary"
+                  style={{ marginTop: 12 }}
+                  onClick={() => router.push("/home")}
+                >
+                  Browse Inventory
+                </button>
+              </>
+            )}
           </div>
         ) : (
           bundles.map((bundle) => {

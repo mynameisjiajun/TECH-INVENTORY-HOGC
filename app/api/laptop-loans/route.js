@@ -19,7 +19,7 @@ const DEFAULT_LOAN_PAGE_SIZE = 200;
 const MAX_LOAN_PAGE_SIZE = 200;
 const AUTO_APPROVE_ADMIN_NOTE = "Auto-approved by global setting";
 const LAPTOP_LOAN_SELECT =
-  "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users(display_name, username)";
+  "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users(display_name, username, telegram_handle)";
 
 function sanitizeSearchTerm(value) {
   return value.replace(/[,%()]/g, " ").trim();
@@ -216,6 +216,7 @@ export async function GET(request) {
     ...lr,
     requester_name: lr.users?.display_name || null,
     requester_username: lr.users?.username || null,
+    requester_telegram: lr.users?.telegram_handle || null,
     users: undefined,
     laptops: [],
     _source: "laptop",

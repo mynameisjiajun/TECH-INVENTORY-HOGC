@@ -38,7 +38,7 @@ const TECH_LOAN_SELECT = `
       admin_notes,
       created_at,
       updated_at,
-      users (display_name, username)
+      users (display_name, username, telegram_handle)
     `;
 
 function sanitizeSearchTerm(value) {
@@ -211,6 +211,7 @@ export async function GET(request) {
     ...lr,
     requester_name: lr.users?.display_name || null,
     requester_username: lr.users?.username || null,
+    requester_telegram: lr.users?.telegram_handle || null,
     users: undefined,
     items: [],
   }));

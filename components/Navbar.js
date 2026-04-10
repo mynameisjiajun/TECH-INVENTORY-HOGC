@@ -28,48 +28,11 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
-  const [isCompactShell, setIsCompactShell] = useState(false);
   const [notifPermission, setNotifPermission] = useState("default");
   const [adminPendingCount, setAdminPendingCount] = useState(0);
   const notifRef = useRef(null);
   const accountRef = useRef(null);
   const prevUnreadRef = useRef(-1);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const mobileQuery = window.matchMedia("(max-width: 768px)");
-
-    const syncCompactShell = () => {
-      const shell = root.dataset.shell;
-      const device = root.dataset.device;
-      setIsCompactShell(
-        shell === "pwa" || device === "mobile" || mobileQuery.matches,
-      );
-    };
-
-    syncCompactShell();
-
-    const observer = new MutationObserver(syncCompactShell);
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: ["data-shell", "data-device"],
-    });
-
-    if (mobileQuery.addEventListener) {
-      mobileQuery.addEventListener("change", syncCompactShell);
-    } else {
-      mobileQuery.addListener(syncCompactShell);
-    }
-
-    return () => {
-      observer.disconnect();
-      if (mobileQuery.removeEventListener) {
-        mobileQuery.removeEventListener("change", syncCompactShell);
-      } else {
-        mobileQuery.removeListener(syncCompactShell);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -458,159 +421,77 @@ export default function Navbar() {
               </div>
             )}
 
-            {isCompactShell ? (
-              <div className="account-menu-shell" ref={accountRef}>
-                <button
-                  aria-label="Account menu"
-                  className="account-btn"
-                  onClick={() => {
-                    setShowAccountMenu((v) => !v);
-                    setShowNotifs(false);
-                  }}
-                >
-                  <div className="user-avatar">{avatarLabel}</div>
-                </button>
-                {showAccountMenu && (
-                  <div className="account-menu-dropdown">
-                    <button
-                      className="account-menu-profile"
-                      onClick={() => {
-                        if (user) {
+            <div className="account-menu-shell" ref={accountRef}>
+              <button
+                aria-label="Account menu"
+                className="account-btn"
+                onClick={() => {
+                  setShowAccountMenu((v) => !v);
+                  setShowNotifs(false);
+                }}
+              >
+                <div className="user-avatar">{avatarLabel}</div>
+              </button>
+              {showAccountMenu && (
+                <div className="account-menu-dropdown">
+                  <button
+                    className="account-menu-profile"
+                    onClick={() => {
+                      router.push(user ? "/profile" : "/login");
+                      setShowAccountMenu(false);
+                    }}
+                  >
+                    <div className="user-avatar account-menu-avatar">
+                      {avatarLabel}
+                    </div>
+                    <div className="account-menu-copy">
+                      <strong>{displayName}</strong>
+                      <span>{accountMeta}</span>
+                    </div>
+                  </button>
+                  {user ? (
+                    <>
+                      <button
+                        className="account-menu-item"
+                        onClick={() => {
                           router.push("/profile");
-                        } else {
+                          setShowAccountMenu(false);
+                        }}
+                      >
+                        Profile
+                      </button>
+                      <button
+                        className="account-menu-item account-menu-item-danger"
+                        onClick={handleLogout}
+                      >
+                        <RiLogoutBoxLine /> Logout
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="account-menu-item"
+                        onClick={() => {
                           router.push("/login");
-                        }
-                        setShowAccountMenu(false);
-                      }}
-                    >
-                      <div className="user-avatar account-menu-avatar">
-                        {avatarLabel}
-                      </div>
-                      <div className="account-menu-copy">
-                        <strong>{displayName}</strong>
-                        <span>{accountMeta}</span>
-                      </div>
-                    </button>
-                    {user ? (
-                      <>
-                        <button
-                          className="account-menu-item"
-                          onClick={() => {
-                            router.push("/profile");
-                            setShowAccountMenu(false);
-                          }}
-                        >
-                          Profile
-                        </button>
-                        <button
-                          className="account-menu-item account-menu-item-danger"
-                          onClick={handleLogout}
-                        >
-                          <RiLogoutBoxLine /> Logout
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className="account-menu-item"
-                          onClick={() => {
-                            router.push("/login");
-                            setShowAccountMenu(false);
-                          }}
-                        >
-                          <RiLoginBoxLine /> Log In
-                        </button>
-                        <button
-                          className="account-menu-item"
-                          onClick={() => {
-                            router.push("/register");
-                            setShowAccountMenu(false);
-                          }}
-                        >
-                          <RiUserAddLine /> Register
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="account-menu-shell" ref={accountRef}>
-                <button
-                  aria-label="Account menu"
-                  className="account-btn"
-                  onClick={() => {
-                    setShowAccountMenu((v) => !v);
-                    setShowNotifs(false);
-                  }}
-                >
-                  <div className="user-avatar">{avatarLabel}</div>
-                </button>
-                {showAccountMenu && (
-                  <div className="account-menu-dropdown">
-                    <button
-                      className="account-menu-profile"
-                      onClick={() => {
-                        if (user) {
-                          router.push("/profile");
-                        } else {
-                          router.push("/login");
-                        }
-                        setShowAccountMenu(false);
-                      }}
-                    >
-                      <div className="user-avatar account-menu-avatar">
-                        {avatarLabel}
-                      </div>
-                      <div className="account-menu-copy">
-                        <strong>{displayName}</strong>
-                        <span>{accountMeta}</span>
-                      </div>
-                    </button>
-                    {user ? (
-                      <>
-                        <button
-                          className="account-menu-item"
-                          onClick={() => {
-                            router.push("/profile");
-                            setShowAccountMenu(false);
-                          }}
-                        >
-                          Profile
-                        </button>
-                        <button
-                          className="account-menu-item account-menu-item-danger"
-                          onClick={handleLogout}
-                        >
-                          <RiLogoutBoxLine /> Logout
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className="account-menu-item"
-                          onClick={() => {
-                            router.push("/login");
-                            setShowAccountMenu(false);
-                          }}
-                        >
-                          <RiLoginBoxLine /> Log In
-                        </button>
-                        <button
-                          className="account-menu-item"
-                          onClick={() => {
-                            router.push("/register");
-                            setShowAccountMenu(false);
-                          }}
-                        >
-                          <RiUserAddLine /> Register
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                          setShowAccountMenu(false);
+                        }}
+                      >
+                        <RiLoginBoxLine /> Log In
+                      </button>
+                      <button
+                        className="account-menu-item"
+                        onClick={() => {
+                          router.push("/register");
+                          setShowAccountMenu(false);
+                        }}
+                      >
+                        <RiUserAddLine /> Register
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </nav>

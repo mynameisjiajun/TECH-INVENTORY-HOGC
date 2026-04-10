@@ -51,6 +51,7 @@ export default function CartPanel() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const laptopItems = items.filter((i) => i._cartType === "laptop");
   const techItems = items.filter((i) => i._cartType !== "laptop");
@@ -885,7 +886,7 @@ export default function CartPanel() {
             </div>
 
             {items.length > 0 && (
-              <div className="cart-footer">
+              <div className="cart-footer" style={{ position: "relative" }}>
                 {!modifyingLoan ? (
                   <button
                     className="btn btn-primary cart-checkout-btn"
@@ -918,10 +919,63 @@ export default function CartPanel() {
                 <button
                   className="btn btn-outline"
                   style={{ width: "100%", marginTop: 8 }}
-                  onClick={clearCart}
+                  onClick={() => setShowClearConfirm(true)}
                 >
                   Clear Cart
                 </button>
+
+                {showClearConfirm && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "rgba(0,0,0,0.55)",
+                      backdropFilter: "blur(4px)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      zIndex: 20,
+                      borderRadius: "inherit",
+                      padding: 24,
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 16,
+                        padding: "24px 20px",
+                        width: "100%",
+                        maxWidth: 300,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div style={{ fontSize: 28, marginBottom: 12 }}>🗑️</div>
+                      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
+                        Clear cart?
+                      </div>
+                      <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 20 }}>
+                        All {totalItems} item{totalItems !== 1 ? "s" : ""} will be removed.
+                      </p>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          className="btn btn-outline"
+                          style={{ flex: 1 }}
+                          onClick={() => setShowClearConfirm(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="btn btn-danger"
+                          style={{ flex: 1 }}
+                          onClick={() => { clearCart(); setShowClearConfirm(false); }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>

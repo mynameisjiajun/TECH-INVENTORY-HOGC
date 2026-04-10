@@ -405,6 +405,7 @@ export default function DashboardPage() {
           startCol: segStart,
           endCol: segEnd,
           label:
+            loan.requester_telegram ||
             loan.requester_name ||
             loan.requester_username ||
             (loan._loanKind === "laptop" ? "Laptop" : "Booked"),
@@ -771,9 +772,11 @@ export default function DashboardPage() {
                       className="dashboard-loan-modal-username"
                       style={{ fontSize: 12, color: "var(--text-muted)" }}
                     >
-                      {selectedLoan.requester_username
-                        ? `@${selectedLoan.requester_username}`
-                        : "Guest-visible booking"}
+                      {selectedLoan.requester_telegram
+                        ? selectedLoan.requester_telegram
+                        : selectedLoan.requester_username
+                          ? `@${selectedLoan.requester_username}`
+                          : "Guest-visible booking"}
                     </div>
                   </div>
                   <div style={{ marginLeft: "auto" }}>
@@ -1442,7 +1445,9 @@ export default function DashboardPage() {
                     className="dashboard-loan-modal-username"
                     style={{ fontSize: 12, color: "var(--text-muted)" }}
                   >
-                    @{selectedLoan.requester_username}
+                    {selectedLoan.requester_telegram
+                      ? selectedLoan.requester_telegram
+                      : `@${selectedLoan.requester_username}`}
                   </div>
                 </div>
                 <div style={{ marginLeft: "auto" }}>
@@ -2154,7 +2159,9 @@ export default function DashboardPage() {
                   className="dashboard-loan-modal-username"
                   style={{ fontSize: 12, color: "var(--text-muted)" }}
                 >
-                  @{selectedLoan.requester_username}
+                  {selectedLoan.requester_telegram
+                    ? selectedLoan.requester_telegram
+                    : `@${selectedLoan.requester_username}`}
                 </div>
               </div>
               <div style={{ marginLeft: "auto" }}>

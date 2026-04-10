@@ -53,7 +53,7 @@ export default function ProfilePage() {
       setProfile(data.profile);
       setDisplayName(data.profile.display_name);
       setEmail(data.profile.email || "");
-      setTelegramHandle(data.profile.telegram_handle || "");
+      setTelegramHandle((data.profile.telegram_handle || "").replace(/^@/, ""));
       setMuteEmails(!!data.profile.mute_emails);
       setMuteTelegram(!!data.profile.mute_telegram);
       return data.profile;
@@ -94,6 +94,14 @@ export default function ProfilePage() {
     e.preventDefault();
     setProfileMsg("");
     setProfileErr("");
+
+    const cleanHandle = telegramHandle.trim().replace(/^@/, "");
+    if (!cleanHandle) {
+      setProfileErr("Telegram handle is required");
+      toast.error("Telegram handle is required");
+      return;
+    }
+
     setProfileLoading(true);
     try {
       const res = await fetch("/api/profile", {
@@ -103,7 +111,7 @@ export default function ProfilePage() {
           action: "update_profile",
           display_name: displayName,
           email: email.trim() || null,
-          telegram_handle: telegramHandle.trim() || null,
+          telegram_handle: cleanHandle,
           mute_emails: muteEmails,
           mute_telegram: muteTelegram,
         }),
@@ -367,8 +375,8 @@ export default function ProfilePage() {
                 }}
               >
                 Telegram Handle{" "}
-                <span style={{ fontWeight: 400, fontSize: 12 }}>
-                  (optional)
+                <span style={{ fontWeight: 400, fontSize: 12, color: "var(--error)" }}>
+                  *
                 </span>
               </label>
               <input
@@ -499,6 +507,7 @@ export default function ProfilePage() {
                     <RiCheckLine size={16} /> Linked & Active
                   </div>
                   <button
+                    type="button"
                     className="btn btn-outline"
                     style={{ fontSize: 12, padding: "6px 12px" }}
                     onClick={handleUnlinkTelegram}

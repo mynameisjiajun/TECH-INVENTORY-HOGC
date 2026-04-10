@@ -18,7 +18,7 @@ const TECH_LOAN_ADMIN_FIELDS =
   "id, user_id, loan_type, purpose, remarks, department, location, start_date, end_date, status, admin_notes, created_at, updated_at";
 const TECH_LOAN_ITEM_FIELDS =
   "id, loan_request_id, item_id, sheet_row, item_name, quantity";
-const TECH_LOAN_LIST_SELECT = `${TECH_LOAN_ADMIN_FIELDS}, users (display_name, username)`;
+const TECH_LOAN_LIST_SELECT = `${TECH_LOAN_ADMIN_FIELDS}, users (display_name, username, telegram_handle)`;
 
 /**
  * Append newly deployed items to the DEPLOYED sheet.
@@ -817,7 +817,7 @@ export async function GET(request) {
       supabase
         .from("laptop_loan_requests")
         .select(
-          "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users (display_name, username), laptop_loan_items(id, loan_request_id, laptop_id, laptops(id, name))",
+          "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users (display_name, username, telegram_handle), laptop_loan_items(id, loan_request_id, laptop_id, laptops(id, name))",
         )
         .in("status", ["approved", "pending"])
         .order("start_date", { ascending: true })
@@ -830,6 +830,7 @@ export async function GET(request) {
     _loanKind: "tech",
     requester_name: lr.users?.display_name || null,
     requester_username: lr.users?.username || null,
+    requester_telegram: lr.users?.telegram_handle || null,
     users: undefined,
     items: [],
   }));
@@ -940,6 +941,7 @@ export async function GET(request) {
     _loanKind: "laptop",
     requester_name: lr.users?.display_name || null,
     requester_username: lr.users?.username || null,
+    requester_telegram: lr.users?.telegram_handle || null,
     users: undefined,
     laptops: lr.laptop_loan_items || [],
     items: (lr.laptop_loan_items || []).map((item) => ({

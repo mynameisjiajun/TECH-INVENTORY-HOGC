@@ -15,6 +15,7 @@ export default function RegisterPage() {
     display_name: "",
     email: "",
     invite_code: "",
+    telegram_handle: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,12 +41,20 @@ export default function RegisterPage() {
       return;
     }
 
+    const rawHandle = formData.telegram_handle.trim().replace(/^@/, "");
+    if (!rawHandle) {
+      setError("Telegram handle is required");
+      setLoading(false);
+      return;
+    }
+
     const result = await register(
       formData.username,
       formData.password,
       formData.display_name,
       formData.invite_code,
       formData.email,
+      rawHandle,
     );
     if (result.ok) {
       router.push("/home");
@@ -121,6 +130,30 @@ export default function RegisterPage() {
             </span>
           </div>
           <div className="input-group">
+            <label>Telegram Handle</label>
+            <input
+              type="text"
+              value={formData.telegram_handle}
+              onChange={update("telegram_handle")}
+              placeholder="@yourhandle"
+              required
+              autoCapitalize="off"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--text-muted)",
+                marginTop: 4,
+                display: "block",
+              }}
+            >
+              Required for loan notifications and reminders
+            </span>
+          </div>
+          <div className="input-group">
             <label>Username</label>
             <input
               type="text"
@@ -169,17 +202,6 @@ export default function RegisterPage() {
             {loading ? "Creating account..." : "Create Account"}
           </button>
         </form>
-
-        <p
-          style={{
-            fontSize: 12,
-            color: "var(--text-muted)",
-            marginTop: 14,
-            textAlign: "center",
-          }}
-        >
-          Telegram linking is done after signup from your Profile page.
-        </p>
 
         <p className="auth-footer">
           Already have an account? <Link href="/login">Sign In</Link>
