@@ -613,6 +613,10 @@ function AdminPageContent() {
   }, [fetchLoans, fetchPendingCount]);
 
   const handleLaptopLoanAction = async (loanClientKey, loanId, action) => {
+    if (typeof loanId === "string" && loanId.startsWith("g_")) {
+      return handleAction(loanClientKey, loanId, action);
+    }
+    
     setActionLoading(loanClientKey);
     setError("");
     try {
@@ -790,10 +794,10 @@ function AdminPageContent() {
         .map((key) => loans.find((loan) => getLoanClientKey(loan) === key))
         .filter(Boolean);
       const techLoansToApprove = selectedLoanEntries.filter(
-        (loan) => loan._source !== "laptop",
+        (loan) => loan._source !== "laptop" || (typeof loan.id === "string" && loan.id.startsWith("g_"))
       );
       const laptopLoansToApprove = selectedLoanEntries.filter(
-        (loan) => loan._source === "laptop",
+        (loan) => loan._source === "laptop" && !(typeof loan.id === "string" && loan.id.startsWith("g_"))
       );
       const techIds = techLoansToApprove.map((loan) => loan.id);
 
@@ -2203,7 +2207,7 @@ function AdminPageContent() {
                               </a>
                             )}
                         </div>
-                        {loan._source !== "laptop" && (
+                        { (loan._source !== "laptop" || (typeof loan.id === "string" && loan.id.startsWith("g_"))) && (
                           <button
                             className="admin-loan-card-delete"
                             disabled={actionLoading === loanKey}
@@ -2621,7 +2625,6 @@ function AdminPageContent() {
                   <thead>
                     <tr>
                       <th>User</th>
-                      <th className="hide-mobile">Username</th>
                       <th>Contact Info</th>
                       <th>Role</th>
                       <th>Joined</th>
@@ -2654,13 +2657,13 @@ function AdminPageContent() {
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                fontSize: 11,
+                                fontSize: u.profile_emoji ? 14 : 11,
                                 fontWeight: 700,
                                 color: "white",
                                 flexShrink: 0,
                               }}
                             >
-                              {u.display_name[0].toUpperCase()}
+                              {u.profile_emoji || u.display_name[0].toUpperCase()}
                             </div>
                             <div>
                               <div style={{ fontSize: 12 }}>
@@ -2678,15 +2681,7 @@ function AdminPageContent() {
                             </div>
                           </div>
                         </td>
-                        <td
-                          className="hide-mobile"
-                          style={{
-                            color: "var(--text-secondary)",
-                            fontSize: 12,
-                          }}
-                        >
-                          @{u.username}
-                        </td>
+
                         <td
                           style={{
                             fontSize: 11,

@@ -58,7 +58,7 @@ export async function GET(request) {
     supabase
       .from("users")
       .select(
-        "id, username, display_name, role, email, telegram_chat_id, created_at",
+        "id, username, display_name, role, email, telegram_chat_id, profile_emoji, created_at",
         { count: "exact" },
       )
       .order("created_at", { ascending: false })

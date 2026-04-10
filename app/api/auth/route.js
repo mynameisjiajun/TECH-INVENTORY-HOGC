@@ -23,7 +23,7 @@ function rateLimitError(retryAfterSeconds) {
 export async function POST(request) {
   try {
     const clientId = getRequestClientIdentifier(request);
-    const { action, username, password, display_name, invite_code, email, telegram_handle } =
+    const { action, username, password, display_name, invite_code, email, telegram_handle, ministry } =
       await request.json();
 
     if (action === "register") {
@@ -81,6 +81,7 @@ export async function POST(request) {
         ? telegram_handle.trim().replace(/^@/, "")
         : null;
 
+      const cleanMinistry = ministry ? ministry.trim() : null;
       const hash = await hashPassword(password);
       const { data: newUser, error: insertError } = await supabase
         .from("users")
@@ -91,13 +92,14 @@ export async function POST(request) {
           role: "user",
           email: cleanEmail,
           telegram_handle: cleanHandle,
+          ministry: cleanMinistry,
         })
-        .select("id, username, role, display_name")
+        .select("id, username, role, display_name, ministry")
         .single();
 
       if (insertError) throw insertError;
 
-      const token = createToken(newUser);
+      const token = createToken({ ...newUser, ministry: cleanMinistry });
 
       if (cleanEmail) {
         sendWelcomeEmail({

@@ -407,8 +407,8 @@ export default function DashboardPage() {
           startCol: segStart,
           endCol: segEnd,
           label:
-            loan.requester_telegram ||
             loan.requester_name ||
+            loan.requester_telegram ||
             loan.requester_username ||
             (loan._loanKind === "laptop" ? "Laptop" : "Booked"),
           type: loan.loan_type,

@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import Navbar from "@/components/Navbar";
 import AppShellLoading from "@/components/AppShellLoading";
+import { MINISTRY_OPTIONS } from "@/lib/utils/ministries";
 import {
   RiUserLine,
   RiLockLine,
   RiCheckLine,
   RiMailLine,
   RiNotificationOffLine,
+  RiEmotionLine,
+  RiCloseLine,
 } from "react-icons/ri";
 
 export default function ProfilePage() {
@@ -28,12 +31,17 @@ export default function ProfilePage() {
   const [passwordMsg, setPasswordMsg] = useState("");
   const [profileErr, setProfileErr] = useState("");
   const [passwordErr, setPasswordErr] = useState("");
+  const [ministry, setMinistry] = useState("");
+  const [ministryIsOther, setMinistryIsOther] = useState(false);
   const [muteEmails, setMuteEmails] = useState(false);
   const [muteTelegram, setMuteTelegram] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [unlinkLoading, setUnlinkLoading] = useState(false);
   const [linkStatusLoading, setLinkStatusLoading] = useState(false);
+  const [profileEmoji, setProfileEmoji] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiSaving, setEmojiSaving] = useState(false);
 
   const loadProfile = useCallback(
     async (options = {}) => {
@@ -54,8 +62,12 @@ export default function ProfilePage() {
       setDisplayName(data.profile.display_name);
       setEmail(data.profile.email || "");
       setTelegramHandle((data.profile.telegram_handle || "").replace(/^@/, ""));
+      const m = data.profile.ministry || "";
+      setMinistry(m);
+      setMinistryIsOther(m !== "" && !MINISTRY_OPTIONS.includes(m));
       setMuteEmails(!!data.profile.mute_emails);
       setMuteTelegram(!!data.profile.mute_telegram);
+      setProfileEmoji(data.profile.profile_emoji || null);
       return data.profile;
     },
     [user],
@@ -112,8 +124,10 @@ export default function ProfilePage() {
           display_name: displayName,
           email: email.trim() || null,
           telegram_handle: cleanHandle,
+          ministry: ministry.trim() || null,
           mute_emails: muteEmails,
           mute_telegram: muteTelegram,
+          profile_emoji: profileEmoji || "",
         }),
       });
       const data = await res.json();
@@ -242,17 +256,27 @@ export default function ProfilePage() {
                   width: 64,
                   height: 64,
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg, var(--accent), #818cf8)",
+                  background: profile.role === "admin"
+                    ? "linear-gradient(135deg, #f59e0b, #ef4444)"
+                    : profile.role === "tech"
+                      ? "linear-gradient(135deg, #10b981, #059669)"
+                      : "linear-gradient(135deg, var(--accent), #818cf8)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 28,
+                  fontSize: profileEmoji ? 34 : 28,
                   fontWeight: 700,
                   color: "white",
                   flexShrink: 0,
+                  cursor: "pointer",
+                  transition: "transform 0.15s ease",
                 }}
+                title="Click to change avatar emoji"
+                onClick={() => setShowEmojiPicker(v => !v)}
+                onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.08)"}
+                onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
               >
-                {profile.display_name[0].toUpperCase()}
+                {profileEmoji || profile.display_name[0].toUpperCase()}
               </div>
               <div style={{ flex: 1 }}>
                 <h2
@@ -272,11 +296,10 @@ export default function ProfilePage() {
                   @{profile.username}
                 </p>
                 <span
-                  className={`badge ${profile.role === "admin" ? "badge-warning" : "badge-info"}`}
+                  className={`badge ${profile.role === "admin" ? "badge-warning" : profile.role === "tech" ? "badge-success" : "badge-info"}`}
                 >
-                  {profile.role === "admin" ? "🛡️ Admin" : "👤 User"}
-                </span>
-              </div>
+                  {profile.role === "admin" ? "🛡️ Admin" : profile.role === "tech" ? "🔧 Tech" : "👤 User"}
+                </span>              </div>
             </div>
             <p
               className="profile-summary-meta"
@@ -296,6 +319,187 @@ export default function ProfilePage() {
                 day: "numeric",
               })}
             </p>
+          </div>
+        )}
+
+        {/* Emoji Picker */}
+        {showEmojiPicker && profile && (
+          <div
+            className="glass-card profile-emoji-picker-card"
+            style={{
+              padding: 20,
+              marginBottom: 28,
+              animation: "fadeIn 0.2s ease",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 14,
+              }}
+            >
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <RiEmotionLine /> Choose Avatar Emoji
+              </h3>
+              <button
+                type="button"
+                aria-label="Close emoji picker"
+                onClick={() => setShowEmojiPicker(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  fontSize: 18,
+                  padding: 4,
+                }}
+              >
+                <RiCloseLine />
+              </button>
+            </div>
+            <div
+              className="emoji-grid"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(42px, 1fr))",
+                gap: 6,
+                maxHeight: 260,
+                overflowY: "auto",
+                padding: "4px 0",
+              }}
+            >
+              {[
+                "😀","😎","🤩","🥳","😇","🤓","🧐","😈",
+                "🦊","🐱","🐶","🐼","🦁","🐯","🐸","🦄",
+                "🔥","⚡","✨","💫","🌟","🌈","🎯","🎨",
+                "💎","🏆","👑","🎭","🎪","🎬","🎮","🎲",
+                "🚀","🛸","🌍","🌙","☀️","⭐","🍀","🌸",
+                "🎵","🎶","🎤","🎸","🥁","🎹","🎺","🎻",
+                "❤️","🧡","💛","💚","💙","💜","🖤","🤍",
+                "🍕","🍔","🌮","🍩","🧁","🍰","🍦","🍣",
+                "⚽","🏀","🎾","🏐","🏈","⚾","🎳","🏓",
+                "🧸","🎁","🎈","🪄","🔮","🧲","💡","🔑",
+              ].map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={async () => {
+                    setProfileEmoji(emoji);
+                    setEmojiSaving(true);
+                    try {
+                      const res = await fetch("/api/profile", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "update_profile",
+                          display_name: displayName,
+                          telegram_handle: telegramHandle.trim().replace(/^@/, ""),
+                          email: email.trim() || null,
+                          ministry: ministry.trim() || null,
+                          mute_emails: muteEmails,
+                          mute_telegram: muteTelegram,
+                          profile_emoji: emoji,
+                        }),
+                      });
+                      if (res.ok) {
+                        toast.success(`Avatar set to ${emoji}`);
+                        checkAuth();
+                      } else {
+                        const data = await res.json().catch(() => ({}));
+                        toast.error(data.error || "Failed to update emoji");
+                        setProfileEmoji(profile.profile_emoji || null);
+                      }
+                    } catch {
+                      toast.error("Network error");
+                      setProfileEmoji(profile.profile_emoji || null);
+                    } finally {
+                      setEmojiSaving(false);
+                    }
+                  }}
+                  disabled={emojiSaving}
+                  style={{
+                    fontSize: 24,
+                    width: 42,
+                    height: 42,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: profileEmoji === emoji
+                      ? "rgba(99, 102, 241, 0.2)"
+                      : "rgba(255,255,255,0.04)",
+                    border: profileEmoji === emoji
+                      ? "2px solid var(--accent)"
+                      : "1px solid var(--border)",
+                    borderRadius: 10,
+                    cursor: emojiSaving ? "wait" : "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            {profileEmoji && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={emojiSaving}
+                onClick={async () => {
+                  setProfileEmoji(null);
+                  setEmojiSaving(true);
+                  try {
+                    const res = await fetch("/api/profile", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        action: "update_profile",
+                        display_name: displayName,
+                        telegram_handle: telegramHandle.trim().replace(/^@/, ""),
+                        email: email.trim() || null,
+                        ministry: ministry.trim() || null,
+                        mute_emails: muteEmails,
+                        mute_telegram: muteTelegram,
+                        profile_emoji: "",
+                      }),
+                    });
+                    if (res.ok) {
+                      toast.success("Avatar reset to initial");
+                      checkAuth();
+                    } else {
+                      const data = await res.json().catch(() => ({}));
+                      toast.error(data.error || "Failed to reset emoji");
+                      setProfileEmoji(profile.profile_emoji || null);
+                    }
+                  } catch {
+                    toast.error("Network error");
+                    setProfileEmoji(profile.profile_emoji || null);
+                  } finally {
+                    setEmojiSaving(false);
+                  }
+                }}
+                style={{
+                  marginTop: 12,
+                  fontSize: 13,
+                  padding: "8px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <RiCloseLine /> Remove Emoji (use initial)
+              </button>
+            )}
           </div>
         )}
 
@@ -442,6 +646,75 @@ export default function ProfilePage() {
                   boxSizing: "border-box",
                 }}
               />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label
+                className="profile-label"
+                style={{
+                  display: "block",
+                  marginBottom: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                Ministry / Department{" "}
+                <span style={{ fontWeight: 400, fontSize: 12 }}>(optional)</span>
+              </label>
+              <select
+                className="profile-input"
+                value={ministryIsOther ? "Others" : ministry}
+                onChange={(e) => {
+                  if (e.target.value === "Others") {
+                    setMinistryIsOther(true);
+                    setMinistry("");
+                  } else {
+                    setMinistryIsOther(false);
+                    setMinistry(e.target.value);
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  padding: "14px 18px",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                  color: ministry || ministryIsOther ? "var(--text-primary)" : "var(--text-muted)",
+                  fontSize: 16,
+                  outline: "none",
+                  boxSizing: "border-box",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="">— Select ministry —</option>
+                {MINISTRY_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+                <option value="Others">Others</option>
+              </select>
+              {ministryIsOther && (
+                <input
+                  className="profile-input"
+                  type="text"
+                  value={ministry}
+                  onChange={(e) => setMinistry(e.target.value)}
+                  placeholder="Enter your ministry or department"
+                  autoCapitalize="words"
+                  style={{
+                    width: "100%",
+                    padding: "14px 18px",
+                    marginTop: 10,
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    color: "var(--text-primary)",
+                    fontSize: 16,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              )}
             </div>
 
             <div

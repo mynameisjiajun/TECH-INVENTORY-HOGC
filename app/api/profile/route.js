@@ -23,7 +23,7 @@ async function getProfileRow(userId) {
   const fullSelect = await supabase
     .from("users")
     .select(
-      "id, username, display_name, role, email, telegram_chat_id, telegram_handle, mute_emails, mute_telegram, created_at",
+      "id, username, display_name, role, email, telegram_chat_id, telegram_handle, ministry, mute_emails, mute_telegram, profile_emoji, created_at",
     )
     .eq("id", userId)
     .single();
@@ -39,7 +39,7 @@ async function getProfileRow(userId) {
   const legacySelect = await supabase
     .from("users")
     .select(
-      "id, username, display_name, role, email, telegram_chat_id, mute_emails, mute_telegram, created_at",
+      "id, username, display_name, role, email, telegram_chat_id, ministry, mute_emails, mute_telegram, profile_emoji, created_at",
     )
     .eq("id", userId)
     .single();
@@ -100,8 +100,10 @@ export async function POST(request) {
     display_name,
     email,
     telegram_handle,
+    ministry,
     mute_emails,
     mute_telegram,
+    profile_emoji,
     current_password,
     new_password,
   } = await request.json();
@@ -115,6 +117,7 @@ export async function POST(request) {
     }
     const cleanEmail = email ? email.trim() : null;
     const cleanTelegramHandle = normalizeTelegramHandle(telegram_handle);
+    const cleanMinistry = ministry ? ministry.trim() : null;
     if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return NextResponse.json(
         { error: "Invalid email format" },
@@ -123,13 +126,19 @@ export async function POST(request) {
     }
 
     const trimmedDisplayName = display_name.trim();
-    const { error: updateError } = await updateProfileRow(user.id, {
+    const cleanEmoji = typeof profile_emoji === "string" ? profile_emoji.trim() || null : undefined;
+    const updatePayload = {
       display_name: trimmedDisplayName,
       email: cleanEmail,
       telegram_handle: cleanTelegramHandle,
+      ministry: cleanMinistry,
       mute_emails: mute_emails === true,
       mute_telegram: mute_telegram === true,
-    });
+    };
+    if (cleanEmoji !== undefined) {
+      updatePayload.profile_emoji = cleanEmoji;
+    }
+    const { error: updateError } = await updateProfileRow(user.id, updatePayload);
     if (updateError) {
       return NextResponse.json(
         {
@@ -142,10 +151,11 @@ export async function POST(request) {
       );
     }
 
-    // Re-issue JWT so navbar reflects new display_name immediately
     const updatedToken = createToken({
       ...user,
       display_name: trimmedDisplayName,
+      ministry: cleanMinistry,
+      profile_emoji: cleanEmoji !== undefined ? cleanEmoji : user.profile_emoji,
     });
     const response = NextResponse.json({ message: "Profile updated!" });
     const cookieOpts = getTokenCookieOptions();

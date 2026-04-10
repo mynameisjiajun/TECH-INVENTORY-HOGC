@@ -274,6 +274,14 @@ export default function LoginPage() {
           <p className="auth-footer">
             Don&apos;t have an account? <Link href="/register">Register</Link>
           </p>
+          <p className="auth-footer" style={{ marginTop: 8 }}>
+            Need to return a guest loan? <Link href="/guest-return">Guest Return Portal</Link>
+          </p>
+          <p className="auth-footer" style={{ marginTop: 8 }}>
+            <Link href="/home" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+              ← Back to Home
+            </Link>
+          </p>
         </div>
       </div>
       {showRickRoll && (

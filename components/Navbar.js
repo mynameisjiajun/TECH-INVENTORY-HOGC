@@ -281,7 +281,13 @@ export default function Navbar() {
   const accountMeta = user
     ? `@${user.username}${user.role === "admin" ? " · admin" : ""}`
     : "Browse first, log in when you need it";
-  const avatarLabel = displayName[0]?.toUpperCase() || "G";
+  const profileEmoji = user?.profile_emoji || null;
+  const avatarLabel = profileEmoji || displayName[0]?.toUpperCase() || "G";
+  const avatarGradient = user?.role === "admin"
+    ? "linear-gradient(135deg, #f59e0b, #ef4444)"
+    : user?.role === "tech"
+      ? "linear-gradient(135deg, #10b981, #059669)"
+      : "linear-gradient(135deg, var(--accent), #818cf8)";
 
   const timeAgo = (dateStr) => {
     const d = new Date(dateStr);
@@ -361,60 +367,65 @@ export default function Navbar() {
                         )}
                       </div>
                     </div>
-                    {notifications.length === 0 ? (
-                      <div
-                        style={{
-                          padding: 24,
-                          textAlign: "center",
-                          color: "var(--text-muted)",
-                          fontSize: 13,
-                        }}
-                      >
-                        No notifications yet
-                      </div>
-                    ) : (
-                      notifications.map((n) => (
+                    <div className="notification-dropdown-list">
+                      {notifications.length === 0 ? (
                         <div
-                          key={n.id}
-                          className={`notification-item ${n.read ? "" : "unread"}`}
-                          onClick={() => {
-                            if (!n.read) markOneRead(n.id);
-                            if (n.link) router.push(n.link);
-                            setShowNotifs(false);
+                          style={{
+                            padding: 24,
+                            textAlign: "center",
+                            color: "var(--text-muted)",
+                            fontSize: 13,
                           }}
                         >
-                          <div>
-                            <p>{n.message}</p>
-                            <span className="notif-time">
-                              {timeAgo(n.created_at)}
-                            </span>
-                          </div>
+                          No notifications yet
                         </div>
-                      ))
-                    )}
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            className={`notification-item ${n.read ? "" : "unread"}`}
+                            onClick={() => {
+                              if (!n.read) markOneRead(n.id);
+                              if (n.link) router.push(n.link);
+                              setShowNotifs(false);
+                            }}
+                          >
+                            <div>
+                              <p>{n.message}</p>
+                              <span className="notif-time">
+                                {timeAgo(n.created_at)}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                     {notifPermission !== "granted" &&
                       typeof Notification !== "undefined" && (
-                        <button
-                          onClick={async () => {
-                            const perm = await Notification.requestPermission();
-                            setNotifPermission(perm);
-                          }}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            padding: "10px",
-                            background: "rgba(99,102,241,0.1)",
-                            border: "none",
-                            borderTop: "1px solid var(--border)",
-                            color: "var(--accent)",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            fontFamily: "inherit",
-                          }}
-                        >
-                          🔔 Enable Push Notifications
-                        </button>
+                        <div className="notification-dropdown-footer">
+                          <button
+                            onClick={async () => {
+                              const perm = await Notification.requestPermission();
+                              setNotifPermission(perm);
+                            }}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              padding: "10px",
+                              background: "rgba(99,102,241,0.1)",
+                              border: "none",
+                              borderTop: "1px solid var(--border)",
+                              color: "var(--accent)",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                              borderRadius: "0 0 12px 12px",
+                            }}
+                          >
+                            🔔 Enable Push Notifications
+                          </button>
+                        </div>
                       )}
                   </div>
                 )}
@@ -430,7 +441,7 @@ export default function Navbar() {
                   setShowNotifs(false);
                 }}
               >
-                <div className="user-avatar">{avatarLabel}</div>
+                <div className="user-avatar" style={{ background: avatarGradient, fontSize: profileEmoji ? 17 : undefined }}>{avatarLabel}</div>
               </button>
               {showAccountMenu && (
                 <div className="account-menu-dropdown">
@@ -441,7 +452,7 @@ export default function Navbar() {
                       setShowAccountMenu(false);
                     }}
                   >
-                    <div className="user-avatar account-menu-avatar">
+                    <div className="user-avatar account-menu-avatar" style={{ background: avatarGradient, fontSize: profileEmoji ? 17 : undefined }}>
                       {avatarLabel}
                     </div>
                     <div className="account-menu-copy">

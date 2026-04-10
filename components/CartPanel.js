@@ -3,6 +3,7 @@ import { useCart } from "@/lib/context/CartContext";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useToast } from "@/lib/context/ToastContext";
 import { useState, useEffect } from "react";
+import { MINISTRY_OPTIONS } from "@/lib/utils/ministries";
 import { useRouter } from "next/navigation";
 import {
   RiCloseLine,
@@ -49,6 +50,7 @@ export default function CartPanel() {
     end_date: "",
     location: "",
   });
+  const [departmentIsOther, setDepartmentIsOther] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -75,13 +77,15 @@ export default function CartPanel() {
   useEffect(() => {
     if (modifyingLoan) {
       setTechLoanType(modifyingLoan.loan_type);
+      const dept = modifyingLoan.department || "";
+      setDepartmentIsOther(dept !== "" && !MINISTRY_OPTIONS.includes(dept));
       setFormData({
         guest_name: "",
         telegram_handle: "",
         email: "",
         purpose: modifyingLoan.purpose || "",
         remarks: modifyingLoan.remarks || "",
-        department: modifyingLoan.department || "",
+        department: dept,
         start_date: modifyingLoan.start_date || "",
         end_date: modifyingLoan.end_date || "",
         location: modifyingLoan.location || "",
@@ -106,7 +110,13 @@ export default function CartPanel() {
       setTechLoanType("temporary");
     }
     if (!modifyingLoan) {
-      setFormData((prev) => ({ ...prev, start_date: today }));
+      const savedMinistry = user?.ministry || "";
+      setDepartmentIsOther(savedMinistry !== "" && !MINISTRY_OPTIONS.includes(savedMinistry));
+      setFormData((prev) => ({
+        ...prev,
+        start_date: today,
+        department: savedMinistry,
+      }));
     }
     setShowForm(true);
   };
@@ -1214,14 +1224,37 @@ export default function CartPanel() {
 
               <div className="input-group">
                 <label>Department / Ministry</label>
-                <input
-                  type="text"
-                  value={formData.department}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, department: e.target.value }))
-                  }
-                  placeholder="e.g., Projection, VP, Sound, Youth"
-                />
+                <select
+                  value={departmentIsOther ? "Others" : formData.department}
+                  onChange={(e) => {
+                    if (e.target.value === "Others") {
+                      setDepartmentIsOther(true);
+                      setFormData((p) => ({ ...p, department: "" }));
+                    } else {
+                      setDepartmentIsOther(false);
+                      setFormData((p) => ({ ...p, department: e.target.value }));
+                    }
+                  }}
+                  style={{ width: "100%", cursor: "pointer" }}
+                >
+                  <option value="">— Select department —</option>
+                  {MINISTRY_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                  <option value="Others">Others</option>
+                </select>
+                {departmentIsOther && (
+                  <input
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, department: e.target.value }))
+                    }
+                    placeholder="Enter your department or ministry"
+                    style={{ marginTop: 8 }}
+                    autoCapitalize="words"
+                  />
+                )}
               </div>
 
               {/* Tech loan fields — only shown when tech items present */}

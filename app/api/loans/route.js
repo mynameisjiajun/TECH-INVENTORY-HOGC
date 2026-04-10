@@ -238,6 +238,75 @@ export async function GET(request) {
     }
   }
 
+  if (view === "all" || view === "active") {
+    let gq = supabase
+      .from("guest_borrow_requests")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(MAX_LOAN_PAGE_SIZE);
+
+    if (view === "active") {
+      gq = gq.eq("status", "approved");
+    } else if (status) {
+      if (isOverdueFilter) {
+        const today = getTodaySingaporeDateString();
+        gq = gq
+          .eq("status", "approved")
+          .eq("loan_type", "temporary")
+          .lt("end_date", today);
+      } else {
+        gq = gq.eq("status", status);
+      }
+    }
+
+    if (dateFrom) gq = gq.gte("start_date", dateFrom);
+    if (dateTo) gq = gq.lte("start_date", dateTo);
+
+    if (sanitizedSearch) {
+      const orPattern = `*${sanitizedSearch}*`;
+      gq = gq.or(
+        `guest_name.ilike.${orPattern},telegram_handle.ilike.${orPattern},purpose.ilike.${orPattern},department.ilike.${orPattern}`,
+      );
+    }
+
+    const { data: guestRows, error: guestError } = await gq;
+    if (guestRows && guestRows.length > 0) {
+      const guestLoans = guestRows
+        .map((r) => ({
+          id: `g_${r.id}`,
+          user_id: null,
+          loan_type: r.loan_type,
+          purpose: r.purpose,
+          remarks: r.remarks,
+          department: r.department,
+          location: "Guest Request",
+          start_date: r.start_date,
+          end_date: r.end_date,
+          status: r.status,
+          admin_notes: r.admin_notes,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          requester_name: r.guest_name,
+          requester_username: null,
+          requester_telegram: r.telegram_handle,
+          items: (r.items || [])
+            .filter((i) => i.source === "tech" || !i.source) // Default to tech for legacy
+            .map((i) => ({
+              id: null,
+              loan_request_id: `g_${r.id}`,
+              item_id: i.item_id || null,
+              sheet_row: i.sheet_row || null,
+              item: i.item_name || "Unknown Item",
+              quantity: i.quantity || 1,
+            })),
+        }))
+        .filter((l) => l.items.length > 0);
+
+      loans = [...loans, ...guestLoans];
+      loans.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+  }
+
   return NextResponse.json(
     {
       loans,

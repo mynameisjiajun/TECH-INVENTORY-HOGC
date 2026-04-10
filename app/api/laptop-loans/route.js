@@ -20,6 +20,17 @@ const MAX_LOAN_PAGE_SIZE = 200;
 const AUTO_APPROVE_ADMIN_NOTE = "Auto-approved by global setting";
 const LAPTOP_LOAN_SELECT =
   "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users(display_name, username, telegram_handle)";
+const LAPTOP_LOAN_SELECT_LEGACY =
+  "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users(display_name, username)";
+
+function isMissingTelegramHandleColumn(error) {
+  const message = error?.message || "";
+  return (
+    error?.code === "42703" ||
+    message.includes("telegram_handle") ||
+    message.includes("column")
+  );
+}
 
 function sanitizeSearchTerm(value) {
   return value.replace(/[,%()]/g, " ").trim();
@@ -151,68 +162,72 @@ export async function GET(request) {
     return NextResponse.json({ count: count || 0 });
   }
 
-  let query = supabase
-    .from("laptop_loan_requests")
-    .select(LAPTOP_LOAN_SELECT, { count: "exact" })
-    .order("created_at", { ascending: false });
-
-  if (view === "active") {
-    // Team calendar visibility should only expose approved loans.
-    query = query.eq("status", "approved");
-  } else {
-    if (view !== "all" || user.role !== "admin") {
-      query = query.eq("user_id", user.id);
-    }
-    if (isOverdueFilter) {
-      const today = getTodaySingaporeDateString();
-      query = query
-        .eq("status", "approved")
-        .eq("loan_type", "temporary")
-        .not("end_date", "is", null)
-        .lt("end_date", today);
-    } else if (status) {
-      query = query.eq("status", status);
-    }
-  }
-
-  if (dateFrom) query = query.gte("start_date", dateFrom);
-  if (dateTo) query = query.lte("start_date", dateTo);
-
+  // Pre-compute search clauses (async) before building the query so we can
+  // reuse them if we need to retry with the legacy select string.
+  let searchClauses = null;
   if (sanitizedSearch) {
     const [matchingLoanIds, matchingUserIds] = await Promise.all([
       getMatchingLaptopLoanIds(sanitizedSearch),
       user ? getMatchingUserIds(sanitizedSearch) : Promise.resolve([]),
     ]);
-
     const orPattern = `*${sanitizedSearch}*`;
-    const searchClauses = [
+    searchClauses = [
       `purpose.ilike.${orPattern}`,
       `remarks.ilike.${orPattern}`,
       `department.ilike.${orPattern}`,
     ];
-
-    if (matchingLoanIds.length > 0) {
+    if (matchingLoanIds.length > 0)
       searchClauses.push(`id.in.(${matchingLoanIds.join(",")})`);
-    }
-
-    if (
-      user &&
-      (view === "all" || view === "active") &&
-      matchingUserIds.length > 0
-    ) {
+    if (user && (view === "all" || view === "active") && matchingUserIds.length > 0)
       searchClauses.push(`user_id.in.(${matchingUserIds.join(",")})`);
-    }
-
-    query = query.or(searchClauses.join(","));
   }
 
-  query = query.range(offset, offset + limit - 1);
+  // Build a filtered query from a given select string (reused for legacy retry).
+  const buildQuery = (selectStr) => {
+    let q = supabase
+      .from("laptop_loan_requests")
+      .select(selectStr, { count: "exact" })
+      .order("created_at", { ascending: false });
 
-  const { data: loanRows, error, count } = await query;
+    if (view === "active") {
+      q = q.eq("status", "approved");
+    } else {
+      if (view !== "all" || user.role !== "admin") q = q.eq("user_id", user.id);
+      if (isOverdueFilter) {
+        const today = getTodaySingaporeDateString();
+        q = q
+          .eq("status", "approved")
+          .eq("loan_type", "temporary")
+          .not("end_date", "is", null)
+          .lt("end_date", today);
+      } else if (status) {
+        q = q.eq("status", status);
+      }
+    }
+
+    if (dateFrom) q = q.gte("start_date", dateFrom);
+    if (dateTo) q = q.lte("start_date", dateTo);
+    if (searchClauses) q = q.or(searchClauses.join(","));
+
+    return q.range(offset, offset + limit - 1);
+  };
+
+  let { data: loanRows, error, count } = await buildQuery(LAPTOP_LOAN_SELECT);
+
+  // If telegram_handle column doesn't exist yet, retry with the legacy select.
+  if (error && isMissingTelegramHandleColumn(error)) {
+    const legacyResult = await buildQuery(LAPTOP_LOAN_SELECT_LEGACY);
+    if (legacyResult.error)
+      return NextResponse.json({ error: legacyResult.error.message }, { status: 500 });
+    loanRows = legacyResult.data;
+    count = legacyResult.count;
+    error = null;
+  }
+
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const loans = (loanRows || []).map((lr) => ({
+  let loans = (loanRows || []).map((lr) => ({
     ...lr,
     requester_name: lr.users?.display_name || null,
     requester_username: lr.users?.username || null,
@@ -239,6 +254,79 @@ export async function GET(request) {
       byLoan.get(item.loan_request_id).push(item);
     }
     for (const loan of loans) loan.laptops = byLoan.get(loan.id) || [];
+  }
+
+  if (view === "all" || view === "active") {
+    let gq = supabase
+      .from("guest_borrow_requests")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(MAX_LOAN_PAGE_SIZE);
+
+    if (view === "active") {
+      gq = gq.eq("status", "approved");
+    } else if (status) {
+      if (isOverdueFilter) {
+        const today = getTodaySingaporeDateString();
+        gq = gq
+          .eq("status", "approved")
+          .eq("loan_type", "temporary")
+          .lt("end_date", today);
+      } else {
+        gq = gq.eq("status", status);
+      }
+    }
+
+    if (dateFrom) gq = gq.gte("start_date", dateFrom);
+    if (dateTo) gq = gq.lte("start_date", dateTo);
+
+    if (sanitizedSearch) {
+      const orPattern = `*${sanitizedSearch}*`;
+      gq = gq.or(
+        `guest_name.ilike.${orPattern},telegram_handle.ilike.${orPattern},purpose.ilike.${orPattern},department.ilike.${orPattern}`,
+      );
+    }
+
+    const { data: guestRows, error: guestError } = await gq;
+    if (guestRows && guestRows.length > 0) {
+      const guestLoans = guestRows
+        .map((r) => ({
+          id: `g_${r.id}`,
+          user_id: null,
+          loan_type: r.loan_type,
+          purpose: r.purpose,
+          remarks: r.remarks,
+          department: r.department,
+          location: "Guest Request",
+          start_date: r.start_date,
+          end_date: r.end_date,
+          status: r.status,
+          admin_notes: r.admin_notes,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          requester_name: r.guest_name,
+          requester_username: null,
+          requester_telegram: r.telegram_handle,
+          _source: "laptop",
+          laptops: (r.items || [])
+            .filter((i) => i.source === "laptop")
+            .map((i) => ({
+              id: null,
+              loan_request_id: `g_${r.id}`,
+              laptop_id: i.laptop_id,
+              laptops: {
+                id: i.laptop_id,
+                name: i.item_name || "Unknown Laptop",
+                screen_size: "",
+                cpu: "",
+              },
+            })),
+        }))
+        .filter((l) => l.laptops.length > 0);
+
+      loans = [...loans, ...guestLoans];
+      loans.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
   }
 
   return NextResponse.json({

@@ -649,6 +649,34 @@ html[data-shell="pwa"] .notification-dropdown {
   background: #10182c;
 }
 
+html[data-shell="pwa"] .notification-dropdown-header {
+  padding: 10px 14px;
+}
+
+html[data-shell="pwa"] .notification-dropdown-header span {
+  font-size: 13px;
+}
+
+html[data-shell="pwa"] .notification-dropdown-header .btn {
+  font-size: 10px;
+  padding: 4px 8px;
+}
+
+html[data-shell="pwa"] .notification-item {
+  padding: 10px 14px;
+  gap: 8px;
+}
+
+html[data-shell="pwa"] .notification-item p {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+html[data-shell="pwa"] .notification-item .notif-time {
+  font-size: 9px;
+  margin-top: 2px;
+}
+
 html[data-shell="pwa"] .mobile-nav {
   position: fixed;
   left: 0;

@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RiServerLine, RiKeyLine } from "react-icons/ri";
+import { MINISTRY_OPTIONS } from "@/lib/utils/ministries";
 
 export default function RegisterPage() {
   const { register, user } = useAuth();
@@ -16,7 +17,9 @@ export default function RegisterPage() {
     email: "",
     invite_code: "",
     telegram_handle: "",
+    ministry: "",
   });
+  const [ministryIsOther, setMinistryIsOther] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -55,6 +58,7 @@ export default function RegisterPage() {
       formData.invite_code,
       formData.email,
       rawHandle,
+      formData.ministry.trim() || null,
     );
     if (result.ok) {
       router.push("/home");
@@ -152,6 +156,38 @@ export default function RegisterPage() {
             >
               Required for loan notifications and reminders
             </span>
+          </div>
+          <div className="input-group">
+            <label>Ministry / Department</label>
+            <select
+              value={ministryIsOther ? "Others" : formData.ministry}
+              onChange={(e) => {
+                if (e.target.value === "Others") {
+                  setMinistryIsOther(true);
+                  setFormData((p) => ({ ...p, ministry: "" }));
+                } else {
+                  setMinistryIsOther(false);
+                  setFormData((p) => ({ ...p, ministry: e.target.value }));
+                }
+              }}
+              style={{ width: "100%", appearance: "none" }}
+            >
+              <option value="">— Select your ministry —</option>
+              {MINISTRY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+              <option value="Others">Others</option>
+            </select>
+            {ministryIsOther && (
+              <input
+                type="text"
+                value={formData.ministry}
+                onChange={update("ministry")}
+                placeholder="Enter your ministry or department"
+                autoCapitalize="words"
+                style={{ marginTop: 8 }}
+              />
+            )}
           </div>
           <div className="input-group">
             <label>Username</label>

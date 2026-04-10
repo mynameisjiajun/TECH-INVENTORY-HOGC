@@ -86,11 +86,23 @@ export async function POST(request) {
         );
       }
 
+      // Intercept guest IDs
+      const guestIds = loan_ids.filter((id) => typeof id === "string" && id.startsWith("g_"));
+      const regularIds = loan_ids.filter((id) => !(typeof id === "string" && id.startsWith("g_")));
+
+      for (const gid of guestIds) {
+        await handleGuestAction({ db, action: "return", loan_id: Number.parseInt(gid.replace("g_", ""), 10), admin_notes, user });
+      }
+
+      if (regularIds.length === 0) {
+        return NextResponse.json({ message: "Guest loans returned" });
+      }
+
       // Batch fetch all approved loans in one query
       const { data: approvedLoans } = await supabase
         .from("loan_requests")
         .select("id, user_id")
-        .in("id", loan_ids)
+        .in("id", regularIds)
         .eq("status", "approved");
 
       if (!approvedLoans || approvedLoans.length === 0) {
@@ -195,11 +207,23 @@ export async function POST(request) {
         );
       }
 
+      // Intercept guest IDs
+      const guestIds = loan_ids.filter((id) => typeof id === "string" && id.startsWith("g_"));
+      const regularIds = loan_ids.filter((id) => !(typeof id === "string" && id.startsWith("g_")));
+
+      for (const gid of guestIds) {
+        await handleGuestAction({ db, action: "approve", loan_id: Number.parseInt(gid.replace("g_", ""), 10), admin_notes: "", user });
+      }
+
+      if (regularIds.length === 0) {
+        return NextResponse.json({ message: "Guest loans approved" });
+      }
+
       // Batch fetch all pending loans
       const { data: pendingLoans } = await supabase
         .from("loan_requests")
         .select(TECH_LOAN_ADMIN_FIELDS)
-        .in("id", loan_ids)
+        .in("id", regularIds)
         .eq("status", "pending");
 
       if (!pendingLoans || pendingLoans.length === 0) {
@@ -344,7 +368,18 @@ export async function POST(request) {
     }
 
     // ===== SINGLE LOAN ACTIONS =====
-    const { loan_id, admin_notes } = body;
+    let { loan_id, admin_notes } = body;
+    let isGuest = false;
+
+    if (typeof loan_id === "string" && loan_id.startsWith("g_")) {
+      isGuest = true;
+      loan_id = Number.parseInt(loan_id.replace("g_", ""), 10);
+    }
+
+    if (isGuest) {
+      return await handleGuestAction({ db, action, loan_id, admin_notes, user });
+    }
+
     const { data: loan } = await supabase
       .from("loan_requests")
       .select(TECH_LOAN_ADMIN_FIELDS)
@@ -725,6 +760,102 @@ export async function POST(request) {
   }
 }
 
+async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
+  const { data: request, error: reqErr } = await supabase
+    .from("guest_borrow_requests")
+    .select("*")
+    .eq("id", loan_id)
+    .single();
+
+  if (reqErr) {
+    console.error("Guest request fetch error:", reqErr);
+  }
+
+  if (!request) return NextResponse.json({ error: "Guest request not found: " + (reqErr?.message || "") }, { status: 404 });
+
+  if (action === "approve") {
+    if (request.status !== "pending") return NextResponse.json({ error: "Already processed" }, { status: 400 });
+    
+    // Process tech items
+    const approveChanges = [];
+    const techItems = (request.items || []).filter(i => i.source === "tech" || !i.source);
+
+    for (const li of techItems) {
+      if (!li.sheet_row && !li.item_id) continue;
+      const si = li.sheet_row
+        ? db.prepare("SELECT * FROM storage_items WHERE sheet_row = ?").get(li.sheet_row)
+        : db.prepare("SELECT * FROM storage_items WHERE id = ?").get(li.item_id);
+
+      if (!si) throw new Error(`Item not found: ${li.item_name || 'unknown'}`);
+      if (si.current < li.quantity) throw new Error(`Not enough stock for "${si.item}". Available: ${si.current}`);
+
+      const result = db.prepare("UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?")
+        .run(li.quantity, si.id, li.quantity);
+      if (result.changes === 0) throw new Error("Stock changed during approval — try again");
+      
+      approveChanges.push({ sheetRow: si.sheet_row, delta: -li.quantity });
+    }
+
+    // Since laptops are handled via temporary overlaps naturally without changing laptops tables
+    // updating their status to approved handles the availability for them. No stock update needed.
+    
+    // We update the request itself
+    await supabase.from("guest_borrow_requests").update({ status: "approved", admin_notes: admin_notes || "", updated_at: new Date().toISOString() }).eq("id", loan_id);
+    
+    // Post to google sheets
+    if (approveChanges.length > 0) await syncAuthoritativeStockToSheets(db, approveChanges);
+    
+    // Log
+    await supabase.from("audit_log").insert({ user_id: user.id, action: "approve", target_type: "guest_request", target_id: loan_id, details: `Approved guest loan. ${admin_notes || ""}` });
+
+    invalidateAll();
+    return NextResponse.json({ message: "Guest loan approved" });
+  }
+
+  if (action === "return") {
+    if (request.status !== "approved") return NextResponse.json({ error: "Not approved" }, { status: 400 });
+    
+    const returnChanges = [];
+    const techItems = (request.items || []).filter(i => i.source === "tech" || !i.source);
+
+    for (const li of techItems) {
+      if (!li.sheet_row && !li.item_id) continue;
+      const si = li.sheet_row
+        ? db.prepare("SELECT id, sheet_row FROM storage_items WHERE sheet_row = ?").get(li.sheet_row)
+        : db.prepare("SELECT id, sheet_row FROM storage_items WHERE id = ?").get(li.item_id);
+
+      if (si) {
+        db.prepare("UPDATE storage_items SET current = current + ? WHERE id = ?").run(li.quantity, si.id);
+        returnChanges.push({ sheetRow: si.sheet_row, delta: li.quantity });
+      }
+    }
+
+    await supabase.from("guest_borrow_requests").update({ status: "returned", admin_notes: admin_notes || "Items returned", updated_at: new Date().toISOString() }).eq("id", loan_id);
+    if (returnChanges.length > 0) await syncAuthoritativeStockToSheets(db, returnChanges);
+    await supabase.from("audit_log").insert({ user_id: user.id, action: "return", target_type: "guest_request", target_id: loan_id, details: `Items returned to stock. ${admin_notes || ""}` });
+
+    invalidateAll();
+    return NextResponse.json({ message: "Guest items returned to stock" });
+  }
+
+  if (action === "reject") {
+    if (request.status !== "pending") return NextResponse.json({ error: "Already processed" }, { status: 400 });
+    await supabase.from("guest_borrow_requests").update({ status: "rejected", admin_notes: admin_notes || "", updated_at: new Date().toISOString() }).eq("id", loan_id);
+    await supabase.from("audit_log").insert({ user_id: user.id, action: "reject", target_type: "guest_request", target_id: loan_id, details: `Rejected guest loan. ${admin_notes || ""}` });
+    invalidateAll();
+    return NextResponse.json({ message: "Guest request rejected" });
+  }
+
+  if (action === "delete") {
+    await supabase.from("guest_borrow_requests").delete().eq("id", loan_id);
+    await supabase.from("audit_log").insert({ user_id: user.id, action: "delete", target_type: "guest_request", target_id: loan_id, details: "Deleted guest request" });
+    invalidateAll();
+    return NextResponse.json({ message: "Guest request deleted" });
+  }
+
+  return NextResponse.json({ error: "Unsupported guest action" }, { status: 400 });
+}
+
 // GET: dashboard stats + active loans + due date warnings
 export async function GET(request) {
   const requestStartedAt = Date.now();
@@ -952,7 +1083,82 @@ export async function GET(request) {
     laptop_loan_items: undefined,
   }));
 
-  const mergedActiveLoans = [...formattedLoans, ...formattedLaptopLoans].sort(
+  // Fetch active guest borrow requests for the calendar
+  const { data: activeGuestRequests } = await supabase
+    .from("guest_borrow_requests")
+    .select("*")
+    .in("status", ["approved", "pending"])
+    .order("start_date", { ascending: true })
+    .limit(ACTIVE_LOANS_DASHBOARD_LIMIT);
+
+  const formattedGuestLoans = (activeGuestRequests || []).flatMap((r) => {
+    const techItems = (r.items || [])
+      .filter((i) => i.source === "tech" || !i.source)
+      .map((i) => ({
+        id: null,
+        item: i.item_name || "Unknown Item",
+        quantity: i.quantity || 1,
+      }));
+    const laptopItems = (r.items || [])
+      .filter((i) => i.source === "laptop")
+      .map((i) => ({
+        id: null,
+        item: i.item_name || "Unknown Laptop",
+        quantity: 1,
+      }));
+
+    const result = [];
+
+    if (techItems.length > 0) {
+      result.push({
+        id: `g_${r.id}`,
+        user_id: null,
+        loan_type: r.loan_type,
+        purpose: r.purpose,
+        remarks: r.remarks,
+        department: r.department,
+        location: "Guest Request",
+        start_date: r.start_date,
+        end_date: r.end_date,
+        status: r.status,
+        admin_notes: r.admin_notes,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        requester_name: r.guest_name,
+        requester_username: null,
+        requester_telegram: r.telegram_handle,
+        _loanKind: "tech",
+        items: techItems,
+      });
+    }
+
+    if (laptopItems.length > 0) {
+      result.push({
+        id: `g_${r.id}`,
+        user_id: null,
+        loan_type: r.loan_type,
+        purpose: r.purpose,
+        remarks: r.remarks,
+        department: r.department,
+        location: "Guest Request",
+        start_date: r.start_date,
+        end_date: r.end_date,
+        status: r.status,
+        admin_notes: r.admin_notes,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        requester_name: r.guest_name,
+        requester_username: null,
+        requester_telegram: r.telegram_handle,
+        _loanKind: "laptop",
+        items: laptopItems,
+      });
+    }
+
+    return result;
+  });
+
+  const mergedActiveLoans = [...formattedLoans, ...formattedLaptopLoans, ...formattedGuestLoans].sort(
     (a, b) => new Date(a.start_date) - new Date(b.start_date),
   );
 

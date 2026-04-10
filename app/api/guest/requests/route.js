@@ -589,7 +589,7 @@ export async function POST(request) {
       .from("guest_borrow_requests")
       .insert({
         guest_name: guest_name.trim(),
-        telegram_handle: normalizedTelegram,
+        telegram_handle: normalizedTelegram || "",
         department: department?.trim() || null,
         email: email?.trim() || null,
         purpose: trimmedPurpose,
