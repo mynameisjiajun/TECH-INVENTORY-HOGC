@@ -717,6 +717,13 @@ function AdminPageContent() {
             refreshLoansTab();
           },
         )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "guest_borrow_requests" },
+          () => {
+            refreshLoansTab();
+          },
+        )
         .subscribe((status, err) => {
           realtimeActive = status === "SUBSCRIBED";
           if (err)

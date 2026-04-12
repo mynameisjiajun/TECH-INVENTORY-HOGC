@@ -147,8 +147,19 @@ export async function GET(request) {
     } else if (status) {
       cq = cq.eq("status", status);
     }
-    const { count } = await cq;
-    return NextResponse.json({ count: count || 0 });
+    const [{ count: techCount }, { count: guestCount }] = await Promise.all([
+      cq,
+      isOverdueFilter
+        ? Promise.resolve({ count: 0 })
+        : (() => {
+            let gq = supabase
+              .from("guest_borrow_requests")
+              .select("id", { count: "exact", head: true });
+            if (status) gq = gq.eq("status", status);
+            return gq;
+          })(),
+    ]);
+    return NextResponse.json({ count: (techCount || 0) + (guestCount || 0) });
   }
 
   // Build query for loan_requests

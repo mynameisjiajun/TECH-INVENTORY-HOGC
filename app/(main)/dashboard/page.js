@@ -229,19 +229,31 @@ export default function DashboardPage() {
           };
     const filter = user.role === "admin" ? undefined : `user_id=eq.${user.id}`;
 
-    const channelOpts = filter
+    const isAdmin = user.role === "admin";
+    const loanRequestsOpts = filter
       ? { event: "*", schema: "public", table: "loan_requests", filter }
       : { event: "*", schema: "public", table: "loan_requests" };
+    const laptopLoanOpts = filter
+      ? { event: "*", schema: "public", table: "laptop_loan_requests", filter }
+      : { event: "*", schema: "public", table: "laptop_loan_requests" };
 
     let channel;
     let realtimeActive = false;
     try {
-      channel = supabaseClient
+      let ch = supabaseClient
         .channel(`dashboard-${user.id}`)
-        .on("postgres_changes", channelOpts, () => {
-          fetch();
-        })
-        .subscribe((status, err) => {
+        .on("postgres_changes", loanRequestsOpts, () => { fetch(); })
+        .on("postgres_changes", laptopLoanOpts, () => { fetch(); });
+
+      if (isAdmin) {
+        ch = ch.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "guest_borrow_requests" },
+          () => { fetch(); },
+        );
+      }
+
+      channel = ch.subscribe((status, err) => {
           realtimeActive = status === "SUBSCRIBED";
           if (err)
             console.warn(
