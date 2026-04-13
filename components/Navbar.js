@@ -441,7 +441,7 @@ export default function Navbar() {
                   setShowNotifs(false);
                 }}
               >
-                <div className="user-avatar" style={{ background: avatarGradient, fontSize: profileEmoji ? 17 : undefined }}>{avatarLabel}</div>
+                <div className="user-avatar" style={{ background: avatarGradient, fontSize: profileEmoji ? 17 : undefined, lineHeight: profileEmoji ? 1 : undefined }}>{avatarLabel}</div>
               </button>
               {showAccountMenu && (
                 <div className="account-menu-dropdown">
@@ -452,7 +452,7 @@ export default function Navbar() {
                       setShowAccountMenu(false);
                     }}
                   >
-                    <div className="user-avatar account-menu-avatar" style={{ background: avatarGradient, fontSize: profileEmoji ? 17 : undefined }}>
+                    <div className="user-avatar account-menu-avatar" style={{ background: avatarGradient, fontSize: profileEmoji ? 17 : undefined, lineHeight: profileEmoji ? 1 : undefined }}>
                       {avatarLabel}
                     </div>
                     <div className="account-menu-copy">

@@ -1729,21 +1729,46 @@ function AdminPageContent() {
                         </div>
                         <div
                           className="admin-loan-card-name"
-                          style={{ fontWeight: 700, fontSize: 15 }}
+                          style={{ display: "flex", alignItems: "center", gap: 9 }}
                         >
-                          {loan.requester_name}
-                          <span
-                            className="admin-loan-card-username"
+                          <div
                             style={{
-                              fontWeight: 400,
-                              color: "var(--text-muted)",
-                              marginLeft: 8,
-                              fontSize: 12,
+                              width: 32,
+                              height: 32,
+                              borderRadius: "50%",
+                              background: loan._source === "laptop"
+                                ? "linear-gradient(135deg, #10b981, #059669)"
+                                : "linear-gradient(135deg, var(--accent), #818cf8)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: loan.requester_profile_emoji ? 16 : 13,
+                              lineHeight: loan.requester_profile_emoji ? 1 : undefined,
+                              fontWeight: 700,
+                              color: "white",
+                              flexShrink: 0,
                             }}
                           >
-                            {loan.requester_telegram ||
-                              `@${loan.requester_username}`}
-                          </span>
+                            {loan.requester_profile_emoji || (loan.requester_name?.[0]?.toUpperCase() ?? "?")}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 15 }}>
+                              {loan.requester_name}
+                            </div>
+                            {(loan.requester_telegram || loan.requester_username) && (
+                              <div
+                                className="admin-loan-card-username"
+                                style={{
+                                  fontWeight: 400,
+                                  color: "var(--text-muted)",
+                                  fontSize: 12,
+                                }}
+                              >
+                                {loan.requester_telegram ||
+                                  `@${loan.requester_username}`}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div

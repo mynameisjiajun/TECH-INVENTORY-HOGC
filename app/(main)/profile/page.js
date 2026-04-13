@@ -265,6 +265,7 @@ export default function ProfilePage() {
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: profileEmoji ? 34 : 28,
+                  lineHeight: profileEmoji ? 1 : undefined,
                   fontWeight: 700,
                   color: "white",
                   flexShrink: 0,
