@@ -2,7 +2,9 @@ import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { autoApproveTechLoan } from "@/lib/services/techLoanAutoApproval";
+import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
+import { invalidateAll } from "@/lib/utils/cache";
 import { checkRateLimit } from "@/lib/utils/rateLimit";
 import { getRequestClientIdentifier } from "@/lib/utils/request";
 import { normalizeTelegramHandle } from "@/lib/utils/telegramHandle";
@@ -616,6 +618,92 @@ export async function POST(request) {
         },
         { status: 500 },
       );
+    }
+
+    if (autoApproveGuestRequests && resolvedTechItems.length > 0) {
+      const applyStockTx = db.transaction((items) => {
+        const changes = [];
+        for (const item of items) {
+          const si = item.sheet_row
+            ? db
+                .prepare(
+                  "SELECT id, sheet_row, item, current FROM storage_items WHERE sheet_row = ?",
+                )
+                .get(item.sheet_row)
+            : db
+                .prepare(
+                  "SELECT id, sheet_row, item, current FROM storage_items WHERE id = ?",
+                )
+                .get(item.item_id);
+
+          if (!si) {
+            throw new Error(
+              `Item no longer exists in inventory: ${item.item_name}`,
+            );
+          }
+          if (si.current < item.quantity) {
+            throw new Error(
+              `Not enough stock for "${si.item}". Available: ${si.current}`,
+            );
+          }
+
+          const result = db
+            .prepare(
+              "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
+            )
+            .run(item.quantity, si.id, item.quantity);
+
+          if (result.changes === 0) {
+            throw new Error(
+              `Stock changed during approval for "${si.item}" — please retry`,
+            );
+          }
+
+          changes.push({ sheetRow: si.sheet_row, delta: -item.quantity });
+        }
+        return changes;
+      });
+
+      const rollbackStockTx = db.transaction((items) => {
+        for (const item of items) {
+          const si = item.sheet_row
+            ? db
+                .prepare("SELECT id FROM storage_items WHERE sheet_row = ?")
+                .get(item.sheet_row)
+            : db
+                .prepare("SELECT id FROM storage_items WHERE id = ?")
+                .get(item.item_id);
+          if (si) {
+            db.prepare(
+              "UPDATE storage_items SET current = current + ? WHERE id = ?",
+            ).run(item.quantity, si.id);
+          }
+        }
+      });
+
+      let approveChanges;
+      try {
+        approveChanges = applyStockTx(resolvedTechItems);
+      } catch (stockErr) {
+        await supabase
+          .from("guest_borrow_requests")
+          .delete()
+          .eq("id", guestRequest.id);
+        throw stockErr;
+      }
+
+      try {
+        await syncAuthoritativeStockToSheets(db, approveChanges);
+      } catch (sheetErr) {
+        rollbackStockTx(resolvedTechItems);
+        await supabase
+          .from("guest_borrow_requests")
+          .delete()
+          .eq("id", guestRequest.id);
+        throw sheetErr;
+      }
+
+      invalidateAll();
     }
 
     if (!autoApproveGuestRequests) {

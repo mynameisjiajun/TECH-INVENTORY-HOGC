@@ -9,16 +9,17 @@ import {
   RiArrowLeftLine,
   RiUploadCloud2Line,
   RiArrowGoBackLine,
-  RiImageLine,
+  RiShoppingCart2Line,
 } from "react-icons/ri";
 
 export default function GuestReturnPage() {
+  const [activeTab, setActiveTab] = useState("return");
   const [searchQuery, setSearchQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { toast } = useToast();
+  const toast = useToast();
 
   // Return modal state
   const [returnModalLoan, setReturnModalLoan] = useState(null);
@@ -43,7 +44,7 @@ export default function GuestReturnPage() {
       if (!res.ok) throw new Error("Search failed");
       const data = await res.json();
       setLoans(data.loans || []);
-    } catch (err) {
+    } catch {
       toast.error("Could not load your loans");
     } finally {
       setLoading(false);
@@ -55,7 +56,7 @@ export default function GuestReturnPage() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      toast.error("Please actally upload an image file");
+      toast.error("Please upload an image file");
       return;
     }
 
@@ -91,7 +92,6 @@ export default function GuestReturnPage() {
       if (!res.ok) throw new Error(data.error || "Failed to submit return");
 
       toast.success("Return submitted! Thank you.");
-      // Remove from list
       setLoans((prev) => prev.filter((l) => l.id !== returnModalLoan.id));
       setReturnModalLoan(null);
       setReturnPhoto(null);
@@ -106,8 +106,10 @@ export default function GuestReturnPage() {
   return (
     <>
       <FluidBackground />
-      <div className="page-container" style={{ paddingTop: 40, paddingBottom: 60, minHeight: "100vh" }}>
-        
+      <div
+        className="page-container"
+        style={{ paddingTop: 40, paddingBottom: 60, minHeight: "100vh" }}
+      >
         {/* Back Button */}
         <button
           onClick={() => router.push("/login")}
@@ -128,25 +130,123 @@ export default function GuestReturnPage() {
           <RiArrowLeftLine /> Back to Login
         </button>
 
-        <div className="glass-panel" style={{ padding: "40px 24px", maxWidth: 640, margin: "0 auto", textAlign: "center" }}>
-          <h1 style={{ marginBottom: 12, fontSize: 28, background: "linear-gradient(to right, var(--text-primary), #a5b4fc)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            Guest Return Portal
-          </h1>
-          <p style={{ color: "var(--text-secondary)", marginBottom: 32 }}>
-            Search your name or Telegram handle to find your active guest loans and process a return.
-          </p>
+        <div
+          className="glass-panel"
+          style={{
+            padding: "32px 24px",
+            maxWidth: 640,
+            margin: "0 auto",
+          }}
+        >
+          {/* Tab strip */}
+          <div
+            style={{
+              display: "flex",
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: 14,
+              padding: 4,
+              gap: 4,
+              marginBottom: 32,
+            }}
+          >
+            <button
+              onClick={() => router.push("/home")}
+              style={{
+                flex: 1,
+                padding: "10px 0",
+                borderRadius: 10,
+                border: "none",
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: "pointer",
+                background:
+                  activeTab === "borrow"
+                    ? "linear-gradient(135deg, #6366f1, #8b5cf6)"
+                    : "transparent",
+                color:
+                  activeTab === "borrow"
+                    ? "white"
+                    : "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
+                transition: "all 0.15s",
+              }}
+            >
+              <RiShoppingCart2Line style={{ fontSize: 16 }} />
+              Borrow
+            </button>
+            <button
+              onClick={() => setActiveTab("return")}
+              style={{
+                flex: 1,
+                padding: "10px 0",
+                borderRadius: 10,
+                border: "none",
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: "pointer",
+                background:
+                  activeTab === "return"
+                    ? "linear-gradient(135deg, #6366f1, #8b5cf6)"
+                    : "transparent",
+                color:
+                  activeTab === "return"
+                    ? "white"
+                    : "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 7,
+                transition: "all 0.15s",
+              }}
+            >
+              <RiArrowGoBackLine style={{ fontSize: 16 }} />
+              Return
+            </button>
+          </div>
 
-          <form onSubmit={handleSearch} style={{ display: "flex", gap: 12, marginBottom: 40, position: "relative" }}>
+          {/* Header */}
+          <div style={{ textAlign: "center", marginBottom: 32 }}>
+            <h1
+              style={{
+                marginBottom: 10,
+                fontSize: 26,
+                background:
+                  "linear-gradient(to right, var(--text-primary), #a5b4fc)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              Guest Return Portal
+            </h1>
+            <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
+              Search your name or Telegram handle to find your active loans and
+              process a return.
+            </p>
+          </div>
+
+          {/* Search form */}
+          <form
+            onSubmit={handleSearch}
+            style={{
+              display: "flex",
+              gap: 12,
+              marginBottom: 32,
+            }}
+          >
             <div style={{ position: "relative", flex: 1 }}>
-              <RiSearch2Line 
-                style={{ 
-                  position: "absolute", 
-                  left: 16, 
-                  top: "50%", 
-                  transform: "translateY(-50%)", 
+              <RiSearch2Line
+                style={{
+                  position: "absolute",
+                  left: 16,
+                  top: "50%",
+                  transform: "translateY(-50%)",
                   color: "var(--text-muted)",
-                  fontSize: 20
-                }} 
+                  fontSize: 20,
+                  pointerEvents: "none",
+                }}
               />
               <input
                 type="text"
@@ -157,7 +257,7 @@ export default function GuestReturnPage() {
                 style={{
                   paddingLeft: 46,
                   height: 52,
-                  fontSize: 16,
+                  fontSize: 15,
                   borderRadius: 14,
                   background: "var(--bg-secondary)",
                   border: "1px solid var(--border)",
@@ -179,56 +279,140 @@ export default function GuestReturnPage() {
             </button>
           </form>
 
-          {/* Results Area */}
-          <div style={{ textAlign: "left" }}>
+          {/* Results */}
+          <div>
             {loading ? (
-              <div style={{ textAlign: "center", color: "var(--text-muted)" }}>Searching databases...</div>
+              <div
+                style={{ textAlign: "center", color: "var(--text-muted)", padding: "24px 0" }}
+              >
+                Searching...
+              </div>
             ) : hasSearched && loans.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)", background: "var(--bg-secondary)", borderRadius: 16, border: "1px solid var(--border)" }}>
-                No active loans found matching "{searchQuery}"
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "40px 0",
+                  color: "var(--text-muted)",
+                  background: "var(--bg-secondary)",
+                  borderRadius: 16,
+                  border: "1px solid var(--border)",
+                }}
+              >
+                No active loans found matching &quot;{searchQuery}&quot;
               </div>
             ) : loans.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <h3 style={{ fontSize: 16, color: "var(--text-secondary)", marginBottom: 4 }}>
-                  Found {loans.length} active loan{loans.length !== 1 ? 's' : ''}
-                </h3>
-                {loans.map(loan => (
-                  <div key={loan.id} style={{
-                    background: "rgba(10, 16, 32, 0.4)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 16,
-                    padding: 20,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 16
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "var(--text-secondary)",
+                    marginBottom: 2,
+                  }}
+                >
+                  Found {loans.length} active loan{loans.length !== 1 ? "s" : ""}
+                </p>
+                {loans.map((loan) => (
+                  <div
+                    key={loan.id}
+                    style={{
+                      background: "rgba(10, 16, 32, 0.4)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 16,
+                      padding: 20,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 14,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 12,
+                      }}
+                    >
                       <div>
-                        <div style={{ fontWeight: 600, fontSize: 18, color: "var(--text-primary)", marginBottom: 4 }}>
-                          {loan.loan_type === "permanent" ? "Permanent Loan" : "Temporary Loan"}
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: 16,
+                            color: "var(--text-primary)",
+                            marginBottom: 3,
+                          }}
+                        >
+                          {loan.requester_name || "Guest"}
                         </div>
-                        <div style={{ color: "var(--text-muted)", fontSize: 14 }}>
-                          Borrowed on: {loan.start_date}
+                        <div
+                          style={{ color: "var(--text-muted)", fontSize: 13 }}
+                        >
+                          {loan.start_date}
+                          {loan.end_date ? ` → ${loan.end_date}` : ""}
                         </div>
                       </div>
-                      <div style={{ background: "rgba(99, 102, 241, 0.1)", color: "var(--accent)", padding: "4px 10px", borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
-                        {loan._loanKind === 'laptop' ? 'Laptop' : 'Accessory / Cable'}
-                      </div>
+                      <span
+                        style={{
+                          background: "rgba(99,102,241,0.12)",
+                          color: "var(--accent)",
+                          padding: "3px 10px",
+                          borderRadius: 8,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {loan._loanKind === "laptop" ? "Laptop" : "Tech"}
+                      </span>
                     </div>
 
-                    <div style={{ background: "var(--bg-secondary)", borderRadius: 12, padding: 12 }}>
-                      <p style={{ margin: "0 0 8px 0", fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Items Borrowed</p>
-                      <ul style={{ margin: 0, paddingLeft: 16, color: "var(--text-primary)", fontSize: 14 }}>
+                    <div
+                      style={{
+                        background: "var(--bg-secondary)",
+                        borderRadius: 10,
+                        padding: "10px 14px",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: "0 0 6px 0",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "var(--text-muted)",
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        Items
+                      </p>
+                      <ul
+                        style={{
+                          margin: 0,
+                          paddingLeft: 16,
+                          color: "var(--text-primary)",
+                          fontSize: 14,
+                        }}
+                      >
                         {loan.items.map((it, idx) => (
-                          <li key={idx} style={{ marginBottom: 4 }}>{it.quantity}x {it.item}</li>
+                          <li key={idx} style={{ marginBottom: 3 }}>
+                            {it.quantity}× {it.item}
+                          </li>
                         ))}
                       </ul>
                     </div>
 
+                    {loan.purpose && (
+                      <div
+                        style={{ fontSize: 13, color: "var(--text-secondary)" }}
+                      >
+                        <span style={{ fontWeight: 600 }}>Purpose:</span>{" "}
+                        {loan.purpose}
+                      </div>
+                    )}
+
                     <button
                       onClick={() => setReturnModalLoan(loan)}
                       className="btn btn-primary"
-                      style={{ width: "100%", padding: "12px 0", fontSize: 15 }}
+                      style={{ width: "100%", padding: "11px 0", fontSize: 14 }}
                     >
                       Process Return
                     </button>
@@ -240,38 +424,87 @@ export default function GuestReturnPage() {
         </div>
       </div>
 
-      {/* Return Modal Overlay */}
+      {/* Return Modal */}
       {returnModalLoan && (
-        <div style={{
-          position: "fixed",
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0,0,0,0.8)",
-          backdropFilter: "blur(4px)",
-          zIndex: 9999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 20
-        }}>
-          <div className="glass-panel" style={{
-            background: "var(--bg-card)",
-            padding: 32,
-            borderRadius: 24,
-            maxWidth: 440,
-            width: "100%",
-            animation: "fadeIn 0.2s ease-out"
-          }}>
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.8)",
+            backdropFilter: "blur(4px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            className="glass-panel"
+            style={{
+              background: "var(--bg-card)",
+              padding: 32,
+              borderRadius: 24,
+              maxWidth: 440,
+              width: "100%",
+              animation: "fadeIn 0.2s ease-out",
+            }}
+          >
             <h2 style={{ marginBottom: 8, fontSize: 22 }}>Return Items</h2>
-            <p style={{ color: "var(--text-secondary)", marginBottom: 24, fontSize: 14 }}>
-              Returning {returnModalLoan.items.reduce((s, i) => s + i.quantity, 0)} items. Please upload a clear photo of the equipment left at the tech booth.
+            <p
+              style={{
+                color: "var(--text-secondary)",
+                marginBottom: 24,
+                fontSize: 14,
+              }}
+            >
+              Returning{" "}
+              {returnModalLoan.items.reduce((s, i) => s + i.quantity, 0)} item
+              {returnModalLoan.items.reduce((s, i) => s + i.quantity, 0) !== 1
+                ? "s"
+                : ""}
+              . Please upload a clear photo of the equipment left at the tech
+              booth.
             </p>
 
             {returnPhoto ? (
-              <div style={{ position: "relative", marginBottom: 20, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
-                <img src={returnPhoto} alt="Return preview" style={{ width: "100%", height: 200, objectFit: "cover", display: "block" }} />
+              <div
+                style={{
+                  position: "relative",
+                  marginBottom: 20,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <img
+                  src={returnPhoto}
+                  alt="Return preview"
+                  style={{
+                    width: "100%",
+                    height: 200,
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                />
                 <button
                   onClick={() => setReturnPhoto(null)}
-                  style={{ position: "absolute", top: 12, right: 12, background: "rgba(0,0,0,0.6)", color: "white", padding: "6px 12px", borderRadius: 8, fontSize: 13, border: "none", cursor: "pointer", backdropFilter: "blur(4px)" }}
+                  style={{
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    background: "rgba(0,0,0,0.6)",
+                    color: "white",
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    border: "none",
+                    cursor: "pointer",
+                    backdropFilter: "blur(4px)",
+                  }}
                 >
                   Retake
                 </button>
@@ -292,13 +525,21 @@ export default function GuestReturnPage() {
                   background: "rgba(255,255,255,0.02)",
                   cursor: "pointer",
                   marginBottom: 20,
-                  transition: "all 0.2s"
+                  transition: "all 0.2s",
                 }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "rgba(99,102,241,0.05)"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "rgba(255,255,255,0.02)"; }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                  e.currentTarget.style.background = "rgba(99,102,241,0.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+                }}
               >
                 <RiUploadCloud2Line style={{ fontSize: 32 }} />
-                <span style={{ fontSize: 14, fontWeight: 500 }}>Tap to upload proof photo required</span>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>
+                  Tap to upload proof photo
+                </span>
                 <input
                   type="file"
                   accept="image/*"
@@ -325,6 +566,7 @@ export default function GuestReturnPage() {
                 onClick={() => {
                   setReturnModalLoan(null);
                   setReturnPhoto(null);
+                  setReturnRemarks("");
                 }}
                 className="btn btn-outline"
                 style={{ flex: 1, padding: "12px 0" }}

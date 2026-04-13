@@ -58,7 +58,8 @@ export default function DashboardPage() {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    if (!user) {
+    // Guests and admins default to "all" — "my" hides guest loans (user_id is null)
+    if (!user || user.role === "admin") {
       setCalendarTypeFilter((prev) => (prev === "my" ? "all" : prev));
     }
   }, [user]);
@@ -229,7 +230,6 @@ export default function DashboardPage() {
           };
     const filter = user.role === "admin" ? undefined : `user_id=eq.${user.id}`;
 
-    const isAdmin = user.role === "admin";
     const loanRequestsOpts = filter
       ? { event: "*", schema: "public", table: "loan_requests", filter }
       : { event: "*", schema: "public", table: "loan_requests" };
@@ -240,20 +240,16 @@ export default function DashboardPage() {
     let channel;
     let realtimeActive = false;
     try {
-      let ch = supabaseClient
+      channel = supabaseClient
         .channel(`dashboard-${user.id}`)
         .on("postgres_changes", loanRequestsOpts, () => { fetch(); })
-        .on("postgres_changes", laptopLoanOpts, () => { fetch(); });
-
-      if (isAdmin) {
-        ch = ch.on(
+        .on("postgres_changes", laptopLoanOpts, () => { fetch(); })
+        .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "guest_borrow_requests" },
           () => { fetch(); },
-        );
-      }
-
-      channel = ch.subscribe((status, err) => {
+        )
+        .subscribe((status, err) => {
           realtimeActive = status === "SUBSCRIBED";
           if (err)
             console.warn(

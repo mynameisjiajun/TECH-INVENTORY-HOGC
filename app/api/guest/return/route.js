@@ -1,6 +1,8 @@
 import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
+import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { invalidateAll } from "@/lib/utils/cache";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -77,35 +79,66 @@ export async function POST(request) {
       );
     }
 
-    // Attempt to update the local sqlite database if possible, but safely ignore
+    // Restore stock in SQLite and sync to Google Sheets
     try {
+      startSyncIfNeeded();
+      await waitForSync();
       const db = getDb();
-      if (db) {
-        db.prepare(
-          `UPDATE guest_borrow_requests 
-           SET status = 'returned', return_photo_url = ? 
-           WHERE id = ?`
-        ).run(photoUrl, db_id);
+      const techItems = (requestRow.items || []).filter(
+        (i) => i.source === "tech" || !i.source,
+      );
+      const returnChanges = [];
+
+      for (const li of techItems) {
+        if (!li.sheet_row && !li.item_id) continue;
+        const si = li.sheet_row
+          ? db
+              .prepare(
+                "SELECT id, sheet_row FROM storage_items WHERE sheet_row = ?",
+              )
+              .get(li.sheet_row)
+          : db
+              .prepare("SELECT id, sheet_row FROM storage_items WHERE id = ?")
+              .get(li.item_id);
+
+        if (si) {
+          db.prepare(
+            "UPDATE storage_items SET current = current + ? WHERE id = ?",
+          ).run(li.quantity, si.id);
+          returnChanges.push({ sheetRow: si.sheet_row, delta: li.quantity });
+        }
       }
-    } catch (e) {
-      /* ignore local db sync errors */
+
+      if (returnChanges.length > 0) {
+        await syncAuthoritativeStockToSheets(db, returnChanges);
+      }
+
+      invalidateAll();
+    } catch (stockErr) {
+      console.error("Guest return: failed to restore stock:", stockErr);
     }
 
-    // Send Telegram Notification regarding the returned item.
+    // Notify admins via Telegram
     try {
-      const tgMessage = 
-        `🔄 *Guest Return Submitted*\n\n` +
-        `*Name:* ${requestRow.guest_name}\n` +
-        `*Contact:* ${requestRow.telegram_handle}\n` +
-        `*Items:* ${
-          Array.isArray(requestRow.items) 
-            ? requestRow.items.map(i => `${i.quantity}x ${i.item_name}`).join(", ") 
-            : "Unknown"
-        }\n` +
-        (remarks ? `*Remarks:* ${remarks}\n\n` : `\n`) +
-        `📷 [View Return Photo](${photoUrl})`;
-        
-      await sendTelegramMessage(tgMessage);
+      const itemSummary = Array.isArray(requestRow.items)
+        ? requestRow.items.map((i) => `${i.quantity}x ${i.item_name}`).join(", ")
+        : "Unknown";
+      const tgMessage =
+        `🔄 <b>Guest Return Submitted</b>\n\n` +
+        `<b>Name:</b> ${requestRow.guest_name}\n` +
+        `<b>Contact:</b> ${requestRow.telegram_handle || "—"}\n` +
+        `<b>Items:</b> ${itemSummary}\n` +
+        (remarks ? `<b>Remarks:</b> ${remarks}\n\n` : "\n") +
+        `📷 <a href="${photoUrl}">View Return Photo</a>`;
+
+      const { data: admins } = await supabase
+        .from("users")
+        .select("id")
+        .eq("role", "admin");
+
+      for (const admin of admins || []) {
+        sendTelegramMessage(admin.id, tgMessage).catch(() => {});
+      }
     } catch (err) {
       console.error("Failed to send guest return telegram:", err);
     }
