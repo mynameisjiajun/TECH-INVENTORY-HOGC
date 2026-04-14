@@ -1038,8 +1038,8 @@ function AdminPageContent() {
 
   const handleResetPassword = async (userId) => {
     const pw = resetPasswords[userId];
-    if (!pw || pw.length < 6) {
-      setUserMsg("Password must be at least 6 characters");
+    if (!pw || pw.length < 8) {
+      setUserMsg("Password must be at least 8 characters");
       return;
     }
     setUserActionLoading(`reset-${userId}`);
