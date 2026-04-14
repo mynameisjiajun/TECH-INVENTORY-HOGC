@@ -469,16 +469,18 @@ export default function CartPanel() {
               >
                 {successState?.primaryLabel || "View My Loans →"}
               </button>
-              <button
-                className="btn btn-outline"
-                style={{ width: "100%" }}
-                onClick={() => {
-                  setSubmitted(false);
-                  setIsOpen(false);
-                }}
-              >
-                Continue Browsing
-              </button>
+              {successState?.primaryLabel !== "Continue Browsing" && (
+                <button
+                  className="btn btn-outline"
+                  style={{ width: "100%" }}
+                  onClick={() => {
+                    setSubmitted(false);
+                    setIsOpen(false);
+                  }}
+                >
+                  Continue Browsing
+                </button>
+              )}
             </div>
           </div>
         )}

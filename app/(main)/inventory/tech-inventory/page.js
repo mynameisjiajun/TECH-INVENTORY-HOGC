@@ -169,7 +169,7 @@ export default function InventoryPage() {
 
   const allTabs = [
     { id: "presets", label: "Presets" },
-    { id: "storage", label: "Storage Spare" },
+    { id: "storage", label: "Storage" },
     { id: "deployed", label: "Deployed" },
     { id: "total_quantity", label: "Total Quantity" },
     { id: "total_breakdown", label: "Qty Breakdown" },
@@ -180,7 +180,7 @@ export default function InventoryPage() {
       ? allTabs
       : [
           { id: "presets", label: "Presets" },
-          { id: "storage", label: "Storage Spare" },
+          { id: "storage", label: "Storage" },
         ];
   const isTableTab = TABLE_TABS.includes(tab);
   const showStorageTypeColumn = user?.role === "admin";
@@ -258,6 +258,7 @@ export default function InventoryPage() {
             </button>
           </div>
         )}
+
 
         {/* Tabs */}
         <div className="tabs">
@@ -484,7 +485,7 @@ export default function InventoryPage() {
               </div>
             )}
 
-            {/* Storage Spare Table */}
+            {/* Storage Table */}
             {tab === "storage" && (
               <div className="table-container">
                 <table className="storage-table">
@@ -498,9 +499,9 @@ export default function InventoryPage() {
                           <th>Model</th>
                         </>
                       )}
-                      <th>Total</th>
+                      {user?.role === "admin" && <th>Total</th>}
                       <th>Available</th>
-                      <th>Loaned</th>
+                      {user?.role === "admin" && <th>Loaned</th>}
                       <th>Location</th>
                       {user?.role === "admin" && <th>Status</th>}
                       <th>Actions</th>
@@ -523,7 +524,7 @@ export default function InventoryPage() {
                               <td>{item.model}</td>
                             </>
                           )}
-                          <td>{item.quantity_spare}</td>
+                          {user?.role === "admin" && <td>{item.quantity_spare}</td>}
                           <td>
                             <span
                               style={{
@@ -539,15 +540,17 @@ export default function InventoryPage() {
                               {item.current}
                             </span>
                           </td>
-                          <td>
-                            {loaned > 0 ? (
-                              <span style={{ color: "var(--warning)" }}>
-                                {loaned}
-                              </span>
-                            ) : (
-                              "0"
-                            )}
-                          </td>
+                          {user?.role === "admin" && (
+                            <td>
+                              {loaned > 0 ? (
+                                <span style={{ color: "var(--warning)" }}>
+                                  {loaned}
+                                </span>
+                              ) : (
+                                "0"
+                              )}
+                            </td>
+                          )}
                           <td
                             style={{
                               fontSize: 12,

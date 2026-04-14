@@ -23,7 +23,7 @@ function rateLimitError(retryAfterSeconds) {
 export async function POST(request) {
   try {
     const clientId = getRequestClientIdentifier(request);
-    const { action, username, password, display_name, invite_code, email, telegram_handle, ministry } =
+    const { action, username, password, display_name, email, telegram_handle, ministry } =
       await request.json();
 
     if (action === "register") {
@@ -44,16 +44,6 @@ export async function POST(request) {
       const registerLimit = await checkRateLimit(`auth:register:${clientId}`);
       if (registerLimit.limited) {
         return rateLimitError(registerLimit.retryAfterSeconds);
-      }
-
-      // Get invite code from Supabase app_settings
-      const currentInviteCode =
-        (await getAppSetting("invite_code")) || process.env.INVITE_CODE;
-      if (!currentInviteCode || invite_code !== currentInviteCode) {
-        return NextResponse.json(
-          { error: "Invalid invite code" },
-          { status: 403 },
-        );
       }
 
       // Check if username exists

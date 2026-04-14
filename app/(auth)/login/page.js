@@ -7,7 +7,7 @@ import { RiServerLine } from "react-icons/ri";
 import FluidBackground from "@/components/FluidBackground";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -114,6 +114,10 @@ export default function LoginPage() {
       return next;
     });
   };
+
+  useEffect(() => {
+    if (user) router.replace("/home");
+  }, [user, router]);
 
   useEffect(() => {
     if (!showRickRoll) {
@@ -274,17 +278,14 @@ export default function LoginPage() {
           <p className="auth-footer">
             Don&apos;t have an account? <Link href="/register">Register</Link>
           </p>
-          <p className="auth-footer" style={{ marginTop: 8 }}>
-            Guest?{" "}
-            <Link href="/home">Borrow items</Link>
-            {" or "}
-            <Link href="/guest-return">return a loan</Link>
-          </p>
-          <p className="auth-footer" style={{ marginTop: 8 }}>
-            <Link href="/home" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-              ← Back to Home
-            </Link>
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0 12px" }}>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            <span style={{ fontSize: 12, color: "var(--text-muted)", flexShrink: 0 }}>or</span>
+            <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+          </div>
+          <Link href="/home" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }}>
+            Continue as Guest
+          </Link>
         </div>
       </div>
       {showRickRoll && (

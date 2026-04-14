@@ -265,11 +265,13 @@ export default function Navbar() {
     );
   }
 
-  const navLinks = [
-    { href: "/home", label: "Home", icon: <RiArchiveLine /> },
-    { href: "/dashboard", label: "Dashboard", icon: <RiDashboardLine /> },
-    { href: "/loans", label: "My Loans", icon: <RiFileListLine /> },
-  ];
+  const navLinks = user
+    ? [
+        { href: "/home", label: "Home", icon: <RiArchiveLine /> },
+        { href: "/dashboard", label: "Dashboard", icon: <RiDashboardLine /> },
+        { href: "/loans", label: "My Loans", icon: <RiFileListLine /> },
+      ]
+    : [];
   if (user?.role === "admin") {
     navLinks.push({
       href: "/admin",
@@ -288,6 +290,7 @@ export default function Navbar() {
     : user?.role === "tech"
       ? "linear-gradient(135deg, #10b981, #059669)"
       : "linear-gradient(135deg, var(--accent), #818cf8)";
+  const avatarStyle = { background: avatarGradient, fontSize: profileEmoji ? 17 : undefined, lineHeight: profileEmoji ? 1 : undefined };
 
   const timeAgo = (dateStr) => {
     const d = new Date(dateStr);
@@ -441,7 +444,7 @@ export default function Navbar() {
                   setShowNotifs(false);
                 }}
               >
-                <div className="user-avatar" style={{ background: avatarGradient, fontSize: profileEmoji ? 17 : undefined, lineHeight: profileEmoji ? 1 : undefined }}>{avatarLabel}</div>
+                <div className="user-avatar" style={avatarStyle}>{avatarLabel}</div>
               </button>
               {showAccountMenu && (
                 <div className="account-menu-dropdown">
@@ -452,7 +455,7 @@ export default function Navbar() {
                       setShowAccountMenu(false);
                     }}
                   >
-                    <div className="user-avatar account-menu-avatar" style={{ background: avatarGradient, fontSize: profileEmoji ? 17 : undefined, lineHeight: profileEmoji ? 1 : undefined }}>
+                    <div className="user-avatar account-menu-avatar" style={avatarStyle}>
                       {avatarLabel}
                     </div>
                     <div className="account-menu-copy">
