@@ -7,11 +7,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const user = await getCurrentUser();
-    // All authenticated users need to read templates (for quick-borrow on inventory page)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const { data: templates, error: templatesError } = await supabase
       .from("loan_templates")

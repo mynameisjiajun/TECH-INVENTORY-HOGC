@@ -109,14 +109,15 @@ export default function InventoryPage() {
   }, [fetchItems, initialSyncChecked]);
 
   useEffect(() => {
+    fetch("/api/admin/templates").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((templateData) => {
+        if (templateData) setTemplates(templateData.templates || []);
+      });
     if (!user) return;
-    Promise.all([
-      fetch("/api/admin/templates").then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch("/api/loans?view=my&status=overdue").then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    ]).then(([templateData, overdueData]) => {
-      if (templateData) setTemplates(templateData.templates || []);
-      if (overdueData?.loans) setOverdueCount(overdueData.loans.length);
-    });
+    fetch("/api/loans?view=my&status=overdue").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((overdueData) => {
+        if (overdueData?.loans) setOverdueCount(overdueData.loans.length);
+      });
   }, [user]);
 
   const handleTemplateRequest = useCallback(
