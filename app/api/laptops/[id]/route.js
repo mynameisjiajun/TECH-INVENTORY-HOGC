@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
+import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
@@ -27,6 +28,12 @@ export async function PUT(request, { params }) {
     updateData.perm_loan_reason = is_perm_loaned ? (perm_loan_reason || null) : null;
   }
 
+  const { data: existingLaptop } = await supabase
+    .from("laptops")
+    .select("id, name, is_perm_loaned, perm_loan_person, perm_loan_reason")
+    .eq("id", id)
+    .single();
+
   const { data, error } = await supabase
     .from("laptops")
     .update(updateData)
@@ -35,6 +42,18 @@ export async function PUT(request, { params }) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (is_perm_loaned === true) {
+    sendAdminTelegramAlert(
+      `💻 <b>Laptop Permanently Assigned</b>\n<b>${user.display_name || user.username || "Admin"}</b> assigned <b>${data.name}</b>.\nAssignee: ${perm_loan_person || "Unspecified"}${perm_loan_reason ? `\nReason: ${perm_loan_reason}` : ""}`,
+    ).catch(() => {});
+  }
+
+  if (is_perm_loaned === false && existingLaptop?.is_perm_loaned) {
+    sendAdminTelegramAlert(
+      `↩️ <b>Laptop Released</b>\n<b>${user.display_name || user.username || "Admin"}</b> released <b>${data.name}</b> from permanent assignment.\nPrevious assignee: ${existingLaptop.perm_loan_person || "Unspecified"}`,
+    ).catch(() => {});
+  }
 
   // If toggling perm loan on, notify the person if we have their user record
   if (is_perm_loaned && perm_loan_person) {

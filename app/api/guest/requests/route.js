@@ -1,5 +1,6 @@
 import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
+import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { autoApproveTechLoan } from "@/lib/services/techLoanAutoApproval";
 import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
@@ -527,6 +528,18 @@ export async function POST(request) {
           warnings,
           context: "matched guest request user",
         });
+
+        sendTelegramMessage(
+          matchedUser.id,
+          [
+            "🧾 <b>Guest Checkout Linked</b>",
+            autoApproveLoans
+              ? "A guest checkout matching your Telegram handle was added to My Loans and is already approved."
+              : "A guest checkout matching your Telegram handle was added to My Loans and is pending admin review.",
+            summaryLines.length ? `\n${summaryLines.join("\n")}` : "",
+            "\nIf this wasn't you, please contact an admin.",
+          ].join("\n\n"),
+        ).catch(() => {});
       }
 
       if (!autoApproveLoans) {
@@ -538,6 +551,10 @@ export async function POST(request) {
           summaryLines,
           warnings,
         });
+      } else {
+        sendAdminTelegramAlert(
+          `✅ <b>Auto-Approved Guest Checkout</b>\nA guest checkout matched <b>${matchedUser.display_name || matchedUser.username || "a user"}</b> and is active now.\n${summaryLines.join("\n")}${trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : ""}`,
+        ).catch(() => {});
       }
 
       return NextResponse.json(
@@ -715,6 +732,10 @@ export async function POST(request) {
         summaryLines: [`Guest request #${guestRequest.id}`, ...summaryLines],
         warnings,
       });
+    } else {
+      sendAdminTelegramAlert(
+        `✅ <b>Guest Queue Auto-Approved</b>\nGuest request #${guestRequest.id} is active now.\nGuest: ${guest_name.trim()}\n${summaryLines.join("\n")}${trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : ""}`,
+      ).catch(() => {});
     }
 
     return NextResponse.json(

@@ -543,14 +543,12 @@ export async function POST(request) {
         quantity: i.quantity,
       }));
       const remarksLine = trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : "";
+      const requesterName = user.display_name || user.username || "A user";
+      const periodLine = end_date
+        ? `Period: ${start_date} to ${end_date}`
+        : `Start Date: ${start_date}`;
 
       if (autoApproveLoans) {
-        await supabase.from("notifications").insert({
-          user_id: user.id,
-          message: `Your ${loan_type} loan request #${loanId} was auto-approved.`,
-          link: "/loans",
-        });
-
         await supabase.from("activity_feed").insert({
           user_id: user.id,
           action: "auto_approve",
@@ -576,6 +574,37 @@ export async function POST(request) {
             adminNotes: AUTO_APPROVE_ADMIN_NOTE,
             items: itemsForEmail,
           }).catch(() => {});
+        }
+
+        if (!userRecord?.mute_telegram) {
+          sendTelegramMessage(
+            user.id,
+            `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loanId}\nType: ${loan_type}\nPurpose: ${trimmedPurpose}\nItems: ${itemListStr}\n${periodLine}${remarksLine ? `${remarksLine}` : ""}`,
+          ).catch(() => {});
+        }
+
+        const { data: admins } = await supabase
+          .from("users")
+          .select("id, mute_telegram")
+          .eq("role", "admin");
+
+        if (admins?.length) {
+          await supabase.from("notifications").insert(
+            admins.map((admin) => ({
+              user_id: admin.id,
+              message: `${requesterName} submitted an auto-approved ${loan_type} loan request #${loanId}.`,
+              link: "/admin",
+            })),
+          );
+
+          for (const admin of admins) {
+            if (!admin.mute_telegram) {
+              sendTelegramMessage(
+                admin.id,
+                `✅ <b>Auto-Approved Loan Request</b>\n<b>${requesterName}</b> submitted an auto-approved <b>${loan_type}</b> loan.\n\nPurpose: ${trimmedPurpose}${remarksLine}\nItems: ${itemListStr}`,
+              ).catch(() => {});
+            }
+          }
         }
 
       } else {

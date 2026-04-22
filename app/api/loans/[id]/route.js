@@ -1,6 +1,7 @@
 import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
+import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
@@ -724,6 +725,10 @@ export async function PUT(request, { params }) {
       }
     }
 
+    const itemListStr = resolvedItems
+      .map((i) => `${i.item_name} × ${i.quantity}`)
+      .join(", ");
+
     if (isAdminEditing) {
       await insertRowsBestEffort({
         client: supabase,
@@ -741,6 +746,19 @@ export async function PUT(request, { params }) {
         warnings,
         context: "loan requester notification",
       });
+
+      sendTelegramMessage(
+        existingLoan.user_id,
+        nextStatus === "approved"
+          ? `📝 <b>Loan Updated</b>\nAn admin updated your approved ${loan_type} loan #${loanId}.\n\nItems: ${itemListStr}`
+          : `📝 <b>Loan Updated</b>\nAn admin updated your ${loan_type} loan request #${loanId}. It is still pending review.\n\nItems: ${itemListStr}`,
+      ).catch(() => {});
+
+      if (nextStatus === "approved") {
+        sendAdminTelegramAlert(
+          `📝 <b>Active Inventory Updated</b>\n<b>${user.display_name || user.username || "Admin"}</b> updated approved loan #${loanId}.\nType: ${loan_type}\nItems: ${itemListStr}`,
+        ).catch(() => {});
+      }
 
       await insertRowsBestEffort({
         client: supabase,
@@ -774,10 +792,6 @@ export async function PUT(request, { params }) {
           warnings,
           context: "admin loan modification",
         });
-
-        const itemListStr = resolvedItems
-          .map((i) => `${i.item_name} × ${i.quantity}`)
-          .join(", ");
         for (const admin of admins) {
           if (!admin.mute_telegram) {
             sendTelegramMessage(

@@ -5,6 +5,7 @@ import { invalidateAll } from "@/lib/utils/cache";
 import { appendRows } from "@/lib/services/sheets";
 import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { sendLoanStatusEmail } from "@/lib/services/email";
+import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
@@ -191,6 +192,10 @@ export async function POST(request) {
         ).catch((err) => console.error("Telegram notification failed:", err.message));
       }
 
+      sendAdminTelegramAlert(
+        `🔄 <b>Inventory Returned</b>\n<b>${user.display_name || user.username || "Admin"}</b> marked ${approvedLoans.length} loan(s) as returned.\nLoan IDs: ${approvedLoans.map((loan) => `#${loan.id}`).join(", ")}`,
+      ).catch(() => {});
+
       invalidateAll();
       return NextResponse.json({
         message: `${approvedLoans.length} loan(s) returned to stock`,
@@ -350,11 +355,22 @@ export async function POST(request) {
 
       // Fire-and-forget Telegram notifications
       for (const loan of pendingLoans) {
+        const itemList =
+          (itemsByLoan.get(loan.id) || [])
+            .map((item) => `${item.item_name} × ${item.quantity}`)
+            .join(", ") || "Items pending sync";
+        const periodLine = loan.end_date
+          ? `${loan.start_date} to ${loan.end_date}`
+          : `From ${loan.start_date}`;
         sendTelegramMessage(
           loan.user_id,
-          `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan.id} has been approved!`,
+          `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loan.id}\nStatus: Approved\nType: ${loan.loan_type}\nPurpose: ${loan.purpose}\nItems: ${itemList}\nPeriod: ${periodLine}`,
         ).catch((err) => console.error("Telegram notification failed:", err.message));
       }
+
+      sendAdminTelegramAlert(
+        `📦 <b>Inventory Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved ${pendingLoans.length} loan(s).\nLoan IDs: ${pendingLoans.map((loan) => `#${loan.id}`).join(", ")}`,
+      ).catch(() => {});
 
       invalidateAll();
       return NextResponse.json({
@@ -520,14 +536,29 @@ export async function POST(request) {
         );
       }
       if (!loanUser?.mute_telegram) {
+        const itemList =
+          (loanItems || [])
+            .map((i) => `${i.item_name} × ${i.quantity}`)
+            .join(", ") || "Items pending sync";
+        const periodLine = loan.end_date
+          ? `${loan.start_date} to ${loan.end_date}`
+          : `From ${loan.start_date}`;
         backgroundTasks.push(
           sendTelegramMessage(
             loan.user_id,
-            `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan_id} has been approved!${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
+            `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loan_id}\nStatus: Approved\nType: ${loan.loan_type}\nPurpose: ${loan.purpose}\nItems: ${itemList}\nPeriod: ${periodLine}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
           ),
         );
       }
       await Promise.all(backgroundTasks);
+
+      const approvedItemList =
+        (loanItems || [])
+          .map((i) => `${i.item_name} × ${i.quantity}`)
+          .join(", ") || "No items listed";
+      sendAdminTelegramAlert(
+        `📦 <b>Inventory Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved loan #${loan_id}.\nBorrower: ${loanUser?.display_name || "Unknown"}\nPurpose: ${loan.purpose}\nItems: ${approvedItemList}`,
+      ).catch(() => {});
 
       invalidateAll();
       await supabase.from("activity_feed").insert({
@@ -685,6 +716,14 @@ export async function POST(request) {
         `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`,
       ).catch((err) => console.error("Telegram notification failed:", err.message));
 
+      const returnedItemList =
+        (loanItems || [])
+          .map((i) => `${i.item_name} × ${i.quantity}`)
+          .join(", ") || "No items listed";
+      sendAdminTelegramAlert(
+        `🔄 <b>Inventory Returned</b>\n<b>${user.display_name || user.username || "Admin"}</b> returned loan #${loan_id} to stock.\nBorrower: ${returnUser?.display_name || "Unknown"}\nItems: ${returnedItemList}`,
+      ).catch((err) => console.error("Telegram notification failed:", err.message));
+
       invalidateAll();
       await supabase.from("activity_feed").insert({
         user_id: user.id,
@@ -738,6 +777,25 @@ export async function POST(request) {
           message: `Your ${loan.loan_type} loan request #${loan_id} has been removed by an admin.${admin_notes ? ` Note: ${admin_notes}` : ""}`,
           link: "/loans",
         });
+
+        sendTelegramMessage(
+          loan.user_id,
+          `❌ <b>Loan Removed</b>\nYour ${loan.loan_type} loan #${loan_id} was removed by an admin.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
+        ).catch((err) =>
+          console.error("Telegram notification failed:", err.message),
+        );
+      }
+
+      if (loan.status === "approved") {
+        const deletedItemList =
+          (loanItems || [])
+            .map((i) => `${i.item_name} × ${i.quantity}`)
+            .join(", ") || "No items listed";
+        sendAdminTelegramAlert(
+          `↩️ <b>Inventory Restored</b>\n<b>${user.display_name || user.username || "Admin"}</b> deleted approved loan #${loan_id} and restored stock.\nItems: ${deletedItemList}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
+        ).catch((err) =>
+          console.error("Telegram notification failed:", err.message),
+        );
       }
 
       // ON DELETE CASCADE removes loan_items automatically
@@ -808,6 +866,13 @@ async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
     // Log
     await supabase.from("audit_log").insert({ user_id: user.id, action: "approve", target_type: "guest_request", target_id: loan_id, details: `Approved guest loan. ${admin_notes || ""}` });
 
+    const guestTechSummary =
+      techItems.map((item) => `${item.item_name} × ${item.quantity}`).join(", ") ||
+      "No tech items";
+    sendAdminTelegramAlert(
+      `📦 <b>Guest Inventory Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved guest request #${loan_id}.\nGuest: ${request.guest_name}\nItems: ${guestTechSummary}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
+    ).catch(() => {});
+
     invalidateAll();
     return NextResponse.json({ message: "Guest loan approved" });
   }
@@ -833,6 +898,13 @@ async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
     await supabase.from("guest_borrow_requests").update({ status: "returned", admin_notes: admin_notes || "Items returned", updated_at: new Date().toISOString() }).eq("id", loan_id);
     if (returnChanges.length > 0) await syncAuthoritativeStockToSheets(db, returnChanges);
     await supabase.from("audit_log").insert({ user_id: user.id, action: "return", target_type: "guest_request", target_id: loan_id, details: `Items returned to stock. ${admin_notes || ""}` });
+
+    const guestReturnSummary =
+      techItems.map((item) => `${item.item_name} × ${item.quantity}`).join(", ") ||
+      "No tech items";
+    sendAdminTelegramAlert(
+      `🔄 <b>Guest Inventory Returned</b>\n<b>${user.display_name || user.username || "Admin"}</b> returned guest request #${loan_id} to stock.\nGuest: ${request.guest_name}\nItems: ${guestReturnSummary}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
+    ).catch(() => {});
 
     invalidateAll();
     return NextResponse.json({ message: "Guest items returned to stock" });

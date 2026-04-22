@@ -569,19 +569,32 @@ export async function POST(request) {
 
   const laptopCount = allRequestedLaptopIds.length;
   const remarksLine = trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : "";
+  const requesterName = user.display_name || user.username || "A user";
+  const laptopListStr = allRequestedLaptopIds
+    .map((laptopId) => laptopMap.get(String(laptopId))?.name || `Laptop ${laptopId}`)
+    .join(", ");
+  const requestSummary = createdLoans
+    .map((loan) =>
+      loan.end_date
+        ? `#${loan.id}: ${loan.start_date} to ${loan.end_date}`
+        : `#${loan.id}: from ${loan.start_date}`,
+    )
+    .join("\n");
 
   if (autoApproveLoans) {
-    await supabase.from("notifications").insert({
-      user_id: user.id,
-      message: `Your laptop loan request${createdLoans.length > 1 ? "s were" : " was"} auto-approved.`,
-      link: "/loans",
-    });
-
     await supabase.from("activity_feed").insert({
       user_id: user.id,
       action: "auto_approve",
       description: `Laptop loan request${createdLoans.length > 1 ? "s" : ""} auto-approved by global setting`,
       link: "/loans",
+    });
+
+    await supabase.from("audit_log").insert({
+      user_id: user.id,
+      action: "auto_approve",
+      target_type: "laptop_loan",
+      target_id: createdLoans[0]?.id || null,
+      details: `Auto-approved ${createdLoans.length} laptop loan request(s) at submission by global setting.`,
     });
 
     const { data: userRecord } = await supabase
@@ -609,8 +622,32 @@ export async function POST(request) {
     if (!userRecord?.mute_telegram) {
       sendTelegramMessage(
         user.id,
-        `✅ <b>Laptop Loan Auto-Approved</b>\nYour laptop request${createdLoans.length > 1 ? "s are" : " is"} approved and active now.${remarksLine}`,
+        `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nPurpose: ${trimmedPurpose}\nLaptops: ${laptopListStr}\nRequests:\n${requestSummary}${remarksLine ? `${remarksLine}` : ""}`,
       ).catch(() => {});
+    }
+
+    const { data: admins } = await supabase
+      .from("users")
+      .select("id, mute_telegram")
+      .eq("role", "admin");
+
+    if (admins?.length) {
+      await supabase.from("notifications").insert(
+        admins.map((admin) => ({
+          user_id: admin.id,
+          message: `${requesterName} submitted ${createdLoans.length} auto-approved laptop loan request(s) for ${laptopCount} laptop(s).`,
+          link: "/admin",
+        })),
+      );
+
+      for (const admin of admins) {
+        if (!admin.mute_telegram) {
+          sendTelegramMessage(
+            admin.id,
+            `✅ <b>Auto-Approved Laptop Loan</b>\n<b>${requesterName}</b> requested ${laptopCount} laptop(s) and it is active now.\nPurpose: ${trimmedPurpose}${remarksLine}\nLaptops: ${laptopListStr}`,
+          ).catch(() => {});
+        }
+      }
     }
   } else {
     // Notify admins

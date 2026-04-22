@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
+import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
@@ -453,6 +454,8 @@ export async function PUT(request, { params }) {
       }
     }
 
+    const laptopNames = (laptops || []).map((entry) => entry.name).join(", ");
+
     if (isAdminEditing) {
       await insertNotifications(
         [
@@ -468,6 +471,19 @@ export async function PUT(request, { params }) {
         warnings,
         "requester",
       );
+
+      sendTelegramMessage(
+        existingLoan.user_id,
+        nextStatus === "approved"
+          ? `📝 <b>Laptop Loan Updated</b>\nAn admin updated your approved laptop loan #${id}.\n\nLaptops: ${laptopNames}`
+          : `📝 <b>Laptop Loan Updated</b>\nAn admin updated your laptop loan request #${id}. It is still pending review.\n\nLaptops: ${laptopNames}`,
+      ).catch(() => {});
+
+      if (nextStatus === "approved") {
+        sendAdminTelegramAlert(
+          `📝 <b>Active Laptop Allocation Updated</b>\n<b>${user.display_name || user.username || "Admin"}</b> updated approved laptop loan #${id}.\nLaptops: ${laptopNames}`,
+        ).catch(() => {});
+      }
 
       const { error: auditError } = await supabase.from("audit_log").insert({
         user_id: user.id,
@@ -494,7 +510,6 @@ export async function PUT(request, { params }) {
         );
       }
 
-      const laptopNames = (laptops || []).map((entry) => entry.name).join(", ");
       if (admins?.length) {
         await insertNotifications(
           admins.map((admin) => ({
@@ -753,11 +768,26 @@ export async function POST(request, { params }) {
     }
 
     const requester = loan.users;
+    const laptopList = loan.laptop_loan_items
+      .map((item) => item.laptops?.name)
+      .filter(Boolean)
+      .join(", ");
+
+    if (action === "approve") {
+      sendAdminTelegramAlert(
+        `💻 <b>Laptop Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved laptop loan #${id}.\nBorrower: ${requester?.display_name || "Unknown"}\nLaptops: ${laptopList}\nPurpose: ${loan.purpose}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
+      ).catch(() => {});
+    }
+
+    if (action === "return") {
+      sendAdminTelegramAlert(
+        `🔄 <b>Laptop Returned To Pool</b>\n<b>${user.display_name || user.username || "Admin"}</b> marked laptop loan #${id} as returned.\nBorrower: ${requester?.display_name || "Unknown"}\nLaptops: ${laptopList}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
+      ).catch(() => {});
+    }
+
     if (requester) {
-      const laptopList = loan.laptop_loan_items
-        .map((item) => item.laptops?.name)
-        .filter(Boolean)
-        .join(", ");
+      const receiptMsg =
+        `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${id}\nStatus: Approved\nType: ${loan.loan_type}\nPurpose: ${loan.purpose}\nLaptops: ${laptopList}\nPeriod: ${loan.end_date ? `${loan.start_date} to ${loan.end_date}` : `From ${loan.start_date}`}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`;
       const msg =
         action === "approve"
           ? `Your laptop loan request #${id} for [${laptopList}] has been approved!`
@@ -780,7 +810,10 @@ export async function POST(request, { params }) {
       if (!requester.mute_telegram) {
         const emoji =
           action === "approve" ? "✅" : action === "reject" ? "❌" : "📥";
-        sendTelegramMessage(requester.id, `${emoji} ${msg}`).catch(() => {});
+        sendTelegramMessage(
+          requester.id,
+          action === "approve" ? receiptMsg : `${emoji} ${msg}`,
+        ).catch(() => {});
       }
     }
 
