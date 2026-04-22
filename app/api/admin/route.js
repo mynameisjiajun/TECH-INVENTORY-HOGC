@@ -188,7 +188,7 @@ export async function POST(request) {
         sendTelegramMessage(
           loan.user_id,
           `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan.id} have been marked as returned.`,
-        ).catch(() => {});
+        ).catch((err) => console.error("Telegram notification failed:", err.message));
       }
 
       invalidateAll();
@@ -353,7 +353,7 @@ export async function POST(request) {
         sendTelegramMessage(
           loan.user_id,
           `✅ <b>Loan Approved</b>\nYour ${loan.loan_type} loan request #${loan.id} has been approved!`,
-        ).catch(() => {});
+        ).catch((err) => console.error("Telegram notification failed:", err.message));
       }
 
       invalidateAll();
@@ -516,7 +516,7 @@ export async function POST(request) {
               item: i.item_name,
               quantity: i.quantity,
             })),
-          }).catch(() => {}),
+          }).catch((err) => console.error("Telegram notification failed:", err.message)),
         );
       }
       if (!loanUser?.mute_telegram) {
@@ -595,7 +595,7 @@ export async function POST(request) {
               item: i.item_name,
               quantity: i.quantity,
             })),
-          }).catch(() => {}),
+          }).catch((err) => console.error("Telegram notification failed:", err.message)),
         );
       }
       if (!rejectUser?.mute_telegram) {
@@ -683,7 +683,7 @@ export async function POST(request) {
       sendTelegramMessage(
         loan.user_id,
         `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`,
-      ).catch(() => {});
+      ).catch((err) => console.error("Telegram notification failed:", err.message));
 
       invalidateAll();
       await supabase.from("activity_feed").insert({

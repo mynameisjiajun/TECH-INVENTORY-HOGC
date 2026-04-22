@@ -50,7 +50,15 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    const event = JSON.parse(rawBody);
+    let event;
+    try {
+      event = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+    if (!event?.type) {
+      return NextResponse.json({ error: "Invalid event format" }, { status: 400 });
+    }
     const { type, data } = event;
 
     const to = data?.to?.[0] || data?.email_id || "unknown";
@@ -58,44 +66,20 @@ export async function POST(request) {
     const emailId = data?.email_id || "";
 
     switch (type) {
-      case "email.sent":
-        console.log(`[Resend] ✅ Sent — ${emailId} to ${to}`);
-        break;
-
-      case "email.delivered":
-        console.log(`[Resend] 📬 Delivered — ${emailId} to ${to}`);
-        break;
-
       case "email.delivery_delayed":
-        console.warn(
-          `[Resend] ⏳ Delayed — ${emailId} to ${to}. Reason: ${data?.reason || "unknown"}`,
-        );
+        console.warn(`[Resend] Delayed — ${emailId} to ${to}. Reason: ${data?.reason || "unknown"}`);
         break;
 
       case "email.bounced":
-        console.error(
-          `[Resend] ❌ Bounced — ${emailId} to ${to}. Type: ${data?.bounce?.type}, Sub: ${data?.bounce?.subtype}`,
-        );
-        // TODO: optionally mark the user's email as invalid in Supabase
-        // await supabase.from('users').update({ email_invalid: true }).eq('email', to);
+        console.error(`[Resend] Bounced — ${emailId} to ${to}. Type: ${data?.bounce?.type}`);
         break;
 
       case "email.complained":
-        console.error(`[Resend] 🚫 Spam complaint — ${emailId} to ${to}`);
-        break;
-
-      case "email.opened":
-        console.log(`[Resend] 👁 Opened — ${emailId} by ${to}`);
-        break;
-
-      case "email.clicked":
-        console.log(
-          `[Resend] 🖱 Clicked — ${emailId} by ${to}, link: ${data?.click?.link}`,
-        );
+        console.error(`[Resend] Spam complaint — ${emailId} to ${to}`);
         break;
 
       default:
-        console.log(`[Resend] Unknown event: ${type}`, data);
+        break;
     }
 
     return NextResponse.json({ ok: true });

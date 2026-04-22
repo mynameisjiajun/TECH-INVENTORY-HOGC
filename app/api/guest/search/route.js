@@ -11,16 +11,17 @@ export async function GET(request) {
 
   const orPattern = `*${q}*`;
   
-  // Search only approved guest requests matching guest_name or telegram_handle
+  // Search active guest requests (pending, reviewed, or approved)
   const { data: activeGuestRequests, error } = await supabase
     .from("guest_borrow_requests")
     .select("*")
-    .eq("status", "approved")
+    .in("status", ["pending", "reviewed", "approved"])
     .or(`guest_name.ilike.${orPattern},telegram_handle.ilike.${orPattern}`)
     .order("start_date", { ascending: true })
     .limit(50);
 
   if (error) {
+    console.error("guest/search error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

@@ -24,6 +24,11 @@ export async function GET(request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await runReminderJobs();
-  return NextResponse.json(result);
+  try {
+    const result = await runReminderJobs();
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error("Reminder job failed:", err);
+    return NextResponse.json({ error: "Reminder job failed" }, { status: 500 });
+  }
 }

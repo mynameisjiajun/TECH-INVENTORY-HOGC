@@ -380,6 +380,12 @@ export async function POST(request) {
           { status: 400 },
         );
       }
+      if (item.quantity > 100) {
+        return NextResponse.json(
+          { error: "Quantity cannot exceed 100 per item" },
+          { status: 400 },
+        );
+      }
     }
     if (!purpose || !purpose.trim()) {
       return NextResponse.json(

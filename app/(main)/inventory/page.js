@@ -17,7 +17,7 @@ import {
 } from "react-icons/ri";
 
 export default function InventoryLanding() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   const router = useRouter();
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined"
@@ -636,6 +636,7 @@ export default function InventoryLanding() {
               </button>
             ))}
           </div>
+
         </div>
       </div>
     </>

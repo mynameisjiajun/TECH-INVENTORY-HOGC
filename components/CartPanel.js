@@ -1152,7 +1152,7 @@ export default function CartPanel() {
                   </div>
 
                   <div className="input-group">
-                    <label>Telegram Handle</label>
+                    <label>Instagram Handle</label>
                     <input
                       type="text"
                       value={formData.telegram_handle}
@@ -1162,7 +1162,7 @@ export default function CartPanel() {
                           telegram_handle: e.target.value,
                         }))
                       }
-                      placeholder="@yourhandle for auto-linking and alerts"
+                      placeholder="@yourhandle"
                       autoCapitalize="off"
                       autoCorrect="off"
                       spellCheck={false}
@@ -1193,7 +1193,7 @@ export default function CartPanel() {
                       lineHeight: 1.6,
                     }}
                   >
-                    Guest checkout stays temporary-only. If your Telegram handle
+                    Guest checkout stays temporary-only. If your Instagram handle
                     matches an existing account, the request will appear in My
                     Loans automatically after you log in.
                   </div>
