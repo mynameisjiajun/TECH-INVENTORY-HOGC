@@ -578,12 +578,6 @@ export async function POST(request) {
           }).catch(() => {});
         }
 
-        if (!userRecord?.mute_telegram) {
-          sendTelegramMessage(
-            user.id,
-            `✅ <b>Loan Auto-Approved</b>\nYour ${loan_type} loan request #${loanId} is approved and active now.${trimmedRemarks ? `${remarksLine}` : ""}`,
-          ).catch(() => {});
-        }
       } else {
         // Notify admins
         const { data: admins } = await supabase
