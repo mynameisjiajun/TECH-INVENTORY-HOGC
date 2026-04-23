@@ -26,6 +26,32 @@ const COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981"];
 const ACTIVE_CALENDAR_PAGE_LIMIT = 200;
 const MAX_ACTIVE_CALENDAR_PAGES = 20;
 
+function getLoanRequesterAvatar(loan) {
+  const profileEmoji =
+    typeof loan?.requester_profile_emoji === "string" &&
+    loan.requester_profile_emoji.trim()
+      ? loan.requester_profile_emoji.trim()
+      : null;
+
+  return {
+    label:
+      profileEmoji ||
+      loan?.requester_name?.[0]?.toUpperCase() ||
+      loan?.requester_username?.[0]?.toUpperCase() ||
+      "?",
+    style: {
+      background:
+        loan?.requester_role === "admin"
+          ? "linear-gradient(135deg, #f59e0b, #ef4444)"
+          : loan?.requester_role === "tech"
+            ? "linear-gradient(135deg, #10b981, #059669)"
+            : "linear-gradient(135deg, var(--accent), #818cf8)",
+      fontSize: profileEmoji ? 20 : 18,
+      lineHeight: profileEmoji ? 1 : undefined,
+    },
+  };
+}
+
 export default function DashboardPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -327,6 +353,9 @@ export default function DashboardPage() {
   };
 
   const isAdmin = user?.role === "admin";
+  const selectedLoanAvatar = selectedLoan
+    ? getLoanRequesterAvatar(selectedLoan)
+    : null;
 
   // Build calendar grid with continuous bars (all users)
   const calendarData = useMemo(() => {
@@ -757,19 +786,15 @@ export default function DashboardPage() {
                       width: 44,
                       height: 44,
                       borderRadius: "50%",
-                      background:
-                        "linear-gradient(135deg, var(--accent), #818cf8)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 18,
                       fontWeight: 700,
                       color: "white",
+                      ...selectedLoanAvatar?.style,
                     }}
                   >
-                    {(selectedLoan.requester_name ||
-                      selectedLoan.requester_username ||
-                      "?")[0].toUpperCase()}
+                    {selectedLoanAvatar?.label}
                   </div>
                   <div>
                     <div
@@ -1430,19 +1455,15 @@ export default function DashboardPage() {
                     width: 44,
                     height: 44,
                     borderRadius: "50%",
-                    background:
-                      "linear-gradient(135deg, var(--accent), #818cf8)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 18,
                     fontWeight: 700,
                     color: "white",
+                    ...selectedLoanAvatar?.style,
                   }}
                 >
-                  {(selectedLoan.requester_name ||
-                    selectedLoan.requester_username ||
-                    "?")[0].toUpperCase()}
+                  {selectedLoanAvatar?.label}
                 </div>
                 <div>
                   <div
@@ -2145,18 +2166,15 @@ export default function DashboardPage() {
                   width: 44,
                   height: 44,
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg, var(--accent), #818cf8)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 18,
                   fontWeight: 700,
                   color: "white",
+                  ...selectedLoanAvatar?.style,
                 }}
               >
-                {(selectedLoan.requester_name ||
-                  selectedLoan.requester_username ||
-                  "?")[0].toUpperCase()}
+                {selectedLoanAvatar?.label}
               </div>
               <div>
                 <div

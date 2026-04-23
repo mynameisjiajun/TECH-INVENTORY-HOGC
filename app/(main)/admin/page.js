@@ -1510,9 +1510,11 @@ function AdminPageContent() {
 
             {statusFilter === "pending" && loans.length > 0 && (
               <div
+                className="admin-bulk-bar admin-pending-bulk-bar"
                 style={{
                   display: "flex",
                   gap: 8,
+                  flexWrap: "wrap",
                   alignItems: "center",
                   padding: "12px 16px",
                   background: "rgba(34,197,94,0.05)",

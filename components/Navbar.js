@@ -414,6 +414,7 @@ export default function Navbar() {
                             style={{
                               display: "block",
                               width: "100%",
+                              boxSizing: "border-box",
                               padding: "10px",
                               background: "rgba(99,102,241,0.1)",
                               border: "none",

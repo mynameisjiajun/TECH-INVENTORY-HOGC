@@ -336,6 +336,7 @@ export default function LaptopLoansPage() {
   const [returningSoon, setReturningSoon] = useState([]);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
+  const [showGuestModal, setShowGuestModal] = useState(false);
   const abortRef = useRef(null);
   const debounceRef = useRef(null);
 
@@ -403,7 +404,7 @@ export default function LaptopLoansPage() {
   const handleNotify = useCallback(
     async (laptop) => {
       if (!user) {
-        router.push("/login");
+        setShowGuestModal(true);
         return;
       }
 
@@ -433,7 +434,7 @@ export default function LaptopLoansPage() {
         toast.error("Network error — could not update notification");
       }
     },
-    [router, toast, user],
+    [toast, user],
   );
 
   const isAdmin = user?.role === "admin";
@@ -1033,6 +1034,78 @@ export default function LaptopLoansPage() {
           </div>
         )}
       </div>
+
+      {/* Guest notify modal */}
+      {showGuestModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(4px)",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+          onClick={() => setShowGuestModal(false)}
+        >
+          <div
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              borderRadius: 20,
+              padding: "32px 28px",
+              maxWidth: 360,
+              width: "100%",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 36 }}>🔔</div>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+                Get Notified When Available
+              </h2>
+              <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                Create an account to get notified when this laptop becomes available to borrow.
+              </p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => router.push("/register")}
+              >
+                Create Account
+              </button>
+              <button
+                className="btn btn-outline"
+                style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => router.push("/login")}
+              >
+                Log In
+              </button>
+            </div>
+            <button
+              onClick={() => setShowGuestModal(false)}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: 12,
+                color: "var(--text-muted)",
+                cursor: "pointer",
+              }}
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile returning soon */}
       <style>{`

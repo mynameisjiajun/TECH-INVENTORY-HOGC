@@ -147,14 +147,18 @@ export default function InventoryPage() {
     setSyncing(true);
     setError("");
     try {
-      const syncRes = await fetch("/api/items/sync", { method: "POST" });
-      if (!syncRes.ok) {
-        const data = await syncRes.json().catch(() => ({}));
-        const msg = data.error || "Sync failed";
-        setError(msg);
-        toast.error(msg);
+      if (user?.role === "admin") {
+        const syncRes = await fetch("/api/items/sync", { method: "POST" });
+        if (!syncRes.ok) {
+          const data = await syncRes.json().catch(() => ({}));
+          const msg = data.error || "Sync failed";
+          setError(msg);
+          toast.error(msg);
+        } else {
+          toast.success("Inventory synced from Google Sheets");
+        }
       } else {
-        toast.success("Inventory synced from Google Sheets");
+        toast.success("Inventory refreshed");
       }
     } catch {
       const msg = "Network error — could not sync from Google Sheets";
@@ -164,7 +168,7 @@ export default function InventoryPage() {
       setSyncing(false);
     }
     await fetchItems();
-  }, [fetchItems, toast]);
+  }, [fetchItems, toast, user]);
 
   if (loading) return <AppShellLoading />;
 
