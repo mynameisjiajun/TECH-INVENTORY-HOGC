@@ -1171,6 +1171,29 @@ html[data-shell="pwa"] .laptop-date-grid input[type="date"] {
   padding: 8px 10px;
 }
 
+/* ── Laptop Loans page: tighter side margins ── */
+html[data-shell="pwa"] .laptop-loans-page {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+html[data-shell="pwa"] .laptop-loans-page .laptop-sticky-bar {
+  padding: 10px 10px;
+}
+
+html[data-shell="pwa"] .laptop-loans-page .laptop-loan-card-body {
+  padding: 14px 12px !important;
+  gap: 12px !important;
+}
+
+html[data-shell="pwa"] .laptop-loans-page .laptop-loan-card-footer {
+  padding: 10px 12px !important;
+}
+
+html[data-shell="pwa"] .laptop-loans-page .laptop-sidebar-card {
+  padding: 12px !important;
+}
+
 html[data-shell="pwa"] .install-banner {
   display: none !important;
 }

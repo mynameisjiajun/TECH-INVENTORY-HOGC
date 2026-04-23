@@ -470,7 +470,7 @@ export default function LaptopLoansPage() {
     <>
       <Navbar />
       <CartPanel />
-      <div className="page-container">
+      <div className="page-container laptop-loans-page">
         {/* Header */}
         <div
           className="page-header"
