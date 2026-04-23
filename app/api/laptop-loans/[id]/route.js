@@ -4,6 +4,7 @@ import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { sendLoanModifiedEmail, sendLoanStatusEmail, sendLoanReturnEmail } from "@/lib/services/email";
+import { escapeHtml, isSafeHttpsUrl } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -487,7 +488,13 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const laptopNames = (laptops || []).map((entry) => entry.name).join(", ");
+    const laptopNames = (laptops || [])
+      .map((entry) => escapeHtml(entry.name))
+      .join(", ");
+    const safeActor = escapeHtml(
+      user.display_name || user.username || "Admin",
+    );
+    const safeUserDisplay = escapeHtml(user.display_name || user.username || "");
 
     const laptopItems = (laptops || []).map((l) => ({ item: l.name, quantity: 1 }));
 
@@ -518,7 +525,7 @@ export async function PUT(request, { params }) {
         nextStatus === "approved"
           ? `📝 <b>Laptop Loan Updated</b>\nAn admin updated your approved laptop loan #${id}.\n\nLaptops: ${laptopNames}`
           : `📝 <b>Laptop Loan Updated</b>\nAn admin updated your laptop loan request #${id}. It is still pending review.\n\nLaptops: ${laptopNames}`,
-      ).catch(() => {});
+      ).catch((err) => console.error("laptop admin-modify user telegram failed:", err?.message || err));
 
       if (loanOwner?.email && !loanOwner?.mute_emails) {
         sendLoanModifiedEmail({
@@ -529,13 +536,13 @@ export async function PUT(request, { params }) {
           autoApproved: false,
           adminModified: true,
           items: laptopItems,
-        }).catch(() => {});
+        }).catch((err) => console.error("laptop-loans [id] route notification send failed:", err?.message || err));
       }
 
       if (nextStatus === "approved") {
         sendAdminTelegramAlert(
-          `📝 <b>Active Laptop Allocation Updated</b>\n<b>${user.display_name || user.username || "Admin"}</b> updated approved laptop loan #${id}.\nLaptops: ${laptopNames}`,
-        ).catch(() => {});
+          `📝 <b>Active Laptop Allocation Updated</b>\n<b>${safeActor}</b> updated approved laptop loan #${id}.\nLaptops: ${laptopNames}`,
+        ).catch((err) => console.error("laptop admin-modify telegram failed:", err?.message || err));
       }
 
       const { error: auditError } = await supabase.from("audit_log").insert({
@@ -573,8 +580,8 @@ export async function PUT(request, { params }) {
         ? `${user.display_name} modified and auto-approved laptop loan #${id}.`
         : `${user.display_name} modified laptop loan request #${id} (now pending approval).`;
       const adminTelegramMsg = autoApproveLoans
-        ? `✅ <b>Laptop Loan Modified & Auto-Approved</b>\n<b>${user.display_name}</b> modified laptop loan #${id}.\nLaptops: ${laptopNames}`
-        : `📝 <b>Laptop Loan Modified</b>\n<b>${user.display_name}</b> modified loan #${id}.\nLaptops: ${laptopNames}`;
+        ? `✅ <b>Laptop Loan Modified & Auto-Approved</b>\n<b>${safeUserDisplay}</b> modified laptop loan #${id}.\nLaptops: ${laptopNames}`
+        : `📝 <b>Laptop Loan Modified</b>\n<b>${safeUserDisplay}</b> modified loan #${id}.\nLaptops: ${laptopNames}`;
 
       if (admins?.length) {
         await insertNotifications(
@@ -589,7 +596,9 @@ export async function PUT(request, { params }) {
 
         for (const admin of admins) {
           if (!admin.mute_telegram) {
-            sendTelegramMessage(admin.id, adminTelegramMsg).catch(() => {});
+            sendTelegramMessage(admin.id, adminTelegramMsg).catch((err) =>
+              console.error("laptop self-modify admin telegram failed:", err?.message || err),
+            );
           }
         }
       }
@@ -613,7 +622,7 @@ export async function PUT(request, { params }) {
         autoApproveLoans
           ? `✅ <b>Laptop Loan Updated & Approved</b>\nYour laptop loan #${id} has been updated and auto-approved.\n\nLaptops: ${laptopNames}`
           : `📝 <b>Laptop Loan Updated</b>\nYour laptop loan #${id} has been updated and is pending approval.\n\nLaptops: ${laptopNames}`,
-      ).catch(() => {});
+      ).catch((err) => console.error("laptop self-modify user telegram failed:", err?.message || err));
 
       if (userRecord?.email && !userRecord?.mute_emails) {
         sendLoanModifiedEmail({
@@ -624,7 +633,7 @@ export async function PUT(request, { params }) {
           autoApproved: autoApproveLoans,
           adminModified: false,
           items: laptopItems,
-        }).catch(() => {});
+        }).catch((err) => console.error("laptop-loans [id] route notification send failed:", err?.message || err));
       }
     }
 
@@ -856,28 +865,39 @@ export async function POST(request, { params }) {
 
     const requester = loan.users;
     const laptopList = loan.laptop_loan_items
+      .map((item) => escapeHtml(item.laptops?.name || ""))
+      .filter(Boolean)
+      .join(", ");
+    const rawLaptopList = loan.laptop_loan_items
       .map((item) => item.laptops?.name)
       .filter(Boolean)
       .join(", ");
+    const adminActionActor = escapeHtml(
+      user.display_name || user.username || "Admin",
+    );
+    const safeBorrower = escapeHtml(requester?.display_name || "Unknown");
+    const safePurpose = escapeHtml(loan.purpose || "");
+    const safeLoanType = escapeHtml(loan.loan_type || "");
+    const safeAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
 
     if (action === "approve") {
       sendAdminTelegramAlert(
-        `💻 <b>Laptop Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved laptop loan #${id}.\nBorrower: ${requester?.display_name || "Unknown"}\nLaptops: ${laptopList}\nPurpose: ${loan.purpose}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
-      ).catch(() => {});
+        `💻 <b>Laptop Checked Out</b>\n<b>${adminActionActor}</b> approved laptop loan #${id}.\nBorrower: ${safeBorrower}\nLaptops: ${laptopList}\nPurpose: ${safePurpose}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
+      ).catch((err) => console.error("laptop approve admin telegram failed:", err?.message || err));
     }
 
     if (action === "return") {
       sendAdminTelegramAlert(
-        `🔄 <b>Laptop Returned To Pool</b>\n<b>${user.display_name || user.username || "Admin"}</b> marked laptop loan #${id} as returned.\nBorrower: ${requester?.display_name || "Unknown"}\nLaptops: ${laptopList}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
-      ).catch(() => {});
+        `🔄 <b>Laptop Returned To Pool</b>\n<b>${adminActionActor}</b> marked laptop loan #${id} as returned.\nBorrower: ${safeBorrower}\nLaptops: ${laptopList}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
+      ).catch((err) => console.error("laptop return admin telegram failed:", err?.message || err));
     }
 
     if (requester) {
       const receiptMsg =
-        `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${id}\nStatus: Approved\nType: ${loan.loan_type}\nPurpose: ${loan.purpose}\nLaptops: ${laptopList}\nPeriod: ${loan.end_date ? `${loan.start_date} to ${loan.end_date}` : `From ${loan.start_date}`}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`;
+        `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${id}\nStatus: Approved\nType: ${safeLoanType}\nPurpose: ${safePurpose}\nLaptops: ${laptopList}\nPeriod: ${loan.end_date ? `${loan.start_date} to ${loan.end_date}` : `From ${loan.start_date}`}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`;
       const msg =
         action === "approve"
-          ? `Your laptop loan request #${id} for [${laptopList}] has been approved!`
+          ? `Your laptop loan request #${id} for [${rawLaptopList}] has been approved!`
           : action === "reject"
             ? `Your laptop loan request #${id} has been rejected.${admin_notes ? ` Note: ${admin_notes}` : ""}`
             : `Laptop loan #${id} has been marked as returned.`;
@@ -897,10 +917,11 @@ export async function POST(request, { params }) {
       if (!requester.mute_telegram) {
         const emoji =
           action === "approve" ? "✅" : action === "reject" ? "❌" : "📥";
+        const safeMsg = escapeHtml(msg);
         sendTelegramMessage(
           requester.id,
-          action === "approve" ? receiptMsg : `${emoji} ${msg}`,
-        ).catch(() => {});
+          action === "approve" ? receiptMsg : `${emoji} ${safeMsg}`,
+        ).catch((err) => console.error("laptop action user telegram failed:", err?.message || err));
       }
 
       if (requester.email && !requester.mute_emails) {
@@ -916,7 +937,7 @@ export async function POST(request, { params }) {
             status: action === "approve" ? "approved" : "rejected",
             adminNotes: admin_notes,
             items: laptopItems,
-          }).catch(() => {});
+          }).catch((err) => console.error("laptop-loans [id] route notification send failed:", err?.message || err));
         } else if (action === "return") {
           sendLoanReturnEmail({
             to: requester.email,
@@ -925,7 +946,7 @@ export async function POST(request, { params }) {
             items: laptopItems,
             photoUrl: null,
             adminReturn: true,
-          }).catch(() => {});
+          }).catch((err) => console.error("laptop-loans [id] route notification send failed:", err?.message || err));
         }
       }
     }

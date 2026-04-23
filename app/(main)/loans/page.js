@@ -9,6 +9,7 @@ import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import AppShellLoading from "@/components/AppShellLoading";
 import { supabaseClient } from "@/lib/db/supabaseClient";
+import { getTodaySingaporeDateString } from "@/lib/utils/date";
 import {
   RiTimeLine,
   RiCheckLine,
@@ -590,7 +591,7 @@ export default function LoansPage() {
     );
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodaySingaporeDateString();
 
   const isOverdue = (loan) =>
     loan.status === "approved" &&

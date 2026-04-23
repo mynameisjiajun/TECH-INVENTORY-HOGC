@@ -248,7 +248,7 @@ export async function POST(request) {
     sendTelegramChatMessage(
       chatId,
       "🔌 Your Tech Inventory account was unlinked from the app profile. Commands and alerts are now disabled until you relink from Profile.",
-    ).catch(() => {});
+    ).catch((err) => console.error("profile unlink telegram failed:", err?.message || err));
 
     return NextResponse.json({
       message:

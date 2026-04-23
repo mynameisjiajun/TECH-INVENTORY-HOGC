@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { sendLaptopAvailableEmail, sendLoanReturnEmail } from "@/lib/services/email";
+import { escapeHtml, isSafeHttpsUrl } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 import {
   deleteStorageObjectBestEffort,
@@ -194,15 +195,15 @@ export async function POST(request, { params }) {
         if (!subUser.mute_telegram) {
           sendTelegramMessage(
             entry.user_id,
-            `💻 <b>Laptop Available!</b>\n<b>${laptopName}</b> is now available to borrow.\n\nHead to the app to reserve it!`,
-          ).catch(() => {});
+            `💻 <b>Laptop Available!</b>\n<b>${escapeHtml(laptopName)}</b> is now available to borrow.\n\nHead to the app to reserve it!`,
+          ).catch((err) => console.error("laptop avail telegram failed:", err?.message || err));
         }
         if (subUser.email && !subUser.mute_emails) {
           sendLaptopAvailableEmail({
             to: subUser.email,
             displayName: subUser.display_name,
             laptopName,
-          }).catch(() => {});
+          }).catch((err) => console.error("laptop return notification send failed:", err?.message || err));
         }
       }
 
@@ -235,10 +236,21 @@ export async function POST(request, { params }) {
     }
 
     const laptopNames = loan.laptop_loan_items
+      .map((item) => escapeHtml(item.laptops?.name || ""))
+      .filter(Boolean)
+      .join(", ");
+    const rawLaptopNames = loan.laptop_loan_items
       .map((item) => item.laptops?.name)
       .filter(Boolean)
       .join(", ");
     const remarksLine = remarks ? `\nRemarks: ${remarks}` : "";
+    const safeRemarks = remarks ? escapeHtml(remarks) : "";
+    const photoAnchor = isSafeHttpsUrl(photoUrl)
+      ? `<a href="${escapeHtml(photoUrl)}">View Photo</a>`
+      : "Photo uploaded";
+    const userPhotoAnchor = isSafeHttpsUrl(photoUrl)
+      ? `<a href="${escapeHtml(photoUrl)}">View Your Return Photo</a>`
+      : "Return photo uploaded";
 
     if (admins?.length) {
       await insertRowsBestEffort({
@@ -246,7 +258,7 @@ export async function POST(request, { params }) {
         table: "notifications",
         entries: admins.map((admin) => ({
           user_id: admin.id,
-          message: `Laptop loan #${id} [${laptopNames}] has been returned.${remarksLine}`,
+          message: `Laptop loan #${id} [${rawLaptopNames}] has been returned.${remarksLine}`,
           link: photoUrl,
         })),
         warnings,
@@ -257,8 +269,8 @@ export async function POST(request, { params }) {
         if (!admin.mute_telegram) {
           sendTelegramMessage(
             admin.id,
-            `📥 <b>Laptop Returned</b>\nLoan #${id} [${laptopNames}] returned.${remarks ? `\n⚠️ ${remarks}` : ""}\n<a href="${photoUrl}">View Photo</a>`,
-          ).catch(() => {});
+            `📥 <b>Laptop Returned</b>\nLoan #${id} [${laptopNames}] returned.${safeRemarks ? `\n⚠️ ${safeRemarks}` : ""}\n${photoAnchor}`,
+          ).catch((err) => console.error("laptop return admin telegram failed:", err?.message || err));
         }
       }
     }
@@ -266,8 +278,8 @@ export async function POST(request, { params }) {
     // Send return receipt to borrower
     sendTelegramMessage(
       loan.user_id,
-      `✅ <b>Return Received!</b>\nYour laptop return for loan #${id} [${laptopNames}] has been recorded.${remarks ? `\n⚠️ <b>Remarks:</b> ${remarks}` : ""}\n📸 <a href="${photoUrl}">View Your Return Photo</a>`,
-    ).catch(() => {});
+      `✅ <b>Return Received!</b>\nYour laptop return for loan #${id} [${laptopNames}] has been recorded.${safeRemarks ? `\n⚠️ <b>Remarks:</b> ${safeRemarks}` : ""}\n📸 ${userPhotoAnchor}`,
+    ).catch((err) => console.error("laptop return user telegram failed:", err?.message || err));
 
     await insertRowsBestEffort({
       client: supabase,
@@ -300,7 +312,7 @@ export async function POST(request, { params }) {
         })),
         photoUrl,
         adminReturn: false,
-      }).catch(() => {});
+      }).catch((err) => console.error("laptop return notification send failed:", err?.message || err));
     }
 
     invalidateAll();

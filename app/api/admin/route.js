@@ -7,6 +7,11 @@ import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSyn
 import { sendLoanStatusEmail, sendLoanReturnEmail } from "@/lib/services/email";
 import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import {
+  getTodaySingaporeDateString,
+  getSingaporeDateOffsetString,
+} from "@/lib/utils/date";
+import { escapeHtml } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 
 const SHEETS_ENABLED = !!(
@@ -193,8 +198,8 @@ export async function POST(request) {
       }
 
       sendAdminTelegramAlert(
-        `🔄 <b>Inventory Returned</b>\n<b>${user.display_name || user.username || "Admin"}</b> marked ${approvedLoans.length} loan(s) as returned.\nLoan IDs: ${approvedLoans.map((loan) => `#${loan.id}`).join(", ")}`,
-      ).catch(() => {});
+        `🔄 <b>Inventory Returned</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> marked ${approvedLoans.length} loan(s) as returned.\nLoan IDs: ${approvedLoans.map((loan) => `#${loan.id}`).join(", ")}`,
+      ).catch((err) => console.error("admin bulk-return telegram failed:", err?.message || err));
 
       const bulkReturnUserIds = [...new Set(approvedLoans.map((l) => l.user_id))];
       const { data: bulkReturnUsers } = await supabase
@@ -217,7 +222,7 @@ export async function POST(request) {
             })),
             photoUrl: null,
             adminReturn: true,
-          }).catch(() => {});
+          }).catch((err) => console.error("admin route notification send failed:", err?.message || err));
         }
       }
 
@@ -249,21 +254,37 @@ export async function POST(request) {
         return NextResponse.json({ message: "Guest loans approved" });
       }
 
-      // Batch fetch all pending loans
-      const { data: pendingLoans } = await supabase
+      // Claim all selected pending loans atomically, then fetch their fields.
+      const { data: claimedRows, error: bulkClaimError } = await supabase
         .from("loan_requests")
-        .select(TECH_LOAN_ADMIN_FIELDS)
+        .update({
+          status: "approved",
+          admin_notes: "Bulk approved",
+          updated_at: new Date().toISOString(),
+        })
         .in("id", regularIds)
-        .eq("status", "pending");
+        .eq("status", "pending")
+        .select("id");
 
-      if (!pendingLoans || pendingLoans.length === 0) {
+      if (bulkClaimError) {
+        return NextResponse.json(
+          { error: bulkClaimError.message },
+          { status: 500 },
+        );
+      }
+
+      const validLoanIds = (claimedRows || []).map((r) => r.id);
+      if (validLoanIds.length === 0) {
         return NextResponse.json(
           { error: "No pending loans found in selection" },
           { status: 400 },
         );
       }
 
-      const validLoanIds = pendingLoans.map((l) => l.id);
+      const { data: pendingLoans } = await supabase
+        .from("loan_requests")
+        .select(TECH_LOAN_ADMIN_FIELDS)
+        .in("id", validLoanIds);
 
       // Batch fetch all loan items
       const { data: allApproveItems } = await supabase
@@ -281,76 +302,120 @@ export async function POST(request) {
       // Validate stock and apply deductions
       const sheetChangesMap = new Map();
       const deployedRows = [];
-      for (const loan of pendingLoans) {
-        for (const li of itemsByLoan.get(loan.id) || []) {
-          const si = li.sheet_row
-            ? db
-                .prepare("SELECT * FROM storage_items WHERE sheet_row = ?")
-                .get(li.sheet_row)
-            : db
-                .prepare("SELECT * FROM storage_items WHERE id = ?")
-                .get(li.item_id);
+      const bulkDecrementedItems = []; // For SQLite rollback
+      const bulkPermanentLoanIds = [];
 
-          if (!si) throw new Error(`Item not found: ${li.item_name}`);
-          if (si.current < li.quantity) {
-            throw new Error(
-              `Not enough stock for "${si.item}" (loan #${loan.id}). Available: ${si.current}`,
-            );
-          }
+      try {
+        for (const loan of pendingLoans) {
+          for (const li of itemsByLoan.get(loan.id) || []) {
+            const si = li.sheet_row
+              ? db
+                  .prepare("SELECT * FROM storage_items WHERE sheet_row = ?")
+                  .get(li.sheet_row)
+              : db
+                  .prepare("SELECT * FROM storage_items WHERE id = ?")
+                  .get(li.item_id);
 
-          const result = db
-            .prepare(
-              "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
-            )
-            .run(li.quantity, si.id, li.quantity);
-          if (result.changes === 0)
-            throw new Error(`Stock conflict for "${si.item}" — please retry`);
+            if (!si) throw new Error(`Item not found: ${li.item_name}`);
+            if (si.current < li.quantity) {
+              throw new Error(
+                `Not enough stock for "${si.item}" (loan #${loan.id}). Available: ${si.current}`,
+              );
+            }
 
-          sheetChangesMap.set(
-            li.sheet_row,
-            (sheetChangesMap.get(li.sheet_row) || 0) - li.quantity,
-          );
+            const result = db
+              .prepare(
+                "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
+              )
+              .run(li.quantity, si.id, li.quantity);
+            if (result.changes === 0)
+              throw new Error(`Stock conflict for "${si.item}" — please retry`);
 
-          if (loan.loan_type === "permanent") {
-            const deployedRow = {
-              item: si.item,
-              type: si.type,
-              brand: si.brand,
-              model: si.model,
+            bulkDecrementedItems.push({
+              storageId: si.id,
               quantity: li.quantity,
-              location: loan.location || si.location,
-              allocation: loan.department || loan.purpose,
-              status: "DEPLOYED",
-              remarks: `Perm loan #${loan.id} — ${loan.purpose}`,
-            };
-            db.prepare(
-              `INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            ).run(
-              deployedRow.item,
-              deployedRow.type,
-              deployedRow.brand,
-              deployedRow.model,
-              deployedRow.quantity,
-              deployedRow.location,
-              deployedRow.allocation,
-              deployedRow.status,
-              deployedRow.remarks,
+            });
+            sheetChangesMap.set(
+              li.sheet_row,
+              (sheetChangesMap.get(li.sheet_row) || 0) - li.quantity,
             );
-            deployedRows.push(deployedRow);
+
+            if (loan.loan_type === "permanent") {
+              const deployedRow = {
+                item: si.item,
+                type: si.type,
+                brand: si.brand,
+                model: si.model,
+                quantity: li.quantity,
+                location: loan.location || si.location,
+                allocation: loan.department || loan.purpose,
+                status: "DEPLOYED",
+                remarks: `Perm loan #${loan.id} — ${loan.purpose}`,
+              };
+              db.prepare(
+                `INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              ).run(
+                deployedRow.item,
+                deployedRow.type,
+                deployedRow.brand,
+                deployedRow.model,
+                deployedRow.quantity,
+                deployedRow.location,
+                deployedRow.allocation,
+                deployedRow.status,
+                deployedRow.remarks,
+              );
+              deployedRows.push(deployedRow);
+              bulkPermanentLoanIds.push(loan.id);
+            }
           }
         }
+      } catch (bulkSqliteErr) {
+        // Compensate: revert claimed Supabase statuses back to pending, and
+        // roll back any SQLite stock deductions and deployed_items inserts.
+        for (const dec of bulkDecrementedItems) {
+          try {
+            db.prepare(
+              "UPDATE storage_items SET current = current + ? WHERE id = ?",
+            ).run(dec.quantity, dec.storageId);
+          } catch (rollbackErr) {
+            console.error(
+              "Bulk approve: SQLite rollback failed:",
+              rollbackErr?.message || rollbackErr,
+            );
+          }
+        }
+        for (const permLoanId of bulkPermanentLoanIds) {
+          try {
+            db.prepare("DELETE FROM deployed_items WHERE remarks LIKE ?").run(
+              `Perm loan #${permLoanId}%`,
+            );
+          } catch (rollbackErr) {
+            console.error(
+              "Bulk approve: deployed_items rollback failed:",
+              rollbackErr?.message || rollbackErr,
+            );
+          }
+        }
+        const { error: revertError } = await supabase
+          .from("loan_requests")
+          .update({
+            status: "pending",
+            admin_notes: null,
+            updated_at: new Date().toISOString(),
+          })
+          .in("id", validLoanIds);
+        if (revertError) {
+          console.error(
+            "Bulk approve: failed to revert claimed loan statuses:",
+            revertError.message || revertError,
+          );
+        }
+        throw bulkSqliteErr;
       }
 
-      // Batch update loan statuses
-      await supabase
-        .from("loan_requests")
-        .update({
-          status: "approved",
-          admin_notes: "Bulk approved",
-          updated_at: new Date().toISOString(),
-        })
-        .in("id", validLoanIds);
+      // Statuses already updated atomically during the claim above.
 
       // Batch insert notifications
       await supabase.from("notifications").insert(
@@ -382,20 +447,20 @@ export async function POST(request) {
       for (const loan of pendingLoans) {
         const itemList =
           (itemsByLoan.get(loan.id) || [])
-            .map((item) => `${item.item_name} × ${item.quantity}`)
+            .map((item) => `${escapeHtml(item.item_name)} × ${item.quantity}`)
             .join(", ") || "Items pending sync";
         const periodLine = loan.end_date
           ? `${loan.start_date} to ${loan.end_date}`
           : `From ${loan.start_date}`;
         sendTelegramMessage(
           loan.user_id,
-          `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loan.id}\nStatus: Approved\nType: ${loan.loan_type}\nPurpose: ${loan.purpose}\nItems: ${itemList}\nPeriod: ${periodLine}`,
+          `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loan.id}\nStatus: Approved\nType: ${escapeHtml(loan.loan_type)}\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${itemList}\nPeriod: ${periodLine}`,
         ).catch((err) => console.error("Telegram notification failed:", err.message));
       }
 
       sendAdminTelegramAlert(
-        `📦 <b>Inventory Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved ${pendingLoans.length} loan(s).\nLoan IDs: ${pendingLoans.map((loan) => `#${loan.id}`).join(", ")}`,
-      ).catch(() => {});
+        `📦 <b>Inventory Checked Out</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> approved ${pendingLoans.length} loan(s).\nLoan IDs: ${pendingLoans.map((loan) => `#${loan.id}`).join(", ")}`,
+      ).catch((err) => console.error("admin bulk-approve telegram failed:", err?.message || err));
 
       const bulkApproveUserIds = [...new Set(pendingLoans.map((l) => l.user_id))];
       const { data: bulkApproveUsers } = await supabase
@@ -418,7 +483,7 @@ export async function POST(request) {
               item: i.item_name,
               quantity: i.quantity,
             })),
-          }).catch(() => {});
+          }).catch((err) => console.error("admin route notification send failed:", err?.message || err));
         }
       }
 
@@ -464,6 +529,29 @@ export async function POST(request) {
         );
       }
 
+      // Atomic claim: only one concurrent approve request can flip this row
+      // from pending → approved. Losers bail out with 409 before touching stock.
+      const { data: claimed, error: claimError } = await supabase
+        .from("loan_requests")
+        .update({
+          status: "approved",
+          admin_notes: admin_notes || "",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", loan_id)
+        .eq("status", "pending")
+        .select("id");
+
+      if (claimError) {
+        return NextResponse.json({ error: claimError.message }, { status: 500 });
+      }
+      if (!claimed || claimed.length === 0) {
+        return NextResponse.json(
+          { error: "Loan already processed" },
+          { status: 409 },
+        );
+      }
+
       const { data: loanItems } = await supabase
         .from("loan_items")
         .select(TECH_LOAN_ITEM_FIELDS)
@@ -471,77 +559,117 @@ export async function POST(request) {
 
       const approveChanges = []; // { sheetRow, delta }
       const deployedRows = [];
+      const decrementedItems = []; // For SQLite rollback if needed
 
       // Validate + deduct stock in SQLite using sheet_row
-      for (const li of loanItems || []) {
-        const si = li.sheet_row
-          ? db
-              .prepare("SELECT * FROM storage_items WHERE sheet_row = ?")
-              .get(li.sheet_row)
-          : db
-              .prepare("SELECT * FROM storage_items WHERE id = ?")
-              .get(li.item_id);
+      // If anything fails, rollback both SQLite and the Supabase status claim.
+      try {
+        for (const li of loanItems || []) {
+          const si = li.sheet_row
+            ? db
+                .prepare("SELECT * FROM storage_items WHERE sheet_row = ?")
+                .get(li.sheet_row)
+            : db
+                .prepare("SELECT * FROM storage_items WHERE id = ?")
+                .get(li.item_id);
 
-        if (!si)
-          throw new Error(`Item not found in inventory: ${li.item_name}`);
-        if (si.current < li.quantity) {
-          throw new Error(
-            `Not enough stock for "${si.item}". Available: ${si.current}`,
-          );
+          if (!si)
+            throw new Error(`Item not found in inventory: ${li.item_name}`);
+          if (si.current < li.quantity) {
+            throw new Error(
+              `Not enough stock for "${si.item}". Available: ${si.current}`,
+            );
+          }
+
+          const result = db
+            .prepare(
+              "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
+            )
+            .run(li.quantity, si.id, li.quantity);
+          if (result.changes === 0)
+            throw new Error("Stock changed during approval — please try again");
+
+          decrementedItems.push({ storageId: si.id, quantity: li.quantity });
+          approveChanges.push({ sheetRow: si.sheet_row, delta: -li.quantity });
+
+          // For permanent loans, add to deployed_items in SQLite
+          if (loan.loan_type === "permanent") {
+            const deployedRow = {
+              item: si.item,
+              type: si.type,
+              brand: si.brand,
+              model: si.model,
+              quantity: li.quantity,
+              location: loan.location || si.location,
+              allocation: loan.department || loan.purpose,
+              status: "DEPLOYED",
+              remarks: `Perm loan #${loan_id} — ${loan.purpose}`,
+            };
+            db.prepare(
+              `
+              INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            ).run(
+              deployedRow.item,
+              deployedRow.type,
+              deployedRow.brand,
+              deployedRow.model,
+              deployedRow.quantity,
+              deployedRow.location,
+              deployedRow.allocation,
+              deployedRow.status,
+              deployedRow.remarks,
+            );
+            deployedRows.push(deployedRow);
+          }
         }
-
-        const result = db
-          .prepare(
-            "UPDATE storage_items SET current = current - ? WHERE id = ? AND current >= ?",
-          )
-          .run(li.quantity, si.id, li.quantity);
-        if (result.changes === 0)
-          throw new Error("Stock changed during approval — please try again");
-
-        approveChanges.push({ sheetRow: si.sheet_row, delta: -li.quantity });
-
-        // For permanent loans, add to deployed_items in SQLite
+      } catch (sqliteErr) {
+        // Rollback partial SQLite stock deductions.
+        for (const dec of decrementedItems) {
+          try {
+            db.prepare(
+              "UPDATE storage_items SET current = current + ? WHERE id = ?",
+            ).run(dec.quantity, dec.storageId);
+          } catch (rollbackErr) {
+            console.error(
+              "Failed to roll back SQLite stock after approve error:",
+              rollbackErr?.message || rollbackErr,
+            );
+          }
+        }
+        // Rollback deployed_items rows we just inserted.
         if (loan.loan_type === "permanent") {
-          const deployedRow = {
-            item: si.item,
-            type: si.type,
-            brand: si.brand,
-            model: si.model,
-            quantity: li.quantity,
-            location: loan.location || si.location,
-            allocation: loan.department || loan.purpose,
-            status: "DEPLOYED",
-            remarks: `Perm loan #${loan_id} — ${loan.purpose}`,
-          };
-          db.prepare(
-            `
-            INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
-          ).run(
-            deployedRow.item,
-            deployedRow.type,
-            deployedRow.brand,
-            deployedRow.model,
-            deployedRow.quantity,
-            deployedRow.location,
-            deployedRow.allocation,
-            deployedRow.status,
-            deployedRow.remarks,
-          );
-          deployedRows.push(deployedRow);
+          try {
+            db.prepare("DELETE FROM deployed_items WHERE remarks LIKE ?").run(
+              `Perm loan #${loan_id}%`,
+            );
+          } catch (rollbackErr) {
+            console.error(
+              "Failed to roll back deployed_items after approve error:",
+              rollbackErr?.message || rollbackErr,
+            );
+          }
         }
+        // Revert the Supabase status claim so the loan goes back to pending.
+        const { error: revertError } = await supabase
+          .from("loan_requests")
+          .update({
+            status: "pending",
+            admin_notes: loan.admin_notes || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", loan_id);
+        if (revertError) {
+          console.error(
+            "Failed to revert loan status after approve error:",
+            revertError.message || revertError,
+          );
+        }
+        throw sqliteErr;
       }
 
-      // Update loan in Supabase
-      await supabase
-        .from("loan_requests")
-        .update({
-          status: "approved",
-          admin_notes: admin_notes || "",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", loan_id);
+      // Status already updated atomically above; stock/deployed_items committed.
 
       await supabase.from("notifications").insert({
         user_id: loan.user_id,
@@ -588,15 +716,16 @@ export async function POST(request) {
       if (!loanUser?.mute_telegram) {
         const itemList =
           (loanItems || [])
-            .map((i) => `${i.item_name} × ${i.quantity}`)
+            .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)
             .join(", ") || "Items pending sync";
         const periodLine = loan.end_date
           ? `${loan.start_date} to ${loan.end_date}`
           : `From ${loan.start_date}`;
+        const safeAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
         backgroundTasks.push(
           sendTelegramMessage(
             loan.user_id,
-            `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loan_id}\nStatus: Approved\nType: ${loan.loan_type}\nPurpose: ${loan.purpose}\nItems: ${itemList}\nPeriod: ${periodLine}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
+            `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loan_id}\nStatus: Approved\nType: ${escapeHtml(loan.loan_type)}\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${itemList}\nPeriod: ${periodLine}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
           ),
         );
       }
@@ -604,11 +733,11 @@ export async function POST(request) {
 
       const approvedItemList =
         (loanItems || [])
-          .map((i) => `${i.item_name} × ${i.quantity}`)
+          .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)
           .join(", ") || "No items listed";
       sendAdminTelegramAlert(
-        `📦 <b>Inventory Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved loan #${loan_id}.\nBorrower: ${loanUser?.display_name || "Unknown"}\nPurpose: ${loan.purpose}\nItems: ${approvedItemList}`,
-      ).catch(() => {});
+        `📦 <b>Inventory Checked Out</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> approved loan #${loan_id}.\nBorrower: ${escapeHtml(loanUser?.display_name || "Unknown")}\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${approvedItemList}`,
+      ).catch((err) => console.error("admin approve telegram failed:", err?.message || err));
 
       invalidateAll();
       await supabase.from("activity_feed").insert({
@@ -629,14 +758,29 @@ export async function POST(request) {
         );
       }
 
-      await supabase
+      const { data: rejectClaim, error: rejectClaimError } = await supabase
         .from("loan_requests")
         .update({
           status: "rejected",
           admin_notes: admin_notes || "",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", loan_id);
+        .eq("id", loan_id)
+        .eq("status", "pending")
+        .select("id");
+
+      if (rejectClaimError) {
+        return NextResponse.json(
+          { error: rejectClaimError.message },
+          { status: 500 },
+        );
+      }
+      if (!rejectClaim || rejectClaim.length === 0) {
+        return NextResponse.json(
+          { error: "Loan already processed" },
+          { status: 409 },
+        );
+      }
 
       await supabase.from("notifications").insert({
         user_id: loan.user_id,
@@ -680,10 +824,11 @@ export async function POST(request) {
         );
       }
       if (!rejectUser?.mute_telegram) {
+        const safeAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
         rejectTasks.push(
           sendTelegramMessage(
             loan.user_id,
-            `❌ <b>Loan Rejected</b>\nYour ${loan.loan_type} loan request #${loan_id} has been rejected.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
+            `❌ <b>Loan Rejected</b>\nYour ${escapeHtml(loan.loan_type)} loan request #${loan_id} has been rejected.${safeAdminNotes ? `\n\nAdmin notes: ${safeAdminNotes}` : ""}`,
           ),
         );
       }
@@ -777,15 +922,15 @@ export async function POST(request) {
           })),
           photoUrl: null,
           adminReturn: true,
-        }).catch(() => {});
+        }).catch((err) => console.error("admin route notification send failed:", err?.message || err));
       }
 
       const returnedItemList =
         (loanItems || [])
-          .map((i) => `${i.item_name} × ${i.quantity}`)
+          .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)
           .join(", ") || "No items listed";
       sendAdminTelegramAlert(
-        `🔄 <b>Inventory Returned</b>\n<b>${user.display_name || user.username || "Admin"}</b> returned loan #${loan_id} to stock.\nBorrower: ${returnUser?.display_name || "Unknown"}\nItems: ${returnedItemList}`,
+        `🔄 <b>Inventory Returned</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> returned loan #${loan_id} to stock.\nBorrower: ${escapeHtml(returnUser?.display_name || "Unknown")}\nItems: ${returnedItemList}`,
       ).catch((err) => console.error("Telegram notification failed:", err.message));
 
       invalidateAll();
@@ -842,9 +987,10 @@ export async function POST(request) {
           link: "/loans",
         });
 
+        const safeAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
         sendTelegramMessage(
           loan.user_id,
-          `❌ <b>Loan Removed</b>\nYour ${loan.loan_type} loan #${loan_id} was removed by an admin.${admin_notes ? `\n\nAdmin notes: ${admin_notes}` : ""}`,
+          `❌ <b>Loan Removed</b>\nYour ${escapeHtml(loan.loan_type)} loan #${loan_id} was removed by an admin.${safeAdminNotes ? `\n\nAdmin notes: ${safeAdminNotes}` : ""}`,
         ).catch((err) =>
           console.error("Telegram notification failed:", err.message),
         );
@@ -853,10 +999,11 @@ export async function POST(request) {
       if (loan.status === "approved") {
         const deletedItemList =
           (loanItems || [])
-            .map((i) => `${i.item_name} × ${i.quantity}`)
+            .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)
             .join(", ") || "No items listed";
+        const safeAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
         sendAdminTelegramAlert(
-          `↩️ <b>Inventory Restored</b>\n<b>${user.display_name || user.username || "Admin"}</b> deleted approved loan #${loan_id} and restored stock.\nItems: ${deletedItemList}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
+          `↩️ <b>Inventory Restored</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> deleted approved loan #${loan_id} and restored stock.\nItems: ${deletedItemList}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
         ).catch((err) =>
           console.error("Telegram notification failed:", err.message),
         );
@@ -931,11 +1078,13 @@ async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
     await supabase.from("audit_log").insert({ user_id: user.id, action: "approve", target_type: "guest_request", target_id: loan_id, details: `Approved guest loan. ${admin_notes || ""}` });
 
     const guestTechSummary =
-      techItems.map((item) => `${item.item_name} × ${item.quantity}`).join(", ") ||
-      "No tech items";
+      techItems
+        .map((item) => `${escapeHtml(item.item_name)} × ${item.quantity}`)
+        .join(", ") || "No tech items";
+    const guestApproveAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
     sendAdminTelegramAlert(
-      `📦 <b>Guest Inventory Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved guest request #${loan_id}.\nGuest: ${request.guest_name}\nItems: ${guestTechSummary}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
-    ).catch(() => {});
+      `📦 <b>Guest Inventory Checked Out</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> approved guest request #${loan_id}.\nGuest: ${escapeHtml(request.guest_name)}\nItems: ${guestTechSummary}${guestApproveAdminNotes ? `\nAdmin Notes: ${guestApproveAdminNotes}` : ""}`,
+    ).catch((err) => console.error("admin guest-approve telegram failed:", err?.message || err));
 
     invalidateAll();
     return NextResponse.json({ message: "Guest loan approved" });
@@ -964,11 +1113,13 @@ async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
     await supabase.from("audit_log").insert({ user_id: user.id, action: "return", target_type: "guest_request", target_id: loan_id, details: `Items returned to stock. ${admin_notes || ""}` });
 
     const guestReturnSummary =
-      techItems.map((item) => `${item.item_name} × ${item.quantity}`).join(", ") ||
-      "No tech items";
+      techItems
+        .map((item) => `${escapeHtml(item.item_name)} × ${item.quantity}`)
+        .join(", ") || "No tech items";
+    const guestReturnAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
     sendAdminTelegramAlert(
-      `🔄 <b>Guest Inventory Returned</b>\n<b>${user.display_name || user.username || "Admin"}</b> returned guest request #${loan_id} to stock.\nGuest: ${request.guest_name}\nItems: ${guestReturnSummary}${admin_notes ? `\nAdmin Notes: ${admin_notes}` : ""}`,
-    ).catch(() => {});
+      `🔄 <b>Guest Inventory Returned</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> returned guest request #${loan_id} to stock.\nGuest: ${escapeHtml(request.guest_name)}\nItems: ${guestReturnSummary}${guestReturnAdminNotes ? `\nAdmin Notes: ${guestReturnAdminNotes}` : ""}`,
+    ).catch((err) => console.error("admin guest-return telegram failed:", err?.message || err));
 
     invalidateAll();
     return NextResponse.json({ message: "Guest items returned to stock" });
@@ -1105,6 +1256,8 @@ export async function GET(request) {
   const thirtyDaysAgo = new Date(
     Date.now() - 30 * 24 * 60 * 60 * 1000,
   ).toISOString();
+  const todaySgt = getTodaySingaporeDateString();
+  const tomorrowSgt = getSingaporeDateOffsetString(1);
   const dueCountsStartedAt = Date.now();
   const analyticsStartedAt = Date.now();
 
@@ -1131,36 +1284,26 @@ export async function GET(request) {
         .eq("status", "approved")
         .eq("loan_type", "temporary")
         .not("end_date", "is", null)
-        .lt("end_date", new Date(Date.now()).toLocaleDateString("en-CA")),
+        .lt("end_date", todaySgt),
       supabase
         .from("loan_requests")
         .select("id", { count: "exact", head: true })
         .eq("status", "approved")
         .eq("loan_type", "temporary")
-        .eq(
-          "end_date",
-          new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString(
-            "en-CA",
-          ),
-        ),
+        .eq("end_date", tomorrowSgt),
       supabase
         .from("laptop_loan_requests")
         .select("id", { count: "exact", head: true })
         .eq("status", "approved")
         .eq("loan_type", "temporary")
         .not("end_date", "is", null)
-        .lt("end_date", new Date(Date.now()).toLocaleDateString("en-CA")),
+        .lt("end_date", todaySgt),
       supabase
         .from("laptop_loan_requests")
         .select("id", { count: "exact", head: true })
         .eq("status", "approved")
         .eq("loan_type", "temporary")
-        .eq(
-          "end_date",
-          new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString(
-            "en-CA",
-          ),
-        ),
+        .eq("end_date", tomorrowSgt),
     ]),
     supabase
       .from("loan_requests")

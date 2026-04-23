@@ -82,7 +82,12 @@ export default function GuestReturnPage() {
       const res  = await fetch("/api/guest/return", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ loan_id: returnModalLoan.id, imageBase64: returnPhoto, remarks: returnRemarks.trim() || null }),
+        body: JSON.stringify({
+          loan_id: returnModalLoan.id,
+          imageBase64: returnPhoto,
+          remarks: returnRemarks.trim() || null,
+          guest_identifier: searchQuery.trim(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to submit return");
@@ -150,20 +155,24 @@ export default function GuestReturnPage() {
             borderRadius: 14, padding: 4, gap: 4, marginBottom: 28,
           }}>
             {[
-              { key: "borrow", label: "Borrow", icon: <RiShoppingCart2Line style={{ fontSize: 16 }} />, action: () => router.push("/home") },
+              // The Borrow tab navigates away, so it's never "active" in this view.
+              { key: "borrow", label: "Borrow", icon: <RiShoppingCart2Line style={{ fontSize: 16 }} />, action: () => router.push("/home"), navigatesAway: true },
               { key: "return", label: "Return", icon: <RiArrowGoBackLine style={{ fontSize: 16 }} />,   action: () => setActiveTab("return") },
-            ].map(({ key, label, icon, action }) => (
-              <button key={key} onClick={action} style={{
-                flex: 1, padding: "10px 0", borderRadius: 10, border: "none",
-                fontWeight: 600, fontSize: 14, cursor: "pointer",
-                background: activeTab === key ? "linear-gradient(135deg,#7266ff,#a78bfa)" : "transparent",
-                color: activeTab === key ? "#fff" : C.textSecondary,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-                transition: "all 0.15s",
-              }}>
-                {icon} {label}
-              </button>
-            ))}
+            ].map(({ key, label, icon, action, navigatesAway }) => {
+              const isActive = !navigatesAway && activeTab === key;
+              return (
+                <button key={key} onClick={action} style={{
+                  flex: 1, padding: "10px 0", borderRadius: 10, border: "none",
+                  fontWeight: 600, fontSize: 14, cursor: "pointer",
+                  background: isActive ? "linear-gradient(135deg,#7266ff,#a78bfa)" : "transparent",
+                  color: isActive ? "#fff" : C.textSecondary,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                  transition: "all 0.15s",
+                }}>
+                  {icon} {label}
+                </button>
+              );
+            })}
           </div>
 
           {/* Header */}

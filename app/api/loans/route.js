@@ -10,6 +10,8 @@ import { sendTelegramMessage } from "@/lib/services/telegram";
 import { autoApproveTechLoan } from "@/lib/services/techLoanAutoApproval";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { getTodaySingaporeDateString } from "@/lib/utils/date";
+import { AUTO_APPROVE_ADMIN_NOTE } from "@/lib/constants";
+import { escapeHtml } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 
 const VALID_LOAN_VIEWS = new Set(["my", "all", "active"]);
@@ -23,7 +25,6 @@ const VALID_LOAN_STATUSES = new Set([
 const DEFAULT_LOAN_PAGE_SIZE = 100;
 const MAX_LOAN_PAGE_SIZE = 100;
 const RELATED_SEARCH_MIN_LENGTH = 2;
-const AUTO_APPROVE_ADMIN_NOTE = "Auto-approved by global setting";
 const TECH_LOAN_SELECT = `
       id,
       user_id,
@@ -537,14 +538,19 @@ export async function POST(request) {
         .single();
 
       const itemListStr = resolvedItems
-        .map((i) => `${i.item_name} × ${i.quantity}`)
+        .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)
         .join(", ");
       const itemsForEmail = resolvedItems.map((i) => ({
         item: i.item_name,
         quantity: i.quantity,
       }));
-      const remarksLine = trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : "";
-      const requesterName = user.display_name || user.username || "A user";
+      const safeRemarks = trimmedRemarks ? escapeHtml(trimmedRemarks) : "";
+      const remarksLine = safeRemarks ? `\nRemarks: ${safeRemarks}` : "";
+      const requesterName = escapeHtml(
+        user.display_name || user.username || "A user",
+      );
+      const safeLoanType = escapeHtml(loan_type);
+      const safePurpose = escapeHtml(trimmedPurpose);
       const periodLine = end_date
         ? `Period: ${start_date} to ${end_date}`
         : `Start Date: ${start_date}`;
@@ -581,14 +587,14 @@ export async function POST(request) {
             status: "approved",
             adminNotes: AUTO_APPROVE_ADMIN_NOTE,
             items: itemsForEmail,
-          }).catch(() => {});
+          }).catch((err) => console.error("loans route notification send failed:", err?.message || err));
         }
 
         if (!userRecord?.mute_telegram) {
           sendTelegramMessage(
             user.id,
-            `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loanId}\nType: ${loan_type}\nPurpose: ${trimmedPurpose}\nItems: ${itemListStr}\n${periodLine}${remarksLine ? `${remarksLine}` : ""}`,
-          ).catch(() => {});
+            `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loanId}\nType: ${safeLoanType}\nPurpose: ${safePurpose}\nItems: ${itemListStr}\n${periodLine}${remarksLine ? `${remarksLine}` : ""}`,
+          ).catch((err) => console.error("loan auto-approve user telegram failed:", err?.message || err));
         }
 
         const { data: admins } = await supabase
@@ -609,8 +615,8 @@ export async function POST(request) {
             if (!admin.mute_telegram) {
               sendTelegramMessage(
                 admin.id,
-                `✅ <b>Auto-Approved Loan Request</b>\n<b>${requesterName}</b> submitted an auto-approved <b>${loan_type}</b> loan.\n\nPurpose: ${trimmedPurpose}${remarksLine}\nItems: ${itemListStr}`,
-              ).catch(() => {});
+                `✅ <b>Auto-Approved Loan Request</b>\n<b>${requesterName}</b> submitted an auto-approved <b>${safeLoanType}</b> loan.\n\nPurpose: ${safePurpose}${remarksLine}\nItems: ${itemListStr}`,
+              ).catch((err) => console.error("loan auto-approve admin telegram failed:", err?.message || err));
             }
           }
         }
@@ -642,8 +648,8 @@ export async function POST(request) {
         if (!userRecord?.mute_telegram) {
           sendTelegramMessage(
             user.id,
-            `📝 <b>Loan Request Received</b>\nYour ${loan_type} loan #${loanId} has been submitted and is pending approval.\n\nPurpose: ${trimmedPurpose}\nItems: ${itemListStr}`,
-          ).catch(() => {});
+            `📝 <b>Loan Request Received</b>\nYour ${safeLoanType} loan #${loanId} has been submitted and is pending approval.\n\nPurpose: ${safePurpose}\nItems: ${itemListStr}`,
+          ).catch((err) => console.error("loan pending user telegram failed:", err?.message || err));
         }
 
         if (userRecord?.email && !userRecord?.mute_emails) {
@@ -655,7 +661,7 @@ export async function POST(request) {
             purpose: trimmedPurpose,
             remarks: trimmedRemarks,
             items: itemsForEmail,
-          }).catch(() => {});
+          }).catch((err) => console.error("loans route notification send failed:", err?.message || err));
         }
 
         const unmutedAdminsEmail = (admins || []).filter((a) => !a.mute_emails);
@@ -668,15 +674,15 @@ export async function POST(request) {
             purpose: trimmedPurpose,
             remarks: trimmedRemarks,
             items: itemsForEmail,
-          }).catch(() => {});
+          }).catch((err) => console.error("loans route notification send failed:", err?.message || err));
         }
 
         for (const admin of admins || []) {
           if (!admin.mute_telegram) {
             sendTelegramMessage(
               admin.id,
-              `🔔 <b>New Loan Request</b>\n<b>${user.display_name || user.username}</b> requested a <b>${loan_type}</b> loan.\n\nPurpose: ${trimmedPurpose}${remarksLine}\nItems: ${itemListStr}`,
-            ).catch(() => {});
+              `🔔 <b>New Loan Request</b>\n<b>${requesterName}</b> requested a <b>${safeLoanType}</b> loan.\n\nPurpose: ${safePurpose}${remarksLine}\nItems: ${itemListStr}`,
+            ).catch((err) => console.error("loan pending admin telegram failed:", err?.message || err));
           }
         }
       }

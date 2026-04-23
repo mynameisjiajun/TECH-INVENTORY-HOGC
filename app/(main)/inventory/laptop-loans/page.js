@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import Navbar from "@/components/Navbar";
 import CartPanel from "@/components/CartPanel";
 import AppShellLoading from "@/components/AppShellLoading";
+import { getTodaySingaporeDateString } from "@/lib/utils/date";
 import {
   RiArrowLeftLine,
   RiMacbookLine,
@@ -340,7 +341,7 @@ export default function LaptopLoansPage() {
   const abortRef = useRef(null);
   const debounceRef = useRef(null);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodaySingaporeDateString();
 
   const fetchLaptops = useCallback(
     async (signal) => {

@@ -4,6 +4,8 @@ import { sendLoanStatusEmail, sendLoanPendingEmail } from "@/lib/services/email"
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { getTodaySingaporeDateString } from "@/lib/utils/date";
+import { AUTO_APPROVE_ADMIN_NOTE } from "@/lib/constants";
+import { escapeHtml } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 
 const VALID_LOAN_VIEWS = new Set(["my", "all", "active"]);
@@ -17,7 +19,6 @@ const VALID_LOAN_STATUSES = new Set([
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_LOAN_PAGE_SIZE = 200;
 const MAX_LOAN_PAGE_SIZE = 200;
-const AUTO_APPROVE_ADMIN_NOTE = "Auto-approved by global setting";
 const LAPTOP_LOAN_SELECT =
   "id, user_id, loan_type, purpose, remarks, department, start_date, end_date, status, admin_notes, created_at, updated_at, users(display_name, username, telegram_handle, profile_emoji, role)";
 const LAPTOP_LOAN_SELECT_LEGACY =
@@ -569,10 +570,18 @@ export async function POST(request) {
   }
 
   const laptopCount = allRequestedLaptopIds.length;
-  const remarksLine = trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : "";
-  const requesterName = user.display_name || user.username || "A user";
+  const safeRemarks = trimmedRemarks ? escapeHtml(trimmedRemarks) : "";
+  const remarksLine = safeRemarks ? `\nRemarks: ${safeRemarks}` : "";
+  const requesterName = escapeHtml(
+    user.display_name || user.username || "A user",
+  );
+  const safePurpose = escapeHtml(trimmedPurpose);
   const laptopListStr = allRequestedLaptopIds
-    .map((laptopId) => laptopMap.get(String(laptopId))?.name || `Laptop ${laptopId}`)
+    .map((laptopId) =>
+      escapeHtml(
+        laptopMap.get(String(laptopId))?.name || `Laptop ${laptopId}`,
+      ),
+    )
     .join(", ");
   const requestSummary = createdLoans
     .map((loan) =>
@@ -624,14 +633,14 @@ export async function POST(request) {
         status: "approved",
         adminNotes: AUTO_APPROVE_ADMIN_NOTE,
         items: itemsForEmail,
-      }).catch(() => {});
+      }).catch((err) => console.error("laptop-loans route notification send failed:", err?.message || err));
     }
 
     if (!userRecord?.mute_telegram) {
       sendTelegramMessage(
         user.id,
-        `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nPurpose: ${trimmedPurpose}\nLaptops: ${laptopListStr}\nRequests:\n${requestSummary}${remarksLine ? `${remarksLine}` : ""}`,
-      ).catch(() => {});
+        `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nPurpose: ${safePurpose}\nLaptops: ${laptopListStr}\nRequests:\n${requestSummary}${remarksLine ? `${remarksLine}` : ""}`,
+      ).catch((err) => console.error("laptop auto-approve user telegram failed:", err?.message || err));
     }
 
     const { data: admins } = await supabase
@@ -652,8 +661,8 @@ export async function POST(request) {
         if (!admin.mute_telegram) {
           sendTelegramMessage(
             admin.id,
-            `✅ <b>Auto-Approved Laptop Loan</b>\n<b>${requesterName}</b> requested ${laptopCount} laptop(s) and it is active now.\nPurpose: ${trimmedPurpose}${remarksLine}\nLaptops: ${laptopListStr}`,
-          ).catch(() => {});
+            `✅ <b>Auto-Approved Laptop Loan</b>\n<b>${requesterName}</b> requested ${laptopCount} laptop(s) and it is active now.\nPurpose: ${safePurpose}${remarksLine}\nLaptops: ${laptopListStr}`,
+          ).catch((err) => console.error("laptop auto-approve admin telegram failed:", err?.message || err));
         }
       }
     }
@@ -682,8 +691,8 @@ export async function POST(request) {
         if (!admin.mute_telegram) {
           sendTelegramMessage(
             admin.id,
-            `💻 <b>New Laptop Loan Request</b>\n<b>${user.display_name}</b> requested ${laptopCount} laptop(s).\nPurpose: ${trimmedPurpose}${remarksLine}`,
-          ).catch(() => {});
+            `💻 <b>New Laptop Loan Request</b>\n<b>${requesterName}</b> requested ${laptopCount} laptop(s).\nPurpose: ${safePurpose}${remarksLine}`,
+          ).catch((err) => console.error("laptop pending admin telegram failed:", err?.message || err));
         }
       }
     }
@@ -698,8 +707,8 @@ export async function POST(request) {
     if (!userRecord?.mute_telegram) {
       sendTelegramMessage(
         user.id,
-        `📝 <b>Laptop Loan Request Received</b>\nYour request for ${laptopCount} laptop(s) has been submitted and is pending approval.\n\nPurpose: ${trimmedPurpose}\nLaptops: ${laptopListStr}`,
-      ).catch(() => {});
+        `📝 <b>Laptop Loan Request Received</b>\nYour request for ${laptopCount} laptop(s) has been submitted and is pending approval.\n\nPurpose: ${safePurpose}\nLaptops: ${laptopListStr}`,
+      ).catch((err) => console.error("laptop pending user telegram failed:", err?.message || err));
     }
 
     if (userRecord?.email && !userRecord?.mute_emails) {
@@ -715,7 +724,7 @@ export async function POST(request) {
         purpose: trimmedPurpose,
         remarks: trimmedRemarks,
         items: itemsForEmail,
-      }).catch(() => {});
+      }).catch((err) => console.error("laptop-loans route notification send failed:", err?.message || err));
     }
   }
 

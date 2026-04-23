@@ -96,7 +96,7 @@ export async function POST(request) {
           to: cleanEmail,
           displayName: newUser.display_name,
           username: newUser.username,
-        }).catch(() => {});
+        }).catch((err) => console.error("auth welcome email failed:", err?.message || err));
       }
 
       const response = NextResponse.json({ user: newUser });

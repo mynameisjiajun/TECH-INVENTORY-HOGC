@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { sendLoanReturnEmail } from "@/lib/services/email";
+import { escapeHtml, isSafeHttpsUrl } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 import {
   deleteStorageObjectBestEffort,
@@ -351,11 +352,18 @@ export async function POST(request, { params }) {
         context: "admin return",
       });
 
+      const safeDisplayName = escapeHtml(loanUser?.display_name || "A user");
+      const safeRemarks = remarks ? escapeHtml(remarks) : "";
+      const safePhotoLink = isSafeHttpsUrl(photoUrl)
+        ? `<a href="${escapeHtml(photoUrl)}">View Proof Photo</a>`
+        : "Proof photo uploaded";
       for (const admin of admins) {
         sendTelegramMessage(
           admin.id,
-          `📥 <b>Item Returned</b>\n${loanUser?.display_name} returned loan #${loanId}.${remarks ? `\n⚠️ <b>Remarks:</b> ${remarks}` : ""}\n<a href="${photoUrl}">View Proof Photo</a>`,
-        ).catch(() => {});
+          `📥 <b>Item Returned</b>\n${safeDisplayName} returned loan #${loanId}.${safeRemarks ? `\n⚠️ <b>Remarks:</b> ${safeRemarks}` : ""}\n${safePhotoLink}`,
+        ).catch((err) =>
+          console.error("return admin telegram failed:", err?.message || err),
+        );
       }
     }
 
@@ -374,10 +382,16 @@ export async function POST(request, { params }) {
       context: "user return receipt",
     });
 
+    const userSafeRemarks = remarks ? escapeHtml(remarks) : "";
+    const userSafePhotoLink = isSafeHttpsUrl(photoUrl)
+      ? `<a href="${escapeHtml(photoUrl)}">View Your Return Photo</a>`
+      : "Your return photo has been uploaded";
     sendTelegramMessage(
       loan.user_id,
-      `✅ <b>Return Received!</b>\nYour return for loan #${loanId} has been recorded.${remarks ? `\n⚠️ <b>Remarks:</b> ${remarks}` : ""}\n📸 <a href="${photoUrl}">View Your Return Photo</a>`,
-    ).catch(() => {});
+      `✅ <b>Return Received!</b>\nYour return for loan #${loanId} has been recorded.${userSafeRemarks ? `\n⚠️ <b>Remarks:</b> ${userSafeRemarks}` : ""}\n📸 ${userSafePhotoLink}`,
+    ).catch((err) =>
+      console.error("return user telegram failed:", err?.message || err),
+    );
 
     if (loanUser) {
       const { data: loanUserFull } = await supabase
@@ -396,7 +410,7 @@ export async function POST(request, { params }) {
           })),
           photoUrl,
           adminReturn: false,
-        }).catch(() => {});
+        }).catch((err) => console.error("loan return notification send failed:", err?.message || err));
       }
     }
 

@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/context/AuthContext";
 import { useToast } from "@/lib/context/ToastContext";
 import { useState, useEffect } from "react";
 import { MINISTRY_OPTIONS } from "@/lib/utils/ministries";
+import { getTodaySingaporeDateString } from "@/lib/utils/date";
 import { useRouter } from "next/navigation";
 import {
   RiCloseLine,
@@ -105,7 +106,7 @@ export default function CartPanel() {
 
   const openCheckoutForm = () => {
     setError("");
-    const today = new Date().toISOString().split("T")[0];
+    const today = getTodaySingaporeDateString();
     if (!user) {
       setTechLoanType("temporary");
     }
@@ -134,7 +135,7 @@ export default function CartPanel() {
         );
         if (missingDates.length > 0) {
           setError(
-            `Please set ${missingDates.length === 1 ? "dates for" : "dates for all"} ${missingDates.map((l) => l.name).join(", ")} before submitting.`,
+            `Please set ${missingDates.length === 1 ? "dates for" : "dates for all"} ${missingDates.map((l) => l.name || l.model || "laptop").join(", ")} before submitting.`,
           );
           setLoading(false);
           return;

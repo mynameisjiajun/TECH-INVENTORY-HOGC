@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/db/supabase";
 import { normalizeTelegramHandle } from "@/lib/utils/telegramHandle";
+import { getTodaySingaporeDateString } from "@/lib/utils/date";
+import { escapeHtml, isSafeHttpsUrl } from "@/lib/utils/html";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -56,15 +58,15 @@ async function fetchAllLoanItems(loanIds) {
 
 function formatItems(items) {
   return items
-    .map((i) => `  • ${i.item_name || i.item} × ${i.quantity}`)
+    .map((i) => `  • ${escapeHtml(i.item_name || i.item)} × ${i.quantity}`)
     .join("\n");
 }
 
 function daysUntil(dateStr) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const target = new Date(dateStr + "T00:00:00");
-  return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+  const todayStr = getTodaySingaporeDateString();
+  const today = new Date(todayStr + "T00:00:00Z");
+  const target = new Date(dateStr + "T00:00:00Z");
+  return Math.round((target - today) / (1000 * 60 * 60 * 24));
 }
 
 // ── Command Handlers ────────────────────────────────────────────
@@ -185,7 +187,7 @@ async function handleStartByTelegramHandle(chatId, username) {
     return {
       ok: false,
       error: [
-        `👋 I couldn't find an app account saved with <b>${normalizedHandle}</b>.`,
+        `👋 I couldn't find an app account saved with <b>${escapeHtml(normalizedHandle)}</b>.`,
         "",
         "Save this exact Telegram handle on your Profile page, then send /start again, or use the Open Telegram to Link button from the app.",
         "",
@@ -213,14 +215,14 @@ async function sendStartResultReply(chatId, result) {
   if (result.status === "relinked") {
     await reply(
       chatId,
-      `✅ Telegram linked to <b>@${result.user.username}</b>.\n\nYour previous Telegram link was replaced automatically, and any stale backend link for this chat was cleared. Send /help to see available commands.`,
+      `✅ Telegram linked to <b>@${escapeHtml(result.user.username)}</b>.\n\nYour previous Telegram link was replaced automatically, and any stale backend link for this chat was cleared. Send /help to see available commands.`,
     );
     return;
   }
 
   await reply(
     chatId,
-    `✅ Successfully linked! Welcome, <b>@${result.user.username}</b>.\n\nYou will now receive instant notifications about your Tech Inventory loans here.\n\nSend /help to see available commands.`,
+    `✅ Successfully linked! Welcome, <b>@${escapeHtml(result.user.username)}</b>.\n\nYou will now receive instant notifications about your Tech Inventory loans here.\n\nSend /help to see available commands.`,
   );
 }
 
@@ -392,7 +394,7 @@ async function handleReturns(chatId, userId) {
 }
 
 async function handleOverdue(chatId, userId) {
-  const today = new Date().toLocaleDateString("en-CA");
+  const today = getTodaySingaporeDateString();
   const { data: loans } = await supabase
     .from("loan_requests")
     .select("id, end_date")
@@ -459,12 +461,12 @@ async function handleStatus(chatId, userId, loanIdStr) {
   };
 
   let message = `<b>Loan #${loan.id} Details:</b>\n\n`;
-  message += `Status: ${statusMap[loan.status] || loan.status}\n`;
+  message += `Status: ${statusMap[loan.status] || escapeHtml(loan.status)}\n`;
   message += `Type: ${loan.loan_type === "permanent" ? "📌 Permanent" : "⏱ Temporary"}\n`;
-  message += `Purpose: ${loan.purpose}\n`;
-  if (loan.remarks) message += `Remarks: ${loan.remarks}\n`;
-  if (loan.department) message += `Department: ${loan.department}\n`;
-  if (loan.location) message += `Location: ${loan.location}\n`;
+  message += `Purpose: ${escapeHtml(loan.purpose)}\n`;
+  if (loan.remarks) message += `Remarks: ${escapeHtml(loan.remarks)}\n`;
+  if (loan.department) message += `Department: ${escapeHtml(loan.department)}\n`;
+  if (loan.location) message += `Location: ${escapeHtml(loan.location)}\n`;
   message += `Start: ${loan.start_date}\n`;
   if (loan.end_date) {
     message += `End: ${loan.end_date}`;
@@ -476,11 +478,15 @@ async function handleStatus(chatId, userId, loanIdStr) {
     }
     message += "\n";
   }
-  if (loan.admin_notes) message += `Admin notes: ${loan.admin_notes}\n`;
+  if (loan.admin_notes) message += `Admin notes: ${escapeHtml(loan.admin_notes)}\n`;
   message += `\nItems:\n${formatItems(items)}`;
 
-  if (loan.status === "returned" && loan.return_photo_url) {
-    message += `\n\n<a href="${loan.return_photo_url}">View return photo →</a>`;
+  if (
+    loan.status === "returned" &&
+    loan.return_photo_url &&
+    isSafeHttpsUrl(loan.return_photo_url)
+  ) {
+    message += `\n\n<a href="${escapeHtml(loan.return_photo_url)}">View return photo →</a>`;
   }
 
   await reply(chatId, message);

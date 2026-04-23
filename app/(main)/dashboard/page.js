@@ -9,6 +9,10 @@ import CartPanel from "@/components/CartPanel";
 import AppShellLoading from "@/components/AppShellLoading";
 import LoanCalendar from "@/components/LoanCalendar";
 import {
+  getTodaySingaporeDateString,
+  getSingaporeDateOffsetString,
+} from "@/lib/utils/date";
+import {
   RiArchiveLine,
   RiHandHeartLine,
   RiAlertLine,
@@ -938,10 +942,8 @@ export default function DashboardPage() {
 
   // ====== NORMAL USER DASHBOARD ======
   if (!isAdmin) {
-    const today = new Date().toISOString().split("T")[0];
-    const in3Days = new Date();
-    in3Days.setDate(in3Days.getDate() + 3);
-    const in3DaysStr = in3Days.toISOString().split("T")[0];
+    const today = getTodaySingaporeDateString();
+    const in3DaysStr = getSingaporeDateOffsetString(3);
     const loanedOut = myLoans.filter((l) => l.status === "approved");
     const pending = myLoans.filter((l) => l.status === "pending");
     const overdueMyLoans = myLoans.filter(

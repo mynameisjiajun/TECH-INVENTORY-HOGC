@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
+import { getTodaySingaporeDateString } from "@/lib/utils/date";
 import { NextResponse } from "next/server";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -40,7 +41,7 @@ export async function GET(request) {
     );
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodaySingaporeDateString();
 
   const [
     { data: tiers },

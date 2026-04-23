@@ -14,6 +14,11 @@ import {
   mutationError,
   withWarnings,
 } from "@/lib/utils/mutationSafety";
+import {
+  AUTO_APPROVE_ADMIN_NOTE,
+  AUTO_APPROVE_GUEST_QUEUE_NOTE,
+} from "@/lib/constants";
+import { escapeHtml } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -227,7 +232,7 @@ async function createMatchedTechLoan({
       start_date: startDate,
       end_date: endDate,
       status: autoApprove ? "approved" : "pending",
-      admin_notes: autoApprove ? "Auto-approved by global setting" : null,
+      admin_notes: autoApprove ? AUTO_APPROVE_ADMIN_NOTE : null,
     })
     .select("id")
     .single();
@@ -291,7 +296,7 @@ async function createMatchedLaptopLoans({
         remarks,
         department,
         status: autoApprove ? "approved" : "pending",
-        admin_notes: autoApprove ? "Auto-approved by global setting" : null,
+        admin_notes: autoApprove ? AUTO_APPROVE_ADMIN_NOTE : null,
       })
       .select("id")
       .single();
@@ -336,11 +341,15 @@ async function notifyAdmins({
     context: "guest request admin",
   });
 
+  const safeGuestName = escapeHtml(guestName);
+  const safePurpose = escapeHtml(purpose);
+  const safeRemarks = remarks ? escapeHtml(remarks) : "";
+  const safeSummaryLines = (summaryLines || []).map((line) => escapeHtml(line));
   for (const admin of admins || []) {
     sendTelegramMessage(
       admin.id,
-      `🧾 <b>Guest Checkout</b>\n<b>${guestName}</b> submitted a request.\nPurpose: ${purpose}${remarks ? `\nRemarks: ${remarks}` : ""}\n${summaryLines.join("\n")}`,
-    ).catch(() => {});
+      `🧾 <b>Guest Checkout</b>\n<b>${safeGuestName}</b> submitted a request.\nPurpose: ${safePurpose}${safeRemarks ? `\nRemarks: ${safeRemarks}` : ""}\n${safeSummaryLines.join("\n")}`,
+    ).catch((err) => console.error("guest admin telegram failed:", err?.message || err));
   }
 }
 
@@ -529,6 +538,7 @@ export async function POST(request) {
           context: "matched guest request user",
         });
 
+        const safeMatchedSummary = summaryLines.map((line) => escapeHtml(line));
         sendTelegramMessage(
           matchedUser.id,
           [
@@ -536,10 +546,10 @@ export async function POST(request) {
             autoApproveLoans
               ? "A guest checkout matching your Telegram handle was added to My Loans and is already approved."
               : "A guest checkout matching your Telegram handle was added to My Loans and is pending admin review.",
-            summaryLines.length ? `\n${summaryLines.join("\n")}` : "",
+            safeMatchedSummary.length ? `\n${safeMatchedSummary.join("\n")}` : "",
             "\nIf this wasn't you, please contact an admin.",
           ].join("\n\n"),
-        ).catch(() => {});
+        ).catch((err) => console.error("matched guest telegram failed:", err?.message || err));
       }
 
       if (!autoApproveLoans) {
@@ -552,9 +562,14 @@ export async function POST(request) {
           warnings,
         });
       } else {
+        const safeMatchedName = escapeHtml(
+          matchedUser.display_name || matchedUser.username || "a user",
+        );
+        const safeAdminSummary = summaryLines.map((line) => escapeHtml(line));
+        const safeAdminRemarks = trimmedRemarks ? escapeHtml(trimmedRemarks) : "";
         sendAdminTelegramAlert(
-          `✅ <b>Auto-Approved Guest Checkout</b>\nA guest checkout matched <b>${matchedUser.display_name || matchedUser.username || "a user"}</b> and is active now.\n${summaryLines.join("\n")}${trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : ""}`,
-        ).catch(() => {});
+          `✅ <b>Auto-Approved Guest Checkout</b>\nA guest checkout matched <b>${safeMatchedName}</b> and is active now.\n${safeAdminSummary.join("\n")}${safeAdminRemarks ? `\nRemarks: ${safeAdminRemarks}` : ""}`,
+        ).catch((err) => console.error("guest auto-approve admin telegram failed:", err?.message || err));
       }
 
       return NextResponse.json(
@@ -619,7 +634,7 @@ export async function POST(request) {
         items: serializedItems,
         status: autoApproveGuestRequests ? "approved" : "pending",
         admin_notes: autoApproveGuestRequests
-          ? "Auto-approved by guest queue setting"
+          ? AUTO_APPROVE_GUEST_QUEUE_NOTE
           : null,
       })
       .select("id")
@@ -702,21 +717,49 @@ export async function POST(request) {
       try {
         approveChanges = applyStockTx(resolvedTechItems);
       } catch (stockErr) {
-        await supabase
+        // SQLite transaction rolls back on throw — stock is untouched. Downgrade
+        // the guest request to pending so admins can review it instead of losing
+        // the audit trail.
+        const { error: downgradeErr } = await supabase
           .from("guest_borrow_requests")
-          .delete()
+          .update({
+            status: "pending",
+            admin_notes: `Auto-approval failed: ${stockErr.message || "stock unavailable"}`,
+          })
           .eq("id", guestRequest.id);
+        if (downgradeErr) {
+          console.error(
+            "Failed to downgrade guest request after stock error:",
+            downgradeErr.message || downgradeErr,
+          );
+        }
         throw stockErr;
       }
 
       try {
         await syncAuthoritativeStockToSheets(db, approveChanges);
       } catch (sheetErr) {
-        rollbackStockTx(resolvedTechItems);
-        await supabase
+        try {
+          rollbackStockTx(resolvedTechItems);
+        } catch (rollbackErr) {
+          console.error(
+            "Stock rollback failed after sheet write error:",
+            rollbackErr?.message || rollbackErr,
+          );
+        }
+        const { error: downgradeErr } = await supabase
           .from("guest_borrow_requests")
-          .delete()
+          .update({
+            status: "pending",
+            admin_notes: `Auto-approval failed during sheet write: ${sheetErr.message || "sheets unavailable"}`,
+          })
           .eq("id", guestRequest.id);
+        if (downgradeErr) {
+          console.error(
+            "Failed to downgrade guest request after sheet error:",
+            downgradeErr.message || downgradeErr,
+          );
+        }
         throw sheetErr;
       }
 
@@ -733,9 +776,12 @@ export async function POST(request) {
         warnings,
       });
     } else {
+      const safeGuestName = escapeHtml(guest_name.trim());
+      const safeSummary = summaryLines.map((line) => escapeHtml(line));
+      const safeRemarks = trimmedRemarks ? escapeHtml(trimmedRemarks) : "";
       sendAdminTelegramAlert(
-        `✅ <b>Guest Queue Auto-Approved</b>\nGuest request #${guestRequest.id} is active now.\nGuest: ${guest_name.trim()}\n${summaryLines.join("\n")}${trimmedRemarks ? `\nRemarks: ${trimmedRemarks}` : ""}`,
-      ).catch(() => {});
+        `✅ <b>Guest Queue Auto-Approved</b>\nGuest request #${guestRequest.id} is active now.\nGuest: ${safeGuestName}\n${safeSummary.join("\n")}${safeRemarks ? `\nRemarks: ${safeRemarks}` : ""}`,
+      ).catch((err) => console.error("guest queue admin telegram failed:", err?.message || err));
     }
 
     return NextResponse.json(

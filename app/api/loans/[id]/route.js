@@ -7,6 +7,7 @@ import { sendTelegramMessage } from "@/lib/services/telegram";
 import { autoApproveTechLoan } from "@/lib/services/techLoanAutoApproval";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { sendLoanModifiedEmail } from "@/lib/services/email";
+import { escapeHtml } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 import {
   insertRowsBestEffort,
@@ -767,8 +768,13 @@ export async function PUT(request, { params }) {
     }
 
     const itemListStr = resolvedItems
-      .map((i) => `${i.item_name} × ${i.quantity}`)
+      .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)
       .join(", ");
+    const safeLoanType = escapeHtml(loan_type);
+    const safeActor = escapeHtml(
+      user.display_name || user.username || "Admin",
+    );
+    const safeUserDisplay = escapeHtml(user.display_name || user.username || "");
 
     if (isAdminEditing) {
       const { data: loanOwner } = await supabase
@@ -797,9 +803,9 @@ export async function PUT(request, { params }) {
       sendTelegramMessage(
         existingLoan.user_id,
         nextStatus === "approved"
-          ? `📝 <b>Loan Updated</b>\nAn admin updated your approved ${loan_type} loan #${loanId}.\n\nItems: ${itemListStr}`
-          : `📝 <b>Loan Updated</b>\nAn admin updated your ${loan_type} loan request #${loanId}. It is still pending review.\n\nItems: ${itemListStr}`,
-      ).catch(() => {});
+          ? `📝 <b>Loan Updated</b>\nAn admin updated your approved ${safeLoanType} loan #${loanId}.\n\nItems: ${itemListStr}`
+          : `📝 <b>Loan Updated</b>\nAn admin updated your ${safeLoanType} loan request #${loanId}. It is still pending review.\n\nItems: ${itemListStr}`,
+      ).catch((err) => console.error("loan update user telegram failed:", err?.message || err));
 
       if (loanOwner?.email && !loanOwner?.mute_emails) {
         sendLoanModifiedEmail({
@@ -810,13 +816,13 @@ export async function PUT(request, { params }) {
           autoApproved: false,
           adminModified: true,
           items: resolvedItems.map((i) => ({ item: i.item_name, quantity: i.quantity })),
-        }).catch(() => {});
+        }).catch((err) => console.error("loans [id] route notification send failed:", err?.message || err));
       }
 
       if (nextStatus === "approved") {
         sendAdminTelegramAlert(
-          `📝 <b>Active Inventory Updated</b>\n<b>${user.display_name || user.username || "Admin"}</b> updated approved loan #${loanId}.\nType: ${loan_type}\nItems: ${itemListStr}`,
-        ).catch(() => {});
+          `📝 <b>Active Inventory Updated</b>\n<b>${safeActor}</b> updated approved loan #${loanId}.\nType: ${safeLoanType}\nItems: ${itemListStr}`,
+        ).catch((err) => console.error("loan update admin telegram failed:", err?.message || err));
       }
 
       await insertRowsBestEffort({
@@ -850,8 +856,8 @@ export async function PUT(request, { params }) {
         ? `${user.display_name} modified and auto-approved their ${loan_type} loan #${loanId}.`
         : `${user.display_name} modified their ${loan_type} loan request #${loanId}.`;
       const adminTelegramMsg = autoApproveLoans
-        ? `✅ <b>Loan Modified & Auto-Approved</b>\n<b>${user.display_name}</b> modified loan #${loanId} and it was auto-approved.\n\nItems: ${itemListStr}`
-        : `📝 <b>Loan Modified</b>\n<b>${user.display_name}</b> modified loan request #${loanId} (now pending).\n\nNew Items: ${itemListStr}`;
+        ? `✅ <b>Loan Modified & Auto-Approved</b>\n<b>${safeUserDisplay}</b> modified loan #${loanId} and it was auto-approved.\n\nItems: ${itemListStr}`
+        : `📝 <b>Loan Modified</b>\n<b>${safeUserDisplay}</b> modified loan request #${loanId} (now pending).\n\nNew Items: ${itemListStr}`;
 
       if (admins && admins.length > 0) {
         await insertRowsBestEffort({
@@ -867,7 +873,9 @@ export async function PUT(request, { params }) {
         });
         for (const admin of admins) {
           if (!admin.mute_telegram) {
-            sendTelegramMessage(admin.id, adminTelegramMsg).catch(() => {});
+            sendTelegramMessage(admin.id, adminTelegramMsg).catch((err) =>
+              console.error("loan modify admin telegram failed:", err?.message || err),
+            );
           }
         }
       }
@@ -892,9 +900,9 @@ export async function PUT(request, { params }) {
       sendTelegramMessage(
         user.id,
         autoApproveLoans
-          ? `✅ <b>Loan Updated & Approved</b>\nYour ${loan_type} loan #${loanId} has been updated and auto-approved.\n\nItems: ${itemListStr}`
-          : `📝 <b>Loan Updated</b>\nYour ${loan_type} loan #${loanId} has been updated and is pending approval.\n\nItems: ${itemListStr}`,
-      ).catch(() => {});
+          ? `✅ <b>Loan Updated & Approved</b>\nYour ${safeLoanType} loan #${loanId} has been updated and auto-approved.\n\nItems: ${itemListStr}`
+          : `📝 <b>Loan Updated</b>\nYour ${safeLoanType} loan #${loanId} has been updated and is pending approval.\n\nItems: ${itemListStr}`,
+      ).catch((err) => console.error("loan self-modify user telegram failed:", err?.message || err));
 
       if (userRecord?.email && !userRecord?.mute_emails) {
         sendLoanModifiedEmail({
@@ -905,7 +913,7 @@ export async function PUT(request, { params }) {
           autoApproved: autoApproveLoans,
           adminModified: false,
           items: resolvedItems.map((i) => ({ item: i.item_name, quantity: i.quantity })),
-        }).catch(() => {});
+        }).catch((err) => console.error("loans [id] route notification send failed:", err?.message || err));
       }
 
       await insertRowsBestEffort({

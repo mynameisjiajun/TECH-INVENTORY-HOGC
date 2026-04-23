@@ -2,6 +2,7 @@ import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { escapeHtml } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 
 export async function PUT(request, { params }) {
@@ -43,16 +44,24 @@ export async function PUT(request, { params }) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const safeAdmin = escapeHtml(user.display_name || user.username || "Admin");
+  const safeLaptopName = escapeHtml(data.name || "");
+  const safeAssignee = escapeHtml(perm_loan_person || "Unspecified");
+  const safeReason = perm_loan_reason ? escapeHtml(perm_loan_reason) : "";
+
   if (is_perm_loaned === true) {
     sendAdminTelegramAlert(
-      `💻 <b>Laptop Permanently Assigned</b>\n<b>${user.display_name || user.username || "Admin"}</b> assigned <b>${data.name}</b>.\nAssignee: ${perm_loan_person || "Unspecified"}${perm_loan_reason ? `\nReason: ${perm_loan_reason}` : ""}`,
-    ).catch(() => {});
+      `💻 <b>Laptop Permanently Assigned</b>\n<b>${safeAdmin}</b> assigned <b>${safeLaptopName}</b>.\nAssignee: ${safeAssignee}${safeReason ? `\nReason: ${safeReason}` : ""}`,
+    ).catch((err) => console.error("laptop perm-assign admin telegram failed:", err?.message || err));
   }
 
   if (is_perm_loaned === false && existingLaptop?.is_perm_loaned) {
+    const safePrevAssignee = escapeHtml(
+      existingLaptop.perm_loan_person || "Unspecified",
+    );
     sendAdminTelegramAlert(
-      `↩️ <b>Laptop Released</b>\n<b>${user.display_name || user.username || "Admin"}</b> released <b>${data.name}</b> from permanent assignment.\nPrevious assignee: ${existingLaptop.perm_loan_person || "Unspecified"}`,
-    ).catch(() => {});
+      `↩️ <b>Laptop Released</b>\n<b>${safeAdmin}</b> released <b>${safeLaptopName}</b> from permanent assignment.\nPrevious assignee: ${safePrevAssignee}`,
+    ).catch((err) => console.error("laptop release admin telegram failed:", err?.message || err));
   }
 
   // If toggling perm loan on, notify the person if we have their user record
@@ -69,7 +78,10 @@ export async function PUT(request, { params }) {
         link: "/inventory/laptop-loans",
       });
       if (!loanUser.mute_telegram) {
-        sendTelegramMessage(loanUser.id, `💻 Laptop <b>${data.name}</b> has been permanently assigned to you.`).catch(() => {});
+        sendTelegramMessage(
+          loanUser.id,
+          `💻 Laptop <b>${safeLaptopName}</b> has been permanently assigned to you.`,
+        ).catch((err) => console.error("laptop perm-assign user telegram failed:", err?.message || err));
       }
     }
   }

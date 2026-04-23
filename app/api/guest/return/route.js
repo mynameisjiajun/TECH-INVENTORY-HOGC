@@ -3,13 +3,15 @@ import { supabase } from "@/lib/db/supabase";
 import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { invalidateAll } from "@/lib/utils/cache";
+import { escapeHtml, isSafeHttpsUrl } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 export async function POST(request) {
   try {
-    const { loan_id, imageBase64, remarks } = await request.json();
+    const { loan_id, imageBase64, remarks, guest_identifier } =
+      await request.json();
 
     if (!loan_id) {
       return NextResponse.json({ error: "Missing loan_id" }, { status: 400 });
@@ -17,6 +19,14 @@ export async function POST(request) {
 
     if (!imageBase64) {
       return NextResponse.json({ error: "Photo is required to return items" }, { status: 400 });
+    }
+
+    const identifier = (guest_identifier || "").trim().toLowerCase();
+    if (identifier.length < 2) {
+      return NextResponse.json(
+        { error: "Guest identifier is required to return this loan" },
+        { status: 400 },
+      );
     }
 
     // Parse guest loan id (e.g. g_12 -> 12)
@@ -33,6 +43,15 @@ export async function POST(request) {
       return NextResponse.json(
         { error: "Guest loan request not found" },
         { status: 404 }
+      );
+    }
+
+    const rowName = (requestRow.guest_name || "").toLowerCase();
+    const rowHandle = (requestRow.telegram_handle || "").toLowerCase();
+    if (!rowName.includes(identifier) && !rowHandle.includes(identifier)) {
+      return NextResponse.json(
+        { error: "You do not have permission to return this loan" },
+        { status: 403 },
       );
     }
 
@@ -121,15 +140,20 @@ export async function POST(request) {
     // Notify admins via Telegram
     try {
       const itemSummary = Array.isArray(requestRow.items)
-        ? requestRow.items.map((i) => `${i.quantity}x ${i.item_name}`).join(", ")
+        ? requestRow.items
+            .map((i) => `${i.quantity}x ${escapeHtml(i.item_name)}`)
+            .join(", ")
         : "Unknown";
+      const photoLink = isSafeHttpsUrl(photoUrl)
+        ? `<a href="${escapeHtml(photoUrl)}">View Return Photo</a>`
+        : "Photo uploaded";
       const tgMessage =
         `🔄 <b>Guest Return Submitted</b>\n\n` +
-        `<b>Name:</b> ${requestRow.guest_name}\n` +
-        `<b>Contact:</b> ${requestRow.telegram_handle || "—"}\n` +
+        `<b>Name:</b> ${escapeHtml(requestRow.guest_name)}\n` +
+        `<b>Contact:</b> ${escapeHtml(requestRow.telegram_handle || "—")}\n` +
         `<b>Items:</b> ${itemSummary}\n` +
-        (remarks ? `<b>Remarks:</b> ${remarks}\n\n` : "\n") +
-        `📷 <a href="${photoUrl}">View Return Photo</a>`;
+        (remarks ? `<b>Remarks:</b> ${escapeHtml(remarks)}\n\n` : "\n") +
+        `📷 ${photoLink}`;
 
       const { data: admins } = await supabase
         .from("users")
@@ -137,7 +161,9 @@ export async function POST(request) {
         .eq("role", "admin");
 
       for (const admin of admins || []) {
-        sendTelegramMessage(admin.id, tgMessage).catch(() => {});
+        sendTelegramMessage(admin.id, tgMessage).catch((err) =>
+          console.error("guest return admin telegram failed:", err?.message || err),
+        );
       }
     } catch (err) {
       console.error("Failed to send guest return telegram:", err);
