@@ -93,6 +93,7 @@ export default async function RootLayout({ children }) {
       data-shell={initialShell.shell}
       data-device={initialShell.device}
       data-platform={initialShell.platform}
+      data-scroll-behavior="smooth"
       className={inter.variable}
     >
       <head>

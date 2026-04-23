@@ -27,11 +27,8 @@ const MOBILE_DAY_NAMES = ["M", "T", "W", "T", "F", "S", "S"];
 const FILTER_OPTIONS = [
   { value: "my", getLabel: (isMobile) => (isMobile ? "Mine" : "My Loans") },
   { value: "all", getLabel: () => "All" },
-  { value: "tech", getLabel: (isMobile) => (isMobile ? "📦" : "📦 Tech") },
-  {
-    value: "laptop",
-    getLabel: (isMobile) => (isMobile ? "💻" : "💻 Laptop"),
-  },
+  { value: "tech", getLabel: () => "📦 Tech" },
+  { value: "laptop", getLabel: () => "💻 Laptop" },
 ];
 
 const MOBILE_MAX_VISIBLE_LANES = 3;
