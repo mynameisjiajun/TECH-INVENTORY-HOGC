@@ -67,6 +67,14 @@ export default function InstallPrompt() {
     localStorage.setItem("pwa-install-dismissed", Date.now().toString());
   };
 
+  useEffect(() => {
+    if (!showBanner) return;
+    document.body.classList.add("has-install-banner");
+    return () => {
+      document.body.classList.remove("has-install-banner");
+    };
+  }, [showBanner]);
+
   if (!showBanner) return null;
 
   return (

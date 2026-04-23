@@ -265,13 +265,18 @@ export default function Navbar() {
     );
   }
 
+  // Guests can still browse Home and Dashboard, so show those links for them too.
+  // "My Loans" is user-specific and remains auth-only.
   const navLinks = user
     ? [
         { href: "/home", label: "Home", icon: <RiArchiveLine /> },
         { href: "/dashboard", label: "Dashboard", icon: <RiDashboardLine /> },
         { href: "/loans", label: "My Loans", icon: <RiFileListLine /> },
       ]
-    : [];
+    : [
+        { href: "/home", label: "Home", icon: <RiArchiveLine /> },
+        { href: "/dashboard", label: "Dashboard", icon: <RiDashboardLine /> },
+      ];
   if (user?.role === "admin") {
     navLinks.push({
       href: "/admin",
@@ -577,15 +582,6 @@ export default function Navbar() {
             )}
           </span>
           <span>Cart</span>
-          {totalItems > 0 && (
-            <span
-              style={{
-                display: "none", // badge now on icon wrap above
-              }}
-            >
-              {totalItems}
-            </span>
-          )}
         </button>
       </div>
 

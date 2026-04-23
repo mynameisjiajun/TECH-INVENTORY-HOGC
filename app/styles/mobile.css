@@ -40,6 +40,12 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     overflow-x: clip;
   }
 
+  /* When the PWA install banner is visible, add ~76px bottom padding so the
+     banner doesn't cover the last row of tables/lists. */
+  html[data-shell="mobile-web"] body.has-install-banner .page-container {
+    padding-bottom: calc(var(--shell-page-mobile-bottom) + 76px);
+  }
+
   html[data-shell="mobile-web"] .page-header {
     margin-bottom: 18px;
   }

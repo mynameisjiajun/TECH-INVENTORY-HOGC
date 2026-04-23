@@ -569,11 +569,11 @@ export default function DashboardPage() {
       { value: "all", getLabel: () => "All" },
       {
         value: "tech",
-        getLabel: (mobile) => (mobile ? "📦" : "📦 Tech"),
+        getLabel: () => "📦 Tech",
       },
       {
         value: "laptop",
-        getLabel: (mobile) => (mobile ? "💻" : "💻 Laptop"),
+        getLabel: () => "💻 Laptop",
       },
     ];
 
