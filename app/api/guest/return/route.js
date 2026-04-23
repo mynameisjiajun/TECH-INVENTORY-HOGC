@@ -65,7 +65,8 @@ export async function POST(request) {
     // Upload photo to Supabase Storage
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
-    const fileName = `guest-loan-${db_id}-${Date.now()}.jpg`;
+    const safeId = String(db_id).replace(/[^a-zA-Z0-9_-]/g, "");
+    const fileName = `guest-loan-${safeId}-${Date.now()}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from("return-photos")

@@ -303,14 +303,16 @@ export async function GET(request) {
           requester_name: r.guest_name,
           requester_username: null,
           requester_telegram: r.telegram_handle,
+          return_photo_url: r.return_photo_url || null,
           items: (r.items || [])
-            .filter((i) => i.source === "tech" || !i.source) // Default to tech for legacy
             .map((i) => ({
               id: null,
               loan_request_id: `g_${r.id}`,
-              item_id: i.item_id || null,
+              item_id: i.item_id || i.laptop_id || null,
               sheet_row: i.sheet_row || null,
-              item: i.item_name || "Unknown Item",
+              item: i.source === "laptop"
+                ? `💻 ${i.item_name || "Laptop"}`
+                : (i.item_name || "Unknown Item"),
               quantity: i.quantity || 1,
             })),
         }))

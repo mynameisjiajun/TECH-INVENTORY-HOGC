@@ -70,20 +70,17 @@ export async function GET(request) {
   const borrowerTelegramMap = new Map(); // laptop_id -> borrower telegram handle
 
   for (const loan of activeLoans || []) {
-    // For overdue approved loans, treat effective end as "today" so they remain
-    // blocked until admin marks them returned — prevents booking a laptop that
-    // hasn't actually come back yet.
-    const effectiveEnd =
-      loan.end_date && loan.end_date < today
-        ? today
-        : loan.end_date || "9999-12-31";
+    // Use the actual booked end_date for date-range overlap checks.
+    // Overdue loans should NOT block new bookings that start after the
+    // original end_date — they only remain visually "out" until returned.
+    const bookedEnd = loan.end_date || "9999-12-31";
 
     for (const item of loan.laptop_loan_items || []) {
       const lid = item.laptop_id;
 
-      // Check date overlap if dates provided
+      // Check date overlap if dates provided — uses the original booked dates
       if (hasDateWindow) {
-        if (loan.start_date <= endDate && effectiveEnd >= startDate) {
+        if (loan.start_date <= endDate && bookedEnd >= startDate) {
           unavailableIds.add(lid);
         }
       }

@@ -1094,7 +1094,8 @@ async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
     if (request.status !== "approved") return NextResponse.json({ error: "Not approved" }, { status: 400 });
     
     const returnChanges = [];
-    const techItems = (request.items || []).filter(i => i.source === "tech" || !i.source);
+    const allItems = request.items || [];
+    const techItems = allItems.filter(i => i.source === "tech" || !i.source);
 
     for (const li of techItems) {
       if (!li.sheet_row && !li.item_id) continue;
@@ -1113,9 +1114,9 @@ async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
     await supabase.from("audit_log").insert({ user_id: user.id, action: "return", target_type: "guest_request", target_id: loan_id, details: `Items returned to stock. ${admin_notes || ""}` });
 
     const guestReturnSummary =
-      techItems
-        .map((item) => `${escapeHtml(item.item_name)} × ${item.quantity}`)
-        .join(", ") || "No tech items";
+      allItems
+        .map((item) => `${item.source === "laptop" ? "💻 " : ""}${escapeHtml(item.item_name)} × ${item.quantity}`)
+        .join(", ") || "No items";
     const guestReturnAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
     sendAdminTelegramAlert(
       `🔄 <b>Guest Inventory Returned</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> returned guest request #${loan_id} to stock.\nGuest: ${escapeHtml(request.guest_name)}\nItems: ${guestReturnSummary}${guestReturnAdminNotes ? `\nAdmin Notes: ${guestReturnAdminNotes}` : ""}`,
