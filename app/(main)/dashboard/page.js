@@ -430,10 +430,11 @@ export default function DashboardPage() {
       const startCell = startOffset + startDay - 1;
       const endCell = startOffset + endDay - 1;
 
+      const todayStr = getTodaySingaporeDateString();
       const isOverdue =
         loan.status === "approved" &&
         loan.end_date &&
-        new Date(loan.end_date) < new Date();
+        loan.end_date < todayStr;
 
       const startWeek = Math.floor(startCell / 7);
       const endWeek = Math.floor(endCell / 7);
@@ -916,7 +917,7 @@ export default function DashboardPage() {
                 </div>
                 {selectedLoan.status === "approved" &&
                   selectedLoan.end_date &&
-                  new Date(selectedLoan.end_date) < new Date() && (
+                  selectedLoan.end_date < getTodaySingaporeDateString() && (
                     <div
                       style={{
                         marginTop: 16,
@@ -1587,7 +1588,7 @@ export default function DashboardPage() {
               </div>
               {selectedLoan.status === "approved" &&
                 selectedLoan.end_date &&
-                new Date(selectedLoan.end_date) < new Date() && (
+                selectedLoan.end_date < getTodaySingaporeDateString() && (
                   <div
                     style={{
                       marginTop: 16,
@@ -2299,7 +2300,7 @@ export default function DashboardPage() {
 
             {selectedLoan.status === "approved" &&
               selectedLoan.end_date &&
-              new Date(selectedLoan.end_date) < new Date() && (
+              selectedLoan.end_date < getTodaySingaporeDateString() && (
                 <div
                   style={{
                     marginTop: 16,
