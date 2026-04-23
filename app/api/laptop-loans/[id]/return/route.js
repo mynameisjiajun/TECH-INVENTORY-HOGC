@@ -1,7 +1,8 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
+import { invalidateAll } from "@/lib/utils/cache";
 import { sendTelegramMessage } from "@/lib/services/telegram";
-import { sendLaptopAvailableEmail } from "@/lib/services/email";
+import { sendLaptopAvailableEmail, sendLoanReturnEmail } from "@/lib/services/email";
 import { NextResponse } from "next/server";
 import {
   deleteStorageObjectBestEffort,
@@ -71,7 +72,11 @@ export async function POST(request, { params }) {
 
     const { error: updateLoanError } = await supabase
       .from("laptop_loan_requests")
-      .update({ status: "returned", return_photo_url: photoUrl })
+      .update({
+        status: "returned",
+        return_photo_url: photoUrl,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id);
 
     if (updateLoanError) {
@@ -94,6 +99,44 @@ export async function POST(request, { params }) {
     }
 
     const laptopIds = loan.laptop_loan_items.map((item) => item.laptop_id);
+    if (loan.loan_type === "permanent" && laptopIds.length > 0) {
+      const { error: releasePermanentError } = await supabase
+        .from("laptops")
+        .update({
+          is_perm_loaned: false,
+          perm_loan_person: null,
+          perm_loan_reason: null,
+        })
+        .in("id", laptopIds);
+
+      if (releasePermanentError) {
+        await supabase
+          .from("laptop_loan_requests")
+          .update({
+            status: loan.status,
+            return_photo_url: loan.return_photo_url || null,
+            updated_at: loan.updated_at || null,
+          })
+          .eq("id", id);
+        await deleteStorageObjectBestEffort({
+          bucket: photoBucket,
+          path: fileName,
+          warnings,
+          context: "uploaded return photo",
+        });
+        return NextResponse.json(
+          {
+            error: mutationError(
+              "Failed to release permanent laptop assignment",
+              releasePermanentError,
+            ),
+            details: warnings,
+          },
+          { status: 500 },
+        );
+      }
+    }
+
     const { data: notifSubscribers, error: notifSubscribersError } =
       await supabase
         .from("laptop_notifications")
@@ -219,6 +262,48 @@ export async function POST(request, { params }) {
         }
       }
     }
+
+    // Send return receipt to borrower
+    sendTelegramMessage(
+      loan.user_id,
+      `✅ <b>Return Received!</b>\nYour laptop return for loan #${id} [${laptopNames}] has been recorded.${remarks ? `\n⚠️ <b>Remarks:</b> ${remarks}` : ""}\n📸 <a href="${photoUrl}">View Your Return Photo</a>`,
+    ).catch(() => {});
+
+    await insertRowsBestEffort({
+      client: supabase,
+      table: "notifications",
+      entries: [
+        {
+          user_id: loan.user_id,
+          message: `Your laptop return for loan #${id} has been received and recorded.`,
+          link: "/loans",
+        },
+      ],
+      warnings,
+      context: "user laptop return receipt",
+    });
+
+    const { data: loanUserRecord } = await supabase
+      .from("users")
+      .select("email, display_name, mute_emails")
+      .eq("id", loan.user_id)
+      .single();
+
+    if (loanUserRecord?.email && !loanUserRecord?.mute_emails) {
+      sendLoanReturnEmail({
+        to: loanUserRecord.email,
+        displayName: loanUserRecord.display_name,
+        loanId: id,
+        items: loan.laptop_loan_items.map((item) => ({
+          item: item.laptops?.name || "Laptop",
+          quantity: 1,
+        })),
+        photoUrl,
+        adminReturn: false,
+      }).catch(() => {});
+    }
+
+    invalidateAll();
 
     return NextResponse.json(
       withWarnings(

@@ -2,7 +2,11 @@ import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { isAppSettingEnabled } from "@/lib/utils/appSettings";
+import { sendLoanModifiedEmail, sendLoanStatusEmail, sendLoanReturnEmail } from "@/lib/services/email";
 import { NextResponse } from "next/server";
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 function notFoundError(error) {
   return error?.code === "PGRST116";
@@ -119,6 +123,9 @@ export async function PUT(request, { params }) {
         { error: "No laptops selected" },
         { status: 400 },
       );
+    if (!["temporary", "permanent"].includes(loan_type)) {
+      return NextResponse.json({ error: "Invalid loan type" }, { status: 400 });
+    }
     if (!purpose?.trim())
       return NextResponse.json(
         { error: "Purpose is required" },
@@ -129,11 +136,36 @@ export async function PUT(request, { params }) {
         { error: "Start date is required" },
         { status: 400 },
       );
+    if (!DATE_REGEX.test(start_date) || Number.isNaN(Date.parse(start_date))) {
+      return NextResponse.json(
+        { error: "Invalid start date format" },
+        { status: 400 },
+      );
+    }
     if (loan_type === "temporary" && !end_date)
       return NextResponse.json(
         { error: "End date required for temporary loans" },
         { status: 400 },
       );
+    if (loan_type === "temporary") {
+      if (!DATE_REGEX.test(end_date) || Number.isNaN(Date.parse(end_date))) {
+        return NextResponse.json(
+          { error: "Invalid end date format" },
+          { status: 400 },
+        );
+      }
+      if (end_date < start_date) {
+        return NextResponse.json(
+          { error: "End date cannot be before start date" },
+          { status: 400 },
+        );
+      }
+    } else if (end_date) {
+      return NextResponse.json(
+        { error: "Permanent loans cannot include an end date" },
+        { status: 400 },
+      );
+    }
     if (loan_type === "permanent" && !["admin", "tech"].includes(user.role)) {
       return NextResponse.json(
         { error: "Only Tech team members can request permanent loans" },
@@ -190,7 +222,8 @@ export async function PUT(request, { params }) {
     }
 
     const isAdminEditing = user.role === "admin";
-    const nextStatus = isAdminEditing ? existingLoan.status : "pending";
+    const autoApproveLoans = !isAdminEditing && await isAppSettingEnabled("auto_approve_loans");
+    const nextStatus = isAdminEditing ? existingLoan.status : (autoApproveLoans ? "approved" : "pending");
     const oldLaptopIds = (existingLoan.laptop_loan_items || []).map(
       (item) => item.laptop_id,
     );
@@ -456,7 +489,15 @@ export async function PUT(request, { params }) {
 
     const laptopNames = (laptops || []).map((entry) => entry.name).join(", ");
 
+    const laptopItems = (laptops || []).map((l) => ({ item: l.name, quantity: 1 }));
+
     if (isAdminEditing) {
+      const { data: loanOwner } = await supabase
+        .from("users")
+        .select("email, display_name, mute_emails")
+        .eq("id", existingLoan.user_id)
+        .single();
+
       await insertNotifications(
         [
           {
@@ -479,6 +520,18 @@ export async function PUT(request, { params }) {
           : `📝 <b>Laptop Loan Updated</b>\nAn admin updated your laptop loan request #${id}. It is still pending review.\n\nLaptops: ${laptopNames}`,
       ).catch(() => {});
 
+      if (loanOwner?.email && !loanOwner?.mute_emails) {
+        sendLoanModifiedEmail({
+          to: loanOwner.email,
+          displayName: loanOwner.display_name,
+          loanId: id,
+          loanType: "laptop",
+          autoApproved: false,
+          adminModified: true,
+          items: laptopItems,
+        }).catch(() => {});
+      }
+
       if (nextStatus === "approved") {
         sendAdminTelegramAlert(
           `📝 <b>Active Laptop Allocation Updated</b>\n<b>${user.display_name || user.username || "Admin"}</b> updated approved laptop loan #${id}.\nLaptops: ${laptopNames}`,
@@ -499,6 +552,12 @@ export async function PUT(request, { params }) {
         );
       }
     } else {
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("email, display_name, mute_emails")
+        .eq("id", user.id)
+        .single();
+
       const { data: admins, error: adminsError } = await supabase
         .from("users")
         .select("id, mute_telegram")
@@ -510,11 +569,18 @@ export async function PUT(request, { params }) {
         );
       }
 
+      const adminMsg = autoApproveLoans
+        ? `${user.display_name} modified and auto-approved laptop loan #${id}.`
+        : `${user.display_name} modified laptop loan request #${id} (now pending approval).`;
+      const adminTelegramMsg = autoApproveLoans
+        ? `✅ <b>Laptop Loan Modified & Auto-Approved</b>\n<b>${user.display_name}</b> modified laptop loan #${id}.\nLaptops: ${laptopNames}`
+        : `📝 <b>Laptop Loan Modified</b>\n<b>${user.display_name}</b> modified loan #${id}.\nLaptops: ${laptopNames}`;
+
       if (admins?.length) {
         await insertNotifications(
           admins.map((admin) => ({
             user_id: admin.id,
-            message: `${user.display_name} modified laptop loan request #${id} (now pending approval).`,
+            message: adminMsg,
             link: "/admin",
           })),
           warnings,
@@ -523,10 +589,7 @@ export async function PUT(request, { params }) {
 
         for (const admin of admins) {
           if (!admin.mute_telegram) {
-            sendTelegramMessage(
-              admin.id,
-              `📝 <b>Laptop Loan Modified</b>\n<b>${user.display_name}</b> modified loan #${id}.\nLaptops: ${laptopNames}`,
-            ).catch(() => {});
+            sendTelegramMessage(admin.id, adminTelegramMsg).catch(() => {});
           }
         }
       }
@@ -535,23 +598,47 @@ export async function PUT(request, { params }) {
         [
           {
             user_id: user.id,
-            message: `Your laptop loan request #${id} has been updated and is pending approval.`,
+            message: autoApproveLoans
+              ? `Your laptop loan #${id} has been updated and auto-approved.`
+              : `Your laptop loan request #${id} has been updated and is pending approval.`,
             link: "/loans",
           },
         ],
         warnings,
         "requester",
       );
+
+      sendTelegramMessage(
+        user.id,
+        autoApproveLoans
+          ? `✅ <b>Laptop Loan Updated & Approved</b>\nYour laptop loan #${id} has been updated and auto-approved.\n\nLaptops: ${laptopNames}`
+          : `📝 <b>Laptop Loan Updated</b>\nYour laptop loan #${id} has been updated and is pending approval.\n\nLaptops: ${laptopNames}`,
+      ).catch(() => {});
+
+      if (userRecord?.email && !userRecord?.mute_emails) {
+        sendLoanModifiedEmail({
+          to: userRecord.email,
+          displayName: userRecord.display_name || user.display_name,
+          loanId: id,
+          loanType: "laptop",
+          autoApproved: autoApproveLoans,
+          adminModified: false,
+          items: laptopItems,
+        }).catch(() => {});
+      }
     }
 
     return NextResponse.json(
       withWarnings(
         {
+          auto_approved: !isAdminEditing && autoApproveLoans,
           message: isAdminEditing
             ? nextStatus === "approved"
               ? "Laptop loan updated successfully and remains approved."
               : "Laptop loan updated successfully and remains pending."
-            : "Laptop loan modified successfully and is now pending approval.",
+            : autoApproveLoans
+              ? "Laptop loan modified and auto-approved!"
+              : "Laptop loan modified successfully and is now pending approval.",
         },
         warnings,
       ),
@@ -583,7 +670,7 @@ export async function POST(request, { params }) {
     const { data: loan, error: loanError } = await supabase
       .from("laptop_loan_requests")
       .select(
-        "*, users(id, display_name, mute_telegram, mute_emails), laptop_loan_items(laptop_id, laptops(name))",
+        "*, users(id, email, display_name, mute_telegram, mute_emails), laptop_loan_items(laptop_id, laptops(name))",
       )
       .eq("id", id)
       .single();
@@ -814,6 +901,32 @@ export async function POST(request, { params }) {
           requester.id,
           action === "approve" ? receiptMsg : `${emoji} ${msg}`,
         ).catch(() => {});
+      }
+
+      if (requester.email && !requester.mute_emails) {
+        const laptopItems = loan.laptop_loan_items.map((item) => ({
+          item: item.laptops?.name || "Laptop",
+          quantity: 1,
+        }));
+        if (action === "approve" || action === "reject") {
+          sendLoanStatusEmail({
+            to: requester.email,
+            displayName: requester.display_name,
+            loanId: id,
+            status: action === "approve" ? "approved" : "rejected",
+            adminNotes: admin_notes,
+            items: laptopItems,
+          }).catch(() => {});
+        } else if (action === "return") {
+          sendLoanReturnEmail({
+            to: requester.email,
+            displayName: requester.display_name,
+            loanId: id,
+            items: laptopItems,
+            photoUrl: null,
+            adminReturn: true,
+          }).catch(() => {});
+        }
       }
     }
 

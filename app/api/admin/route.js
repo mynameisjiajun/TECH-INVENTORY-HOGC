@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
 import { appendRows } from "@/lib/services/sheets";
 import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
-import { sendLoanStatusEmail } from "@/lib/services/email";
+import { sendLoanStatusEmail, sendLoanReturnEmail } from "@/lib/services/email";
 import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
@@ -196,6 +196,31 @@ export async function POST(request) {
         `🔄 <b>Inventory Returned</b>\n<b>${user.display_name || user.username || "Admin"}</b> marked ${approvedLoans.length} loan(s) as returned.\nLoan IDs: ${approvedLoans.map((loan) => `#${loan.id}`).join(", ")}`,
       ).catch(() => {});
 
+      const bulkReturnUserIds = [...new Set(approvedLoans.map((l) => l.user_id))];
+      const { data: bulkReturnUsers } = await supabase
+        .from("users")
+        .select("id, email, display_name, mute_emails")
+        .in("id", bulkReturnUserIds);
+      const bulkReturnUserMap = new Map(
+        (bulkReturnUsers || []).map((u) => [u.id, u]),
+      );
+      for (const loan of approvedLoans) {
+        const u = bulkReturnUserMap.get(loan.user_id);
+        if (u?.email && !u?.mute_emails) {
+          sendLoanReturnEmail({
+            to: u.email,
+            displayName: u.display_name,
+            loanId: loan.id,
+            items: (itemsByLoan.get(loan.id) || []).map((i) => ({
+              item: i.item_name,
+              quantity: i.quantity,
+            })),
+            photoUrl: null,
+            adminReturn: true,
+          }).catch(() => {});
+        }
+      }
+
       invalidateAll();
       return NextResponse.json({
         message: `${approvedLoans.length} loan(s) returned to stock`,
@@ -371,6 +396,31 @@ export async function POST(request) {
       sendAdminTelegramAlert(
         `📦 <b>Inventory Checked Out</b>\n<b>${user.display_name || user.username || "Admin"}</b> approved ${pendingLoans.length} loan(s).\nLoan IDs: ${pendingLoans.map((loan) => `#${loan.id}`).join(", ")}`,
       ).catch(() => {});
+
+      const bulkApproveUserIds = [...new Set(pendingLoans.map((l) => l.user_id))];
+      const { data: bulkApproveUsers } = await supabase
+        .from("users")
+        .select("id, email, display_name, mute_emails")
+        .in("id", bulkApproveUserIds);
+      const bulkApproveUserMap = new Map(
+        (bulkApproveUsers || []).map((u) => [u.id, u]),
+      );
+      for (const loan of pendingLoans) {
+        const u = bulkApproveUserMap.get(loan.user_id);
+        if (u?.email && !u?.mute_emails) {
+          sendLoanStatusEmail({
+            to: u.email,
+            displayName: u.display_name,
+            loanId: loan.id,
+            status: "approved",
+            adminNotes: "Bulk approved",
+            items: (itemsByLoan.get(loan.id) || []).map((i) => ({
+              item: i.item_name,
+              quantity: i.quantity,
+            })),
+          }).catch(() => {});
+        }
+      }
 
       invalidateAll();
       return NextResponse.json({
@@ -665,7 +715,7 @@ export async function POST(request) {
           .eq("loan_request_id", loan_id),
         supabase
           .from("users")
-          .select("display_name")
+          .select("display_name, email, mute_emails")
           .eq("id", loan.user_id)
           .single(),
       ]);
@@ -715,6 +765,20 @@ export async function POST(request) {
         loan.user_id,
         `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`,
       ).catch((err) => console.error("Telegram notification failed:", err.message));
+
+      if (returnUser?.email && !returnUser?.mute_emails) {
+        sendLoanReturnEmail({
+          to: returnUser.email,
+          displayName: returnUser.display_name,
+          loanId: loan_id,
+          items: (loanItems || []).map((i) => ({
+            item: i.item_name,
+            quantity: i.quantity,
+          })),
+          photoUrl: null,
+          adminReturn: true,
+        }).catch(() => {});
+      }
 
       const returnedItemList =
         (loanItems || [])

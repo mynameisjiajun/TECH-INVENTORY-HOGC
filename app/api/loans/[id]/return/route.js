@@ -1,7 +1,10 @@
+import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
+import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { sendLoanReturnEmail } from "@/lib/services/email";
 import { NextResponse } from "next/server";
 import {
   deleteStorageObjectBestEffort,
@@ -10,6 +13,103 @@ import {
   mutationError,
   withWarnings,
 } from "@/lib/utils/mutationSafety";
+
+function restoreReturnedLoanInventoryTx(db, loanItems, loanId, isPermanentLoan) {
+  return db.transaction((items, currentLoanId, permanentLoan) => {
+    const sheetChanges = [];
+    const deployedRows = permanentLoan
+      ? db
+          .prepare(
+            "SELECT item, type, brand, model, quantity, location, allocation, status, remarks FROM deployed_items WHERE remarks LIKE ?",
+          )
+          .all(`Perm loan #${currentLoanId}%`)
+      : [];
+
+    for (const loanItem of items || []) {
+      const storageItem = loanItem.sheet_row
+        ? db
+            .prepare("SELECT id, sheet_row FROM storage_items WHERE sheet_row = ?")
+            .get(loanItem.sheet_row)
+        : db
+            .prepare("SELECT id, sheet_row FROM storage_items WHERE id = ?")
+            .get(loanItem.item_id);
+
+      if (!storageItem) {
+        throw new Error(
+          `Item no longer exists in inventory: ${loanItem.item_name}`,
+        );
+      }
+
+      db.prepare(
+        "UPDATE storage_items SET current = current + ? WHERE id = ?",
+      ).run(loanItem.quantity, storageItem.id);
+
+      sheetChanges.push({
+        sheetRow: storageItem.sheet_row || loanItem.sheet_row,
+        delta: loanItem.quantity,
+      });
+    }
+
+    if (permanentLoan) {
+      db.prepare("DELETE FROM deployed_items WHERE remarks LIKE ?").run(
+        `Perm loan #${currentLoanId}%`,
+      );
+    }
+
+    return { sheetChanges, deployedRows };
+  })(loanItems, loanId, isPermanentLoan);
+}
+
+function rollbackReturnedLoanInventoryTx(
+  db,
+  loanItems,
+  deployedRows,
+  isPermanentLoan,
+) {
+  db.transaction((items, priorDeployedRows, permanentLoan) => {
+    for (const loanItem of items || []) {
+      const storageItem = loanItem.sheet_row
+        ? db
+            .prepare("SELECT id FROM storage_items WHERE sheet_row = ?")
+            .get(loanItem.sheet_row)
+        : db
+            .prepare("SELECT id FROM storage_items WHERE id = ?")
+            .get(loanItem.item_id);
+
+      if (!storageItem) continue;
+
+      db.prepare(
+        "UPDATE storage_items SET current = current - ? WHERE id = ?",
+      ).run(loanItem.quantity, storageItem.id);
+    }
+
+    if (permanentLoan && priorDeployedRows.length > 0) {
+      for (const row of priorDeployedRows) {
+        db.prepare(
+          `INSERT INTO deployed_items (item, type, brand, model, quantity, location, allocation, status, remarks)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          row.item,
+          row.type,
+          row.brand,
+          row.model,
+          row.quantity,
+          row.location,
+          row.allocation,
+          row.status,
+          row.remarks,
+        );
+      }
+    }
+  })(loanItems, deployedRows, isPermanentLoan);
+}
+
+function invertSheetChanges(sheetChanges) {
+  return sheetChanges.map((change) => ({
+    sheetRow: change.sheetRow,
+    delta: -change.delta,
+  }));
+}
 
 export async function POST(request, { params }) {
   const user = await getCurrentUser();
@@ -66,6 +166,18 @@ export async function POST(request, { params }) {
       );
     }
 
+    const { data: loanItems, error: loanItemsError } = await supabase
+      .from("loan_items")
+      .select("item_id, sheet_row, item_name, quantity")
+      .eq("loan_request_id", loanId);
+
+    if (loanItemsError) {
+      return NextResponse.json(
+        { error: mutationError("Failed to load loan items", loanItemsError) },
+        { status: 500 },
+      );
+    }
+
     // Upload photo to Supabase Storage
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
@@ -82,6 +194,62 @@ export async function POST(request, { params }) {
     const { data: urlData } = photoBucket.getPublicUrl(fileName);
     const photoUrl = urlData.publicUrl;
 
+    startSyncIfNeeded();
+    await waitForSync();
+    const db = getDb();
+    const isPermanentLoan = loan.loan_type === "permanent";
+    let restoredInventory;
+
+    try {
+      restoredInventory = restoreReturnedLoanInventoryTx(
+        db,
+        loanItems || [],
+        loanId,
+        isPermanentLoan,
+      );
+    } catch (inventoryError) {
+      await deleteStorageObjectBestEffort({
+        bucket: photoBucket,
+        path: fileName,
+        warnings,
+        context: "uploaded return photo",
+      });
+      return NextResponse.json(
+        {
+          error:
+            inventoryError.message || "Failed to restore returned inventory",
+          details: warnings,
+        },
+        { status: 500 },
+      );
+    }
+
+    if (restoredInventory.sheetChanges.length > 0) {
+      try {
+        await syncAuthoritativeStockToSheets(db, restoredInventory.sheetChanges);
+      } catch (sheetError) {
+        rollbackReturnedLoanInventoryTx(
+          db,
+          loanItems || [],
+          restoredInventory.deployedRows,
+          isPermanentLoan,
+        );
+        await deleteStorageObjectBestEffort({
+          bucket: photoBucket,
+          path: fileName,
+          warnings,
+          context: "uploaded return photo",
+        });
+        return NextResponse.json(
+          {
+            error: sheetError.message || "Failed to sync returned inventory",
+            details: warnings,
+          },
+          { status: 500 },
+        );
+      }
+    }
+
     const { error: updateLoanError } = await supabase
       .from("loan_requests")
       .update({
@@ -93,6 +261,25 @@ export async function POST(request, { params }) {
       .eq("id", loanId);
 
     if (updateLoanError) {
+      rollbackReturnedLoanInventoryTx(
+        db,
+        loanItems || [],
+        restoredInventory?.deployedRows || [],
+        isPermanentLoan,
+      );
+      if (restoredInventory?.sheetChanges?.length) {
+        try {
+          await syncAuthoritativeStockToSheets(
+            db,
+            invertSheetChanges(restoredInventory.sheetChanges),
+          );
+        } catch (rollbackSheetError) {
+          warnings.push(
+            rollbackSheetError.message ||
+              "Failed to revert sheet sync after return failure",
+          );
+        }
+      }
       await deleteStorageObjectBestEffort({
         bucket: photoBucket,
         path: fileName,
@@ -169,6 +356,47 @@ export async function POST(request, { params }) {
           admin.id,
           `📥 <b>Item Returned</b>\n${loanUser?.display_name} returned loan #${loanId}.${remarks ? `\n⚠️ <b>Remarks:</b> ${remarks}` : ""}\n<a href="${photoUrl}">View Proof Photo</a>`,
         ).catch(() => {});
+      }
+    }
+
+    // In-app + Telegram + email return receipt to borrower
+    await insertRowsBestEffort({
+      client: supabase,
+      table: "notifications",
+      entries: [
+        {
+          user_id: loan.user_id,
+          message: `Your return for loan #${loanId} has been received and recorded.`,
+          link: "/loans",
+        },
+      ],
+      warnings,
+      context: "user return receipt",
+    });
+
+    sendTelegramMessage(
+      loan.user_id,
+      `✅ <b>Return Received!</b>\nYour return for loan #${loanId} has been recorded.${remarks ? `\n⚠️ <b>Remarks:</b> ${remarks}` : ""}\n📸 <a href="${photoUrl}">View Your Return Photo</a>`,
+    ).catch(() => {});
+
+    if (loanUser) {
+      const { data: loanUserFull } = await supabase
+        .from("users")
+        .select("email, mute_emails")
+        .eq("id", loan.user_id)
+        .single();
+      if (loanUserFull?.email && !loanUserFull?.mute_emails) {
+        sendLoanReturnEmail({
+          to: loanUserFull.email,
+          displayName: loanUser.display_name,
+          loanId,
+          items: (loanItems || []).map((item) => ({
+            item: item.item_name,
+            quantity: item.quantity,
+          })),
+          photoUrl,
+          adminReturn: false,
+        }).catch(() => {});
       }
     }
 

@@ -2,9 +2,9 @@ import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import {
-  sendNewLoanUserEmail,
   sendNewLoanAdminEmails,
   sendLoanStatusEmail,
+  sendLoanPendingEmail,
 } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { autoApproveTechLoan } from "@/lib/services/techLoanAutoApproval";
@@ -564,6 +564,13 @@ export async function POST(request) {
           details: `Auto-approved ${loan_type} loan at submission by global setting.`,
         });
 
+        // In-app notification to user
+        await supabase.from("notifications").insert({
+          user_id: user.id,
+          message: `Your ${loan_type} loan request #${loanId} has been auto-approved!`,
+          link: "/loans",
+        });
+
         if (userRecord?.email && !userRecord?.mute_emails) {
           sendLoanStatusEmail({
             to: userRecord.email,
@@ -624,8 +631,22 @@ export async function POST(request) {
           );
         }
 
+        // In-app + Telegram to user confirming submission
+        await supabase.from("notifications").insert({
+          user_id: user.id,
+          message: `Your ${loan_type} loan request #${loanId} has been submitted and is pending approval.`,
+          link: "/loans",
+        });
+
+        if (!userRecord?.mute_telegram) {
+          sendTelegramMessage(
+            user.id,
+            `📝 <b>Loan Request Received</b>\nYour ${loan_type} loan #${loanId} has been submitted and is pending approval.\n\nPurpose: ${trimmedPurpose}\nItems: ${itemListStr}`,
+          ).catch(() => {});
+        }
+
         if (userRecord?.email && !userRecord?.mute_emails) {
-          sendNewLoanUserEmail({
+          sendLoanPendingEmail({
             to: userRecord.email,
             displayName: user.display_name || user.username,
             loanId,

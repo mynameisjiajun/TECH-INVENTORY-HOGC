@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
-import { sendLoanStatusEmail } from "@/lib/services/email";
+import { sendLoanStatusEmail, sendLoanPendingEmail } from "@/lib/services/email";
 import { sendTelegramMessage } from "@/lib/services/telegram";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { getTodaySingaporeDateString } from "@/lib/utils/date";
@@ -608,6 +608,13 @@ export async function POST(request) {
       quantity: 1,
     }));
 
+    // In-app notification to user
+    await supabase.from("notifications").insert({
+      user_id: user.id,
+      message: `Your laptop loan request has been auto-approved and is active!`,
+      link: "/loans",
+    });
+
     if (userRecord?.email && !userRecord?.mute_emails) {
       sendLoanStatusEmail({
         to: userRecord.email,
@@ -650,6 +657,12 @@ export async function POST(request) {
       }
     }
   } else {
+    const { data: userRecord } = await supabase
+      .from("users")
+      .select("email, display_name, mute_emails, mute_telegram")
+      .eq("id", user.id)
+      .single();
+
     // Notify admins
     const { data: admins } = await supabase
       .from("users")
@@ -674,12 +687,35 @@ export async function POST(request) {
       }
     }
 
-    // Notify user
+    // In-app + Telegram + email to user confirming submission
     await supabase.from("notifications").insert({
       user_id: user.id,
       message: `Your laptop loan request has been submitted and is pending approval.`,
       link: "/loans",
     });
+
+    if (!userRecord?.mute_telegram) {
+      sendTelegramMessage(
+        user.id,
+        `📝 <b>Laptop Loan Request Received</b>\nYour request for ${laptopCount} laptop(s) has been submitted and is pending approval.\n\nPurpose: ${trimmedPurpose}\nLaptops: ${laptopListStr}`,
+      ).catch(() => {});
+    }
+
+    if (userRecord?.email && !userRecord?.mute_emails) {
+      const itemsForEmail = allRequestedLaptopIds.map((laptopId) => ({
+        item: laptopMap.get(String(laptopId))?.name || `Laptop ${laptopId}`,
+        quantity: 1,
+      }));
+      sendLoanPendingEmail({
+        to: userRecord.email,
+        displayName: userRecord.display_name || user.display_name,
+        loanId: createdLoans[0]?.id,
+        loanType: "laptop",
+        purpose: trimmedPurpose,
+        remarks: trimmedRemarks,
+        items: itemsForEmail,
+      }).catch(() => {});
+    }
   }
 
   return NextResponse.json({

@@ -4,6 +4,9 @@ import { getCurrentUser } from "@/lib/utils/auth";
 import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
 import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
 import { sendTelegramMessage } from "@/lib/services/telegram";
+import { autoApproveTechLoan } from "@/lib/services/techLoanAutoApproval";
+import { isAppSettingEnabled } from "@/lib/utils/appSettings";
+import { sendLoanModifiedEmail } from "@/lib/services/email";
 import { NextResponse } from "next/server";
 import {
   insertRowsBestEffort,
@@ -382,6 +385,9 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Loan ID required" }, { status: 400 });
     if (!items || items.length === 0)
       return NextResponse.json({ error: "No items selected" }, { status: 400 });
+    if (!["temporary", "permanent"].includes(loan_type)) {
+      return NextResponse.json({ error: "Invalid loan type" }, { status: 400 });
+    }
 
     for (const item of items) {
       if (
@@ -416,6 +422,12 @@ export async function PUT(request, { params }) {
     if (loan_type === "temporary" && !end_date) {
       return NextResponse.json(
         { error: "End date is required for temporary loans" },
+        { status: 400 },
+      );
+    }
+    if (loan_type === "permanent" && end_date) {
+      return NextResponse.json(
+        { error: "Permanent loans cannot include an end date" },
         { status: 400 },
       );
     }
@@ -473,7 +485,8 @@ export async function PUT(request, { params }) {
     }
 
     const isAdminEditing = user.role === "admin";
-    const nextStatus = isAdminEditing ? existingLoan.status : "pending";
+    const autoApproveLoans = !isAdminEditing && await isAppSettingEnabled("auto_approve_loans");
+    const nextStatus = isAdminEditing ? existingLoan.status : (autoApproveLoans ? "approved" : "pending");
 
     const { data: oldItems, error: oldItemsError } = await supabase
       .from("loan_items")
@@ -666,6 +679,7 @@ export async function PUT(request, { params }) {
         );
       }
     } else if (existingLoan.status === "approved") {
+      // Was approved, going back to pending — restore stock
       let restoreChanges = [];
       try {
         restoreChanges = restoreApprovedLoanInventoryTx(
@@ -692,6 +706,33 @@ export async function PUT(request, { params }) {
       }
 
       inventorySheetChanges = restoreChanges;
+    } else if (existingLoan.status !== "approved" && nextStatus === "approved") {
+      // Was pending, now being auto-approved — deduct new items from inventory
+      try {
+        await autoApproveTechLoan({
+          db,
+          loanId,
+          loanType: loan_type,
+          purpose: purpose.trim(),
+          department: department || "",
+          location: location || "",
+          resolvedItems,
+        });
+        // autoApproveTechLoan handles its own sheets sync, leave inventorySheetChanges empty
+      } catch (autoApproveError) {
+        const rollbackWarnings = await rollbackLoanRequestState({
+          loanId,
+          requestSnapshot,
+          itemSnapshot: oldItems || [],
+        });
+        return NextResponse.json(
+          {
+            error: autoApproveError.message || "Failed to auto-approve modified loan",
+            details: rollbackWarnings,
+          },
+          { status: 500 },
+        );
+      }
     }
 
     if (inventorySheetChanges.length > 0) {
@@ -730,6 +771,12 @@ export async function PUT(request, { params }) {
       .join(", ");
 
     if (isAdminEditing) {
+      const { data: loanOwner } = await supabase
+        .from("users")
+        .select("email, display_name, mute_emails")
+        .eq("id", existingLoan.user_id)
+        .single();
+
       await insertRowsBestEffort({
         client: supabase,
         table: "notifications",
@@ -754,6 +801,18 @@ export async function PUT(request, { params }) {
           : `📝 <b>Loan Updated</b>\nAn admin updated your ${loan_type} loan request #${loanId}. It is still pending review.\n\nItems: ${itemListStr}`,
       ).catch(() => {});
 
+      if (loanOwner?.email && !loanOwner?.mute_emails) {
+        sendLoanModifiedEmail({
+          to: loanOwner.email,
+          displayName: loanOwner.display_name,
+          loanId,
+          loanType: loan_type,
+          autoApproved: false,
+          adminModified: true,
+          items: resolvedItems.map((i) => ({ item: i.item_name, quantity: i.quantity })),
+        }).catch(() => {});
+      }
+
       if (nextStatus === "approved") {
         sendAdminTelegramAlert(
           `📝 <b>Active Inventory Updated</b>\n<b>${user.display_name || user.username || "Admin"}</b> updated approved loan #${loanId}.\nType: ${loan_type}\nItems: ${itemListStr}`,
@@ -776,17 +835,31 @@ export async function PUT(request, { params }) {
         context: "loan audit log",
       });
     } else {
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("email, display_name, mute_emails")
+        .eq("id", user.id)
+        .single();
+
       const { data: admins } = await supabase
         .from("users")
         .select("id, mute_telegram")
         .eq("role", "admin");
+
+      const adminLoanMsg = autoApproveLoans
+        ? `${user.display_name} modified and auto-approved their ${loan_type} loan #${loanId}.`
+        : `${user.display_name} modified their ${loan_type} loan request #${loanId}.`;
+      const adminTelegramMsg = autoApproveLoans
+        ? `✅ <b>Loan Modified & Auto-Approved</b>\n<b>${user.display_name}</b> modified loan #${loanId} and it was auto-approved.\n\nItems: ${itemListStr}`
+        : `📝 <b>Loan Modified</b>\n<b>${user.display_name}</b> modified loan request #${loanId} (now pending).\n\nNew Items: ${itemListStr}`;
+
       if (admins && admins.length > 0) {
         await insertRowsBestEffort({
           client: supabase,
           table: "notifications",
           entries: admins.map((admin) => ({
             user_id: admin.id,
-            message: `${user.display_name} modified their ${loan_type} loan request #${loanId}.`,
+            message: adminLoanMsg,
             link: "/admin",
           })),
           warnings,
@@ -794,12 +867,45 @@ export async function PUT(request, { params }) {
         });
         for (const admin of admins) {
           if (!admin.mute_telegram) {
-            sendTelegramMessage(
-              admin.id,
-              `📝 <b>Loan Modified</b>\n<b>${user.display_name}</b> modified loan request #${loanId} (now pending).\n\nNew Items: ${itemListStr}`,
-            ).catch(() => {});
+            sendTelegramMessage(admin.id, adminTelegramMsg).catch(() => {});
           }
         }
+      }
+
+      // In-app + Telegram + email to the user
+      await insertRowsBestEffort({
+        client: supabase,
+        table: "notifications",
+        entries: [
+          {
+            user_id: user.id,
+            message: autoApproveLoans
+              ? `Your ${loan_type} loan #${loanId} has been updated and auto-approved.`
+              : `Your ${loan_type} loan #${loanId} has been updated and is pending approval.`,
+            link: "/loans",
+          },
+        ],
+        warnings,
+        context: "user loan modification",
+      });
+
+      sendTelegramMessage(
+        user.id,
+        autoApproveLoans
+          ? `✅ <b>Loan Updated & Approved</b>\nYour ${loan_type} loan #${loanId} has been updated and auto-approved.\n\nItems: ${itemListStr}`
+          : `📝 <b>Loan Updated</b>\nYour ${loan_type} loan #${loanId} has been updated and is pending approval.\n\nItems: ${itemListStr}`,
+      ).catch(() => {});
+
+      if (userRecord?.email && !userRecord?.mute_emails) {
+        sendLoanModifiedEmail({
+          to: userRecord.email,
+          displayName: userRecord.display_name || user.display_name,
+          loanId,
+          loanType: loan_type,
+          autoApproved: autoApproveLoans,
+          adminModified: false,
+          items: resolvedItems.map((i) => ({ item: i.item_name, quantity: i.quantity })),
+        }).catch(() => {});
       }
 
       await insertRowsBestEffort({
@@ -809,7 +915,9 @@ export async function PUT(request, { params }) {
           {
             user_id: user.id,
             action: "modify",
-            description: `Modified loan #${loanId}`,
+            description: autoApproveLoans
+              ? `Modified and auto-approved loan #${loanId}`
+              : `Modified loan #${loanId}`,
             link: "/admin",
           },
         ],
@@ -821,11 +929,14 @@ export async function PUT(request, { params }) {
     return NextResponse.json(
       withWarnings(
         {
+          auto_approved: !isAdminEditing && autoApproveLoans,
           message: isAdminEditing
             ? nextStatus === "approved"
               ? "Loan updated successfully and remains approved."
               : "Loan updated successfully and remains pending."
-            : "Loan modified successfully and is now pending approval.",
+            : autoApproveLoans
+              ? "Loan modified and auto-approved!"
+              : "Loan modified successfully and is now pending approval.",
         },
         warnings,
       ),
