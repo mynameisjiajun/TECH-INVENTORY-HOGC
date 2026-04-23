@@ -1147,7 +1147,7 @@ html[data-shell="pwa"] .cart-header {
 
 html[data-shell="pwa"] .laptop-sticky-bar {
   top: var(--shell-sticky-top-mobile);
-  overflow: visible;
+  overflow: hidden;
   margin-left: 0 !important;
   margin-right: 0 !important;
   border-radius: 16px !important;

@@ -1185,8 +1185,11 @@ html[data-shell="mobile-web"][data-platform="ios"] {
 
   html[data-shell="mobile-web"] .laptop-sticky-bar {
     top: var(--shell-sticky-top-mobile);
-    /* Allow native date picker UI to render outside the clip boundary */
-    overflow: visible;
+    overflow: hidden;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    border-radius: 16px !important;
+    border: 1px solid var(--border) !important;
   }
 
   html[data-shell="mobile-web"] .laptop-date-grid {
