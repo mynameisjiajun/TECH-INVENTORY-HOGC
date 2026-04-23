@@ -662,6 +662,15 @@ html[data-shell="pwa"] .notification-dropdown-header .btn {
   padding: 4px 8px;
 }
 
+html[data-shell="pwa"] .notification-dropdown-footer {
+  margin: 0;
+  padding: 0;
+}
+
+html[data-shell="pwa"] .notification-dropdown-footer button {
+  border-radius: 0 0 18px 18px !important;
+}
+
 html[data-shell="pwa"] .notification-item {
   padding: 10px 14px;
   gap: 8px;
@@ -1138,33 +1147,20 @@ html[data-shell="pwa"] .cart-header {
 
 html[data-shell="pwa"] .laptop-sticky-bar {
   top: var(--shell-sticky-top-mobile);
-  /* clip horizontal bleed while letting the date-picker calendar pop below */
-  overflow-x: clip;
-  overflow-y: visible;
-  max-width: 100%;
-  box-sizing: border-box;
+  overflow: visible;
 }
 
 html[data-shell="pwa"] .laptop-date-grid {
   grid-template-columns: 1fr;
   gap: 8px;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
 }
 
 html[data-shell="pwa"] .laptop-date-grid.single-col {
   grid-template-columns: 1fr;
 }
 
-html[data-shell="pwa"] .laptop-date-grid > div {
-  min-width: 0;
-  max-width: 100%;
-}
-
 html[data-shell="pwa"] .laptop-date-grid input[type="date"] {
   width: 100%;
-  max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
   font-size: 16px;
