@@ -770,6 +770,20 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   font-size: inherit;
 }
 
+/* iOS Safari renders the displayed value via this pseudo-element and ignores
+   the input's own font-size — without this rule the value text balloons and
+   overflows the field in standalone PWA mode. */
+input[type="date"]::-webkit-date-and-time-value {
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.2;
+  text-align: left;
+  min-height: 1.2em;
+  margin: 0;
+  padding: 0;
+}
+
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
