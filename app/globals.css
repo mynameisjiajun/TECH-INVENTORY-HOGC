@@ -772,11 +772,13 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 
 /* iOS Safari renders the displayed value via this pseudo-element and ignores
    the input's own font-size — without this rule the value text balloons and
-   overflows the field in standalone PWA mode. */
+   overflows the field in standalone PWA mode. `inherit` is unreliable here on
+   iOS, so set an explicit size that matches the input's default. */
 input[type="date"]::-webkit-date-and-time-value {
   color: var(--text-primary);
   font-family: inherit;
-  font-size: inherit;
+  font-size: 16px;
+  font-weight: 500;
   line-height: 1.2;
   text-align: left;
   min-height: 1.2em;
@@ -2699,7 +2701,18 @@ body.rickroll-lock {
     box-sizing: border-box;
     /* Must stay 16px — iOS Safari zooms the viewport if < 16px */
     font-size: 16px;
-    padding: 6px 8px;
+    line-height: 1.2;
+    padding: 10px 12px;
+    height: 42px;
+  }
+
+  .laptop-date-grid input[type="date"]::-webkit-date-and-time-value {
+    font-size: 16px !important;
+    line-height: 1.2 !important;
+    min-height: 1.2em;
+    text-align: left;
+    margin: 0;
+    padding: 0;
   }
 
   .laptop-loan-type-toggle button {

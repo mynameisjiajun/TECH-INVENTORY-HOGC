@@ -1213,7 +1213,18 @@ html[data-shell="mobile-web"][data-platform="ios"] {
     box-sizing: border-box;
     /* Keep at 16px — iOS Safari zooms the viewport if font-size < 16px */
     font-size: 16px;
-    padding: 8px 10px;
+    line-height: 1.2;
+    padding: 10px 12px;
+    height: 42px;
+  }
+
+  html[data-shell="mobile-web"] .laptop-date-grid input[type="date"]::-webkit-date-and-time-value {
+    font-size: 16px !important;
+    line-height: 1.2 !important;
+    min-height: 1.2em;
+    text-align: left;
+    margin: 0;
+    padding: 0;
   }
 
   /* ── Laptop Loans page: tighter side margins ── */
