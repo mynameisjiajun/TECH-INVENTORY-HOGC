@@ -9,6 +9,7 @@ import { getAppSetting } from "@/lib/utils/appSettings";
 import { sendWelcomeEmail } from "@/lib/services/email";
 import { checkRateLimit, resetRateLimit } from "@/lib/utils/rateLimit";
 import { getRequestClientIdentifier } from "@/lib/utils/request";
+import { COOKIE_NAME } from "@/lib/utils/jwt";
 import { NextResponse } from "next/server";
 
 function rateLimitError(retryAfterSeconds) {
@@ -156,7 +157,7 @@ export async function POST(request) {
 
     if (action === "logout") {
       const response = NextResponse.json({ ok: true });
-      response.cookies.set("tech-inventory-token", "", {
+      response.cookies.set(COOKIE_NAME, "", {
         maxAge: 0,
         path: "/",
       });
