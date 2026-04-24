@@ -595,7 +595,7 @@ export async function POST(request) {
         if (!userRecord?.mute_telegram) {
           sendTelegramMessage(
             user.id,
-            `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loanId}\nType: ${safeLoanType}\nPurpose: ${safePurpose}\nItems: ${itemListStr}\n${periodLine}${remarksLine ? `${remarksLine}` : ""}`,
+            `✅ <b>Loan Approved!</b>\nGreat news — your loan has been auto-approved. Here are the details:\n\nLoan ID: #${loanId}\nType: ${safeLoanType}\nPurpose: ${safePurpose}\nItems: ${itemListStr}\n${periodLine}${remarksLine ? `${remarksLine}` : ""}\n\nYou're all set! Check the app for more details.`,
           ).catch((err) => console.error("loan auto-approve user telegram failed:", err?.message || err));
         }
 
@@ -617,7 +617,7 @@ export async function POST(request) {
             if (!admin.mute_telegram) {
               sendTelegramMessage(
                 admin.id,
-                `✅ <b>Auto-Approved Loan Request</b>\n<b>${requesterName}</b> submitted an auto-approved <b>${safeLoanType}</b> loan.\n\nPurpose: ${safePurpose}${remarksLine}\nItems: ${itemListStr}`,
+                `✅ <b>Auto-Approved Loan</b>\n<b>${requesterName}</b> submitted a <b>${safeLoanType}</b> loan that was auto-approved.\n\nPurpose: ${safePurpose}${remarksLine}\nItems: ${itemListStr}`,
               ).catch((err) => console.error("loan auto-approve admin telegram failed:", err?.message || err));
             }
           }
@@ -650,7 +650,7 @@ export async function POST(request) {
         if (!userRecord?.mute_telegram) {
           sendTelegramMessage(
             user.id,
-            `📝 <b>Loan Request Received</b>\nYour ${safeLoanType} loan #${loanId} has been submitted and is pending approval.\n\nPurpose: ${safePurpose}\nItems: ${itemListStr}`,
+            `📝 <b>Loan Request Submitted!</b>\nYour ${safeLoanType} loan request has been received and is pending approval.\n\nLoan ID: #${loanId}\nPurpose: ${safePurpose}\nItems: ${itemListStr}\n\nWe'll notify you once it's reviewed. Thanks!`,
           ).catch((err) => console.error("loan pending user telegram failed:", err?.message || err));
         }
 
@@ -683,7 +683,7 @@ export async function POST(request) {
           if (!admin.mute_telegram) {
             sendTelegramMessage(
               admin.id,
-              `🔔 <b>New Loan Request</b>\n<b>${requesterName}</b> requested a <b>${safeLoanType}</b> loan.\n\nPurpose: ${safePurpose}${remarksLine}\nItems: ${itemListStr}`,
+              `🔔 <b>New Loan Request</b>\n<b>${requesterName}</b> has submitted a <b>${safeLoanType}</b> loan request.\n\nPurpose: ${safePurpose}${remarksLine}\nItems: ${itemListStr}\n\nHead to the admin panel to review and approve.`,
             ).catch((err) => console.error("loan pending admin telegram failed:", err?.message || err));
           }
         }

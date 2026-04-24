@@ -239,7 +239,7 @@ export async function POST(request) {
 
     sendTelegramChatMessage(
       chatId,
-      "🔌 Your Telegram has been unlinked from your Tech Inventory account. Commands and alerts are now disabled until you relink from your Profile page.",
+      "🔌 <b>Telegram Unlinked</b>\nYour Telegram has been disconnected from your Tech Inventory account. You won't receive notifications here anymore.\n\nTo reconnect, visit your Profile page in the app.",
     ).catch(() => {});
 
     return NextResponse.json({ message: "Telegram unlinked successfully." });

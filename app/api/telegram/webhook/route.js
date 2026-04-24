@@ -193,7 +193,7 @@ async function handleStartByTelegramHandle(chatId, username) {
   if (!normalizedHandle) {
     return {
       ok: false,
-      error: `👋 I'm the Tech Inventory Bot!\n\n${buildLinkInstructions()}`,
+      error: `👋 <b>Welcome to Tech Inventory Bot!</b>\n\nIt looks like your Telegram isn't linked yet. Here's how to get started:\n\n${buildLinkInstructions()}`,
     };
   }
 
@@ -239,7 +239,7 @@ async function sendStartResultReply(chatId, result) {
   if (result.status === "already-linked") {
     await reply(
       chatId,
-      `✅ Your Telegram is already linked to <b>@${escapeHtml(result.user.username)}</b>. Send /help to see available commands.`,
+      `✅ You're already linked as <b>@${escapeHtml(result.user.username)}</b>!\n\nSend /help to see available commands.`,
     );
     return;
   }
@@ -247,14 +247,14 @@ async function sendStartResultReply(chatId, result) {
   if (result.status === "relinked") {
     await reply(
       chatId,
-      `✅ Telegram linked to <b>@${escapeHtml(result.user.username)}</b>.\n\nYour previous Telegram link was replaced automatically, and any stale backend link for this chat was cleared. Send /help to see available commands.`,
+      `✅ <b>Re-linked successfully!</b>\nThis chat is now linked to <b>@${escapeHtml(result.user.username)}</b>. Any previous Telegram link has been replaced.\n\nSend /help to see available commands.`,
     );
     return;
   }
 
   await reply(
     chatId,
-    `✅ Successfully linked! Welcome, <b>@${escapeHtml(result.user.username)}</b>.\n\nYou will now receive instant notifications about your Tech Inventory loans here.\n\nSend /help to see available commands.`,
+    `✅ <b>You're linked!</b> Welcome, <b>@${escapeHtml(result.user.username)}</b>! 🎉\n\nYou'll now receive loan notifications and reminders directly here.\n\nSend /help to see what I can do.`,
   );
 }
 
@@ -270,16 +270,16 @@ async function handleHelp(chatId) {
   await reply(
     chatId,
     [
-      "<b>Tech Inventory Bot Commands:</b>",
+      "🤖 <b>Tech Inventory Bot — Commands</b>",
       "",
       "/loans — View your active & pending loans",
       "/returns — Items you need to return",
-      "/overdue — Overdue items (need immediate attention)",
-      "/status &lt;id&gt; — Check a specific loan (e.g. /status 5)",
+      "/overdue — Overdue items (urgent!)",
+      "/status &lt;id&gt; — Details for a specific loan (e.g. /status 5)",
       "/history — Your recent loan history",
-      "/unlink — Unlink this Telegram chat from your app account",
-      "/mute — Mute Telegram notifications",
-      "/unmute — Unmute Telegram notifications",
+      "/unlink — Disconnect this chat from your account",
+      "/mute — Pause Telegram notifications",
+      "/unmute — Resume Telegram notifications",
       "/help — Show this message",
     ].join("\n"),
   );
@@ -303,7 +303,7 @@ async function handleUnlink(chatId, userId) {
 
   await reply(
     chatId,
-    "🔌 This Telegram chat has been unlinked from your Tech Inventory account. Commands and alerts are now disabled until you relink from Profile.",
+    "🔌 <b>Telegram Unlinked</b>\nThis chat has been disconnected from your Tech Inventory account. You won't receive notifications here anymore.\n\nTo reconnect, visit your Profile page in the app.",
   );
 }
 
@@ -312,8 +312,8 @@ async function handleMute(chatId, userId, mute) {
   await reply(
     chatId,
     mute
-      ? "🔕 Telegram notifications muted. Send /unmute to re-enable them."
-      : "🔔 Telegram notifications re-enabled.",
+      ? "🔕 <b>Notifications Muted</b>\nYou won't receive Telegram notifications until you unmute. Send /unmute to re-enable them."
+      : "🔔 <b>Notifications Enabled</b>\nWelcome back! You'll start receiving Telegram notifications again.",
   );
 }
 
@@ -583,7 +583,7 @@ export async function POST(request) {
     if (!user) {
       await reply(
         chatId,
-        `👋 I'm the Tech Inventory Bot!\n\n${buildLinkInstructions()}`,
+        `👋 <b>Welcome to Tech Inventory Bot!</b>\n\nIt looks like your Telegram isn't linked yet. Here's how to get started:\n\n${buildLinkInstructions()}`,
       );
       return NextResponse.json({ ok: true });
     }
@@ -611,7 +611,7 @@ export async function POST(request) {
     } else {
       await reply(
         chatId,
-        "I didn't understand that. Send /help to see what I can do.",
+        "🤔 I didn't quite understand that command. Send /help to see what I can do!",
       );
     }
 

@@ -803,8 +803,8 @@ export async function PUT(request, { params }) {
       sendTelegramMessage(
         existingLoan.user_id,
         nextStatus === "approved"
-          ? `📝 <b>Loan Updated</b>\nAn admin updated your approved ${safeLoanType} loan #${loanId}.\n\nItems: ${itemListStr}`
-          : `📝 <b>Loan Updated</b>\nAn admin updated your ${safeLoanType} loan request #${loanId}. It is still pending review.\n\nItems: ${itemListStr}`,
+          ? `📝 <b>Your Loan Was Updated</b>\nAn admin has made changes to your approved ${safeLoanType} loan <b>#${loanId}</b>.\n\nItems: ${itemListStr}\n\nCheck the app for the latest details.`
+          : `📝 <b>Your Loan Request Was Updated</b>\nAn admin has made changes to your ${safeLoanType} loan request <b>#${loanId}</b>. It is still pending review.\n\nItems: ${itemListStr}`,
       ).catch((err) => console.error("loan update user telegram failed:", err?.message || err));
 
       if (loanOwner?.email && !loanOwner?.mute_emails) {
@@ -821,7 +821,7 @@ export async function PUT(request, { params }) {
 
       if (nextStatus === "approved") {
         sendAdminTelegramAlert(
-          `📝 <b>Active Inventory Updated</b>\n<b>${safeActor}</b> updated approved loan #${loanId}.\nType: ${safeLoanType}\nItems: ${itemListStr}`,
+          `📝 <b>Active Inventory Updated</b>\n<b>${safeActor}</b> modified approved loan #${loanId}.\nType: ${safeLoanType}\nItems: ${itemListStr}`,
         ).catch((err) => console.error("loan update admin telegram failed:", err?.message || err));
       }
 
@@ -856,8 +856,8 @@ export async function PUT(request, { params }) {
         ? `${user.display_name} modified and auto-approved their ${loan_type} loan #${loanId}.`
         : `${user.display_name} modified their ${loan_type} loan request #${loanId}.`;
       const adminTelegramMsg = autoApproveLoans
-        ? `✅ <b>Loan Modified & Auto-Approved</b>\n<b>${safeUserDisplay}</b> modified loan #${loanId} and it was auto-approved.\n\nItems: ${itemListStr}`
-        : `📝 <b>Loan Modified</b>\n<b>${safeUserDisplay}</b> modified loan request #${loanId} (now pending).\n\nNew Items: ${itemListStr}`;
+        ? `✅ <b>Loan Modified & Auto-Approved</b>\n<b>${safeUserDisplay}</b> updated loan <b>#${loanId}</b>, which was auto-approved.\n\nItems: ${itemListStr}`
+        : `📝 <b>Loan Request Modified</b>\n<b>${safeUserDisplay}</b> updated loan request <b>#${loanId}</b>. It is now pending review.\n\nNew Items: ${itemListStr}`;
 
       if (admins && admins.length > 0) {
         await insertRowsBestEffort({
@@ -900,8 +900,8 @@ export async function PUT(request, { params }) {
       sendTelegramMessage(
         user.id,
         autoApproveLoans
-          ? `✅ <b>Loan Updated & Approved</b>\nYour ${safeLoanType} loan #${loanId} has been updated and auto-approved.\n\nItems: ${itemListStr}`
-          : `📝 <b>Loan Updated</b>\nYour ${safeLoanType} loan #${loanId} has been updated and is pending approval.\n\nItems: ${itemListStr}`,
+          ? `✅ <b>Loan Updated & Approved!</b>\nYour ${safeLoanType} loan <b>#${loanId}</b> has been updated and auto-approved.\n\nItems: ${itemListStr}`
+          : `📝 <b>Loan Request Updated</b>\nYour ${safeLoanType} loan request <b>#${loanId}</b> has been updated and is now pending approval.\n\nItems: ${itemListStr}`,
       ).catch((err) => console.error("loan self-modify user telegram failed:", err?.message || err));
 
       if (userRecord?.email && !userRecord?.mute_emails) {

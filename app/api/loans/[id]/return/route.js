@@ -361,7 +361,7 @@ export async function POST(request, { params }) {
       for (const admin of admins) {
         sendTelegramMessage(
           admin.id,
-          `📥 <b>Item Returned</b>\n${safeDisplayName} returned loan #${loanId}.${safeRemarks ? `\n⚠️ <b>Remarks:</b> ${safeRemarks}` : ""}\n${safePhotoLink}`,
+          `📥 <b>Items Returned</b>\n<b>${safeDisplayName}</b> has submitted a return for loan <b>#${loanId}</b>.${safeRemarks ? `\n\n⚠️ <b>Remarks:</b> ${safeRemarks}` : ""}\n\n${safePhotoLink}`,
         ).catch((err) =>
           console.error("return admin telegram failed:", err?.message || err),
         );
@@ -389,7 +389,7 @@ export async function POST(request, { params }) {
       : "Your return photo has been uploaded";
     sendTelegramMessage(
       loan.user_id,
-      `✅ <b>Return Received!</b>\nYour return for loan #${loanId} has been recorded.${userSafeRemarks ? `\n⚠️ <b>Remarks:</b> ${userSafeRemarks}` : ""}\n📸 ${userSafePhotoLink}`,
+      `✅ <b>Return Received — Thank You!</b>\nYour return for loan <b>#${loanId}</b> has been recorded successfully.${userSafeRemarks ? `\n\nRemarks: ${userSafeRemarks}` : ""}\n\n📸 ${userSafePhotoLink}`,
     ).catch((err) =>
       console.error("return user telegram failed:", err?.message || err),
     );

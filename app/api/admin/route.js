@@ -193,12 +193,12 @@ export async function POST(request) {
       for (const loan of approvedLoans) {
         sendTelegramMessage(
           loan.user_id,
-          `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan.id} have been marked as returned.`,
+          `📦 <b>Items Returned</b>\nYour items from loan request <b>#${loan.id}</b> have been marked as returned. Thanks for returning them!`,
         ).catch((err) => console.error("Telegram notification failed:", err.message));
       }
 
       sendAdminTelegramAlert(
-        `🔄 <b>Inventory Returned</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> marked ${approvedLoans.length} loan(s) as returned.\nLoan IDs: ${approvedLoans.map((loan) => `#${loan.id}`).join(", ")}`,
+        `🔄 <b>Bulk Return Processed</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> marked ${approvedLoans.length} loan(s) as returned.\nLoan IDs: ${approvedLoans.map((loan) => `#${loan.id}`).join(", ")}`,
       ).catch((err) => console.error("admin bulk-return telegram failed:", err?.message || err));
 
       const bulkReturnUserIds = [...new Set(approvedLoans.map((l) => l.user_id))];
@@ -454,12 +454,12 @@ export async function POST(request) {
           : `From ${loan.start_date}`;
         sendTelegramMessage(
           loan.user_id,
-          `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loan.id}\nStatus: Approved\nType: ${escapeHtml(loan.loan_type)}\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${itemList}\nPeriod: ${periodLine}`,
+          `✅ <b>Loan Approved!</b>\nGreat news — your ${escapeHtml(loan.loan_type)} loan request <b>#${loan.id}</b> has been approved!\n\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${itemList}\nPeriod: ${periodLine}\n\nHead to the app to see the full details.`,
         ).catch((err) => console.error("Telegram notification failed:", err.message));
       }
 
       sendAdminTelegramAlert(
-        `📦 <b>Inventory Checked Out</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> approved ${pendingLoans.length} loan(s).\nLoan IDs: ${pendingLoans.map((loan) => `#${loan.id}`).join(", ")}`,
+        `📦 <b>Bulk Approval Processed</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> approved ${pendingLoans.length} loan(s).\nLoan IDs: ${pendingLoans.map((loan) => `#${loan.id}`).join(", ")}`,
       ).catch((err) => console.error("admin bulk-approve telegram failed:", err?.message || err));
 
       const bulkApproveUserIds = [...new Set(pendingLoans.map((l) => l.user_id))];
@@ -725,7 +725,7 @@ export async function POST(request) {
         backgroundTasks.push(
           sendTelegramMessage(
             loan.user_id,
-            `✅ <b>We've Received Your Loan</b>\nHere are your loan details:\n\nLoan ID: #${loan_id}\nStatus: Approved\nType: ${escapeHtml(loan.loan_type)}\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${itemList}\nPeriod: ${periodLine}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
+            `✅ <b>Loan Approved!</b>\nGreat news — your ${escapeHtml(loan.loan_type)} loan request has been approved!\n\nLoan ID: #${loan_id}\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${itemList}\nPeriod: ${periodLine}${safeAdminNotes ? `\n\nAdmin Notes: ${safeAdminNotes}` : ""}\n\nYou're all set!`,
           ),
         );
       }
@@ -736,7 +736,7 @@ export async function POST(request) {
           .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)
           .join(", ") || "No items listed";
       sendAdminTelegramAlert(
-        `📦 <b>Inventory Checked Out</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> approved loan #${loan_id}.\nBorrower: ${escapeHtml(loanUser?.display_name || "Unknown")}\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${approvedItemList}`,
+        `📦 <b>Inventory Checked Out</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> approved loan <b>#${loan_id}</b>.\nBorrower: ${escapeHtml(loanUser?.display_name || "Unknown")}\nPurpose: ${escapeHtml(loan.purpose)}\nItems: ${approvedItemList}`,
       ).catch((err) => console.error("admin approve telegram failed:", err?.message || err));
 
       invalidateAll();
@@ -828,7 +828,7 @@ export async function POST(request) {
         rejectTasks.push(
           sendTelegramMessage(
             loan.user_id,
-            `❌ <b>Loan Rejected</b>\nYour ${escapeHtml(loan.loan_type)} loan request #${loan_id} has been rejected.${safeAdminNotes ? `\n\nAdmin notes: ${safeAdminNotes}` : ""}`,
+            `❌ <b>Loan Request Not Approved</b>\nUnfortunately, your ${escapeHtml(loan.loan_type)} loan request <b>#${loan_id}</b> was not approved.${safeAdminNotes ? `\n\nReason: ${safeAdminNotes}` : ""}\n\nIf you have questions, please reach out to an admin.`,
           ),
         );
       }
@@ -908,7 +908,7 @@ export async function POST(request) {
       await syncAuthoritativeStockToSheets(db, returnChanges);
       sendTelegramMessage(
         loan.user_id,
-        `🔄 <b>Loan Returned</b>\nYour loaned items for request #${loan_id} have been marked as returned and restored to inventory.`,
+        `🔄 <b>Loan Marked as Returned</b>\nYour loaned items from request <b>#${loan_id}</b> have been marked as returned by an admin and restored to inventory.`,
       ).catch((err) => console.error("Telegram notification failed:", err.message));
 
       if (returnUser?.email && !returnUser?.mute_emails) {
@@ -930,7 +930,7 @@ export async function POST(request) {
           .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)
           .join(", ") || "No items listed";
       sendAdminTelegramAlert(
-        `🔄 <b>Inventory Returned</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> returned loan #${loan_id} to stock.\nBorrower: ${escapeHtml(returnUser?.display_name || "Unknown")}\nItems: ${returnedItemList}`,
+        `🔄 <b>Inventory Returned</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> marked loan <b>#${loan_id}</b> as returned.\nBorrower: ${escapeHtml(returnUser?.display_name || "Unknown")}\nItems: ${returnedItemList}`,
       ).catch((err) => console.error("Telegram notification failed:", err.message));
 
       invalidateAll();
@@ -990,7 +990,7 @@ export async function POST(request) {
         const safeAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
         sendTelegramMessage(
           loan.user_id,
-          `❌ <b>Loan Removed</b>\nYour ${escapeHtml(loan.loan_type)} loan #${loan_id} was removed by an admin.${safeAdminNotes ? `\n\nAdmin notes: ${safeAdminNotes}` : ""}`,
+          `🗑️ <b>Loan Request Removed</b>\nYour ${escapeHtml(loan.loan_type)} loan <b>#${loan_id}</b> has been removed by an admin.${safeAdminNotes ? `\n\nAdmin Notes: ${safeAdminNotes}` : ""}\n\nIf you have questions, please reach out to an admin.`,
         ).catch((err) =>
           console.error("Telegram notification failed:", err.message),
         );
@@ -1003,7 +1003,7 @@ export async function POST(request) {
             .join(", ") || "No items listed";
         const safeAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
         sendAdminTelegramAlert(
-          `↩️ <b>Inventory Restored</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> deleted approved loan #${loan_id} and restored stock.\nItems: ${deletedItemList}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
+          `↩️ <b>Inventory Restored</b>\n<b>${escapeHtml(user.display_name || user.username || "Admin")}</b> deleted approved loan <b>#${loan_id}</b> and restored stock.\nItems: ${deletedItemList}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
         ).catch((err) =>
           console.error("Telegram notification failed:", err.message),
         );
