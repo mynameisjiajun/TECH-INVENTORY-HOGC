@@ -32,13 +32,34 @@ function buildLinkInstructions() {
     .join("\n");
 }
 
+const TELEGRAM_MAX_LENGTH = 4000;
+
 async function reply(chatId, text) {
   if (!BOT_TOKEN) return;
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
-  });
+  const safeText =
+    text.length > TELEGRAM_MAX_LENGTH
+      ? text.slice(0, TELEGRAM_MAX_LENGTH) + "\n\n<i>…message truncated</i>"
+      : text;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: safeText, parse_mode: "HTML" }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.error("Telegram reply failed:", errData?.description || errData);
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      console.error("Telegram reply network error:", err.message);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // Fetch items for multiple loans in a single query, returns a Map<loanId, items[]>
@@ -134,10 +155,11 @@ async function handleStart(chatId, userId) {
     }
   }
 
-  const { error: updateError } = await supabase
+  const { data: updatedRows, error: updateError } = await supabase
     .from("users")
     .update({ telegram_chat_id: currentChatId })
-    .eq("id", userId);
+    .eq("id", userId)
+    .select("id");
 
   if (updateError) {
     return {
@@ -146,6 +168,13 @@ async function handleStart(chatId, userId) {
         updateError.code === "23505"
           ? "⚠️ This Telegram chat is already linked elsewhere. Please send /start again in a moment."
           : "⚠️ We couldn't link your Telegram account right now. Please try again later or use the app Profile page to retry.",
+    };
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    return {
+      ok: false,
+      error: `❌ That link code is invalid or expired.\n\n${buildLinkInstructions()}`,
     };
   }
 
@@ -209,6 +238,10 @@ async function sendStartResultReply(chatId, result) {
   }
 
   if (result.status === "already-linked") {
+    await reply(
+      chatId,
+      `✅ Your Telegram is already linked to <b>@${escapeHtml(result.user.username)}</b>. Send /help to see available commands.`,
+    );
     return;
   }
 
@@ -254,44 +287,14 @@ async function handleHelp(chatId) {
 }
 
 async function handleUnlink(chatId, userId) {
-  const currentChatId = String(chatId);
-  const { data: user, error: userError } = await supabase
-    .from("users")
-    .select("telegram_chat_id")
-    .eq("id", userId)
-    .single();
-
-  if (userError || !user) {
-    await reply(
-      chatId,
-      "⚠️ We couldn't load your Telegram link status right now. Please try again later.",
-    );
-    return;
-  }
-
-  if (!user.telegram_chat_id) {
-    await reply(
-      chatId,
-      `ℹ️ No app account is currently linked to this Telegram chat.\n\n${buildLinkInstructions()}`,
-    );
-    return;
-  }
-
-  if (user.telegram_chat_id !== currentChatId) {
-    await reply(
-      chatId,
-      "⚠️ This Telegram chat is not the one currently linked to your app account. Please unlink from the app Profile page instead.",
-    );
-    return;
-  }
-
-  const { error: unlinkError } = await supabase
+  const { data: unlinkedRows, error: unlinkError } = await supabase
     .from("users")
     .update({ telegram_chat_id: null })
     .eq("id", userId)
-    .eq("telegram_chat_id", currentChatId);
+    .eq("telegram_chat_id", String(chatId))
+    .select("id");
 
-  if (unlinkError) {
+  if (unlinkError || !unlinkedRows || unlinkedRows.length === 0) {
     await reply(
       chatId,
       "⚠️ We couldn't unlink this Telegram chat right now. Please try again later or unlink from the app Profile page.",

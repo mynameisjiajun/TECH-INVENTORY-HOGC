@@ -7,7 +7,6 @@ import {
   getTokenCookieOptions,
 } from "@/lib/utils/auth";
 import { normalizeTelegramHandle } from "@/lib/utils/telegramHandle";
-import { sendTelegramChatMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
 function isMissingTelegramHandleColumn(error) {
@@ -210,34 +209,13 @@ export async function POST(request) {
   }
 
   if (action === "unlink_telegram") {
-    const { data: existingUser, error: existingUserError } = await supabase
-      .from("users")
-      .select("telegram_chat_id")
-      .eq("id", user.id)
-      .single();
-
-    if (existingUserError) {
-      return NextResponse.json(
-        {
-          error:
-            existingUserError.message || "Failed to load Telegram link state",
-        },
-        { status: 500 },
-      );
-    }
-
-    if (!existingUser?.telegram_chat_id) {
-      return NextResponse.json(
-        { error: "No Telegram account is currently linked" },
-        { status: 400 },
-      );
-    }
-
-    const chatId = existingUser.telegram_chat_id;
-    const { error: unlinkError } = await supabase
+    const { data: unlinkedRows, error: unlinkError } = await supabase
       .from("users")
       .update({ telegram_chat_id: null })
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .not("telegram_chat_id", "is", null)
+      .select("id");
+
     if (unlinkError) {
       return NextResponse.json(
         { error: unlinkError.message || "Failed to unlink Telegram" },
@@ -245,15 +223,14 @@ export async function POST(request) {
       );
     }
 
-    sendTelegramChatMessage(
-      chatId,
-      "🔌 Your Tech Inventory account was unlinked from the app profile. Commands and alerts are now disabled until you relink from Profile.",
-    ).catch((err) => console.error("profile unlink telegram failed:", err?.message || err));
+    if (!unlinkedRows || unlinkedRows.length === 0) {
+      return NextResponse.json(
+        { error: "No Telegram account is currently linked" },
+        { status: 400 },
+      );
+    }
 
-    return NextResponse.json({
-      message:
-        "Telegram unlinked. A confirmation was sent in Telegram if the chat is still reachable.",
-    });
+    return NextResponse.json({ message: "Telegram unlinked successfully." });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
