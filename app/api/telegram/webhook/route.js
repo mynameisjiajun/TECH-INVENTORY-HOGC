@@ -41,21 +41,18 @@ function daysUntil(dateStr) {
 // ── Command Handlers ────────────────────────────────────────────
 
 async function handleStart(chatId, userId) {
+  // Merge SELECT + UPDATE into one round trip for faster pairing
   const { data: user } = await supabase
     .from("users")
-    .select("id, username")
+    .update({ telegram_chat_id: String(chatId) })
     .eq("id", userId)
+    .select("id, username")
     .single();
 
   if (!user) {
     await reply(chatId, "❌ Invalid link. Please use the link from your Profile page.");
     return;
   }
-
-  await supabase
-    .from("users")
-    .update({ telegram_chat_id: String(chatId) })
-    .eq("id", userId);
 
   await reply(
     chatId,
@@ -74,8 +71,17 @@ async function handleHelp(chatId) {
     "/history — Your recent loan history",
     "/mute — Mute Telegram notifications",
     "/unmute — Unmute Telegram notifications",
+    "/unlink — Unlink your Telegram account",
     "/help — Show this message",
   ].join("\n"));
+}
+
+async function handleUnlink(chatId, userId) {
+  await supabase.from("users").update({ telegram_chat_id: null }).eq("id", userId);
+  await reply(
+    chatId,
+    "✅ Your Telegram account has been unlinked from Tech Inventory.\n\nYou'll no longer receive notifications here. Visit your Profile page to link again.",
+  );
 }
 
 async function handleMute(chatId, userId, mute) {
@@ -332,6 +338,8 @@ export async function POST(request) {
       await handleMute(chatId, user.id, true);
     } else if (text === "/unmute") {
       await handleMute(chatId, user.id, false);
+    } else if (text === "/unlink") {
+      await handleUnlink(chatId, user.id);
     } else {
       await reply(chatId, "I didn't understand that. Send /help to see what I can do.");
     }

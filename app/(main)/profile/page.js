@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const [muteTelegram, setMuteTelegram] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -45,6 +46,37 @@ export default function ProfilePage() {
         setProfileErr(err.message || 'Could not load profile');
       });
   }, [user]);
+
+  // Poll every 3 s while the Telegram link button is showing so the UI
+  // auto-updates to "Linked & Active" without the user having to refresh.
+  useEffect(() => {
+    if (!user || profile?.telegram_chat_id) return;
+    const id = setInterval(async () => {
+      try {
+        const r = await fetch('/api/profile');
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data.profile?.telegram_chat_id) {
+          setProfile(data.profile);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => clearInterval(id);
+  }, [user, profile?.telegram_chat_id]);
+
+  const handleUnlinkTelegram = async () => {
+    setUnlinkLoading(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unlink_telegram' }),
+      });
+      if (res.ok) setProfile(p => ({ ...p, telegram_chat_id: null }));
+    } catch { /* ignore */ } finally {
+      setUnlinkLoading(false);
+    }
+  };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -161,20 +193,30 @@ export default function ProfilePage() {
               
               {profileErr && profileErr.includes("Telegram") ? null : (
                 profile?.telegram_chat_id ? (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500 }}>
-                    <RiCheckLine size={16} /> Linked & Active
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500 }}>
+                      <RiCheckLine size={16} /> Linked & Active
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={handleUnlinkTelegram}
+                      disabled={unlinkLoading}
+                      style={{ fontSize: 12, color: 'var(--error)', borderColor: 'rgba(244,63,94,0.3)' }}
+                    >
+                      {unlinkLoading ? 'Unlinking…' : 'Unlink'}
+                    </button>
                   </div>
                 ) : (
                   <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: 16, borderRadius: 8, marginTop: 12 }}>
                     <p style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 12, fontWeight: 500 }}>To link your account:</p>
                     <ol style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px 0', paddingLeft: 20 }}>
                       <li style={{ marginBottom: 6 }}>Click the button below to open Telegram</li>
-                      <li style={{ marginBottom: 6 }}>Press <strong>Start</strong> at the bottom of the chat</li>
-                      <li>Wait for the confirmation message, then <strong>refresh this page</strong>.</li>
+                      <li>Press <strong>Start</strong> — this page will update automatically.</li>
                     </ol>
-                    <a 
-                      href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "HOGC_Tech_Bot"}?start=${user.id}`} 
-                      target="_blank" 
+                    <a
+                      href={`https://t.me/${process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || "HOGC_Tech_Bot"}?start=${user.id}`}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="btn btn-outline"
                       style={{ background: '#38bdf8', color: '#fff', border: 'none', padding: '10px 18px', display: 'inline-block' }}

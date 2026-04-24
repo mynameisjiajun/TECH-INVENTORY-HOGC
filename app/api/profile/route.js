@@ -56,6 +56,11 @@ export async function POST(request) {
     return response;
   }
 
+  if (action === "unlink_telegram") {
+    await supabase.from("users").update({ telegram_chat_id: null }).eq("id", user.id);
+    return NextResponse.json({ message: "Telegram unlinked." });
+  }
+
   if (action === "change_password") {
     if (!current_password || !new_password) {
       return NextResponse.json(
