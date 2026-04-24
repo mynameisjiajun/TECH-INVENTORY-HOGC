@@ -293,12 +293,14 @@ export async function POST(request) {
     }
 
     const chatId = body.message.chat.id;
-    const text = body.message.text.trim();
+    // Strip @BotName suffix Telegram appends to commands in group chats
+    // e.g. "/help@HOGC_Tech_Bot" → "/help", "/start@Bot 123" → "/start 123"
+    const text = body.message.text.trim().replace(/^(\/\w+)@\w+/, "$1");
 
     // Handle /start <userId> (account linking)
     if (text.startsWith("/start ")) {
-      const userIdRaw = text.split(" ")[1];
-      const userId = parseInt(userIdRaw, 10);
+      const parts = text.split(/\s+/);
+      const userId = parseInt(parts[1], 10);
       if (!isNaN(userId)) {
         await handleStart(chatId, userId);
         return NextResponse.json({ ok: true });
@@ -320,25 +322,26 @@ export async function POST(request) {
       return NextResponse.json({ ok: true });
     }
 
-    // Route commands
-    if (text === "/help" || text === "/start") {
+    // Route commands (use startsWith so extra spaces/args don't break matching)
+    const cmd = text.split(/\s+/)[0];
+    if (cmd === "/help" || cmd === "/start") {
       await handleHelp(chatId);
-    } else if (text === "/loans") {
+    } else if (cmd === "/loans") {
       await handleLoans(chatId, user.id);
-    } else if (text === "/returns") {
+    } else if (cmd === "/returns") {
       await handleReturns(chatId, user.id);
-    } else if (text === "/overdue") {
+    } else if (cmd === "/overdue") {
       await handleOverdue(chatId, user.id);
-    } else if (text.startsWith("/status")) {
+    } else if (cmd === "/status") {
       const arg = text.split(/\s+/)[1] || "";
       await handleStatus(chatId, user.id, arg);
-    } else if (text === "/history") {
+    } else if (cmd === "/history") {
       await handleHistory(chatId, user.id);
-    } else if (text === "/mute") {
+    } else if (cmd === "/mute") {
       await handleMute(chatId, user.id, true);
-    } else if (text === "/unmute") {
+    } else if (cmd === "/unmute") {
       await handleMute(chatId, user.id, false);
-    } else if (text === "/unlink") {
+    } else if (cmd === "/unlink") {
       await handleUnlink(chatId, user.id);
     } else {
       await reply(chatId, "I didn't understand that. Send /help to see what I can do.");
