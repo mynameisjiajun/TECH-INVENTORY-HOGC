@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "node lib/seed.js",
     "telegram:commands": "node scripts/setup-telegram-commands.js",
     "telegram:webhook:check": "node scripts/setup-telegram-webhook.js --check",
     "telegram:webhook:setup": "node scripts/setup-telegram-webhook.js --setup"
@@ -32,7 +31,6 @@
     "svix": "^1.88.0"
   },
   "devDependencies": {
-    "copy-webpack-plugin": "^14.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6"
   }

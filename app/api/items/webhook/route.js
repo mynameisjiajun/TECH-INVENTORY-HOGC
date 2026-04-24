@@ -172,9 +172,6 @@ export async function POST(request) {
     const { storageUpdated, deployedUpdated } = syncAll();
     invalidateAll();
 
-    console.log(
-      `Inventory webhook: synced ${storageUpdated} storage, ${deployedUpdated} deployed`,
-    );
     return NextResponse.json({ ok: true, storageUpdated, deployedUpdated });
   } catch (err) {
     console.error("Inventory webhook error:", err);
