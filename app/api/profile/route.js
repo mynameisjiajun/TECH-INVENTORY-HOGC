@@ -7,6 +7,7 @@ import {
   getTokenCookieOptions,
 } from "@/lib/utils/auth";
 import { normalizeTelegramHandle } from "@/lib/utils/telegramHandle";
+import { sendTelegramChatMessage } from "@/lib/services/telegram";
 import { NextResponse } from "next/server";
 
 function isMissingTelegramHandleColumn(error) {
@@ -209,12 +210,25 @@ export async function POST(request) {
   }
 
   if (action === "unlink_telegram") {
-    const { data: unlinkedRows, error: unlinkError } = await supabase
+    const { data: existing } = await supabase
+      .from("users")
+      .select("telegram_chat_id")
+      .eq("id", user.id)
+      .single();
+
+    if (!existing?.telegram_chat_id) {
+      return NextResponse.json(
+        { error: "No Telegram account is currently linked" },
+        { status: 400 },
+      );
+    }
+
+    const chatId = existing.telegram_chat_id;
+
+    const { error: unlinkError } = await supabase
       .from("users")
       .update({ telegram_chat_id: null })
-      .eq("id", user.id)
-      .not("telegram_chat_id", "is", null)
-      .select("id");
+      .eq("id", user.id);
 
     if (unlinkError) {
       return NextResponse.json(
@@ -223,12 +237,10 @@ export async function POST(request) {
       );
     }
 
-    if (!unlinkedRows || unlinkedRows.length === 0) {
-      return NextResponse.json(
-        { error: "No Telegram account is currently linked" },
-        { status: 400 },
-      );
-    }
+    sendTelegramChatMessage(
+      chatId,
+      "🔌 Your Telegram has been unlinked from your Tech Inventory account. Commands and alerts are now disabled until you relink from your Profile page.",
+    ).catch(() => {});
 
     return NextResponse.json({ message: "Telegram unlinked successfully." });
   }
