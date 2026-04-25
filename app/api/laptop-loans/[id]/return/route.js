@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { invalidateAll } from "@/lib/utils/cache";
-import { sendTelegramMessage } from "@/lib/services/telegram";
+import { sendTelegramMessage, sendChannelMessage } from "@/lib/services/telegram";
 import { sendLaptopAvailableEmail, sendLoanReturnEmail } from "@/lib/services/email";
 import { escapeHtml, isSafeHttpsUrl } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
@@ -33,7 +33,7 @@ export async function POST(request, { params }) {
 
     const { data: loan, error: loanError } = await supabase
       .from("laptop_loan_requests")
-      .select("*, laptop_loan_items(laptop_id, laptops(name))")
+      .select("*, laptop_loan_items(laptop_id, laptops(name, cpu))")
       .eq("id", id)
       .single();
 
@@ -298,7 +298,7 @@ export async function POST(request, { params }) {
 
     const { data: loanUserRecord } = await supabase
       .from("users")
-      .select("email, display_name, mute_emails")
+      .select("email, display_name, telegram_handle, mute_emails")
       .eq("id", loan.user_id)
       .single();
 
@@ -315,6 +315,34 @@ export async function POST(request, { params }) {
         adminReturn: false,
       }).catch((err) => console.error("laptop return notification send failed:", err?.message || err));
     }
+
+    const formatReturnDate = (dateStr) => {
+      if (!dateStr) return "N/A";
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return `${day} ${months[month - 1]} ${year}`;
+    };
+
+    const returnChannelItems = loan.laptop_loan_items.map((item) => {
+      const name = escapeHtml(item.laptops?.name || "Unknown");
+      const cpu = item.laptops?.cpu ? ` (${escapeHtml(item.laptops.cpu)})` : "";
+      return `${name}${cpu}`;
+    });
+    const returnLaptopLabel = returnChannelItems.length > 1 ? "Laptops" : "Laptop";
+    const returnLaptopBlock = returnChannelItems.length === 1
+      ? `<b>${returnLaptopLabel}:</b> ${returnChannelItems[0]}`
+      : `<b>${returnLaptopLabel}:</b>\n${returnChannelItems.map((l) => `• ${l}`).join("\n")}`;
+    const returnBorrowerName = escapeHtml(loanUserRecord?.display_name || "Unknown");
+    const returnBorrowerHandle = loanUserRecord?.telegram_handle
+      ? `@${escapeHtml(loanUserRecord.telegram_handle.replace(/^@/, ""))}`
+      : "no handle";
+    const returnDepartment = loan.department
+      ? `${escapeHtml(loan.department.toUpperCase())} Ministry`
+      : "N/A";
+
+    sendChannelMessage(
+      `📥 <b>LAPTOP RETURNED</b>\n<i>Returned by <b>${returnBorrowerName}</b> (${returnBorrowerHandle}) from ${returnDepartment}</i>\n──────────────────\n<b>Loan ID:</b> #${id}\n\n${returnLaptopBlock}\n<b>Return Date:</b> ${formatReturnDate(new Date().toISOString().slice(0, 10))}${safeRemarks ? `\n<b>Remarks:</b> ${safeRemarks}` : ""}`,
+    ).catch((err) => console.error("laptop return channel telegram failed:", err?.message || err));
 
     invalidateAll();
 

@@ -1,10 +1,10 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { sendAdminTelegramAlert } from "@/lib/services/adminTelegram";
-import { sendTelegramMessage } from "@/lib/services/telegram";
+import { sendTelegramMessage, sendChannelMessage } from "@/lib/services/telegram";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { sendLoanModifiedEmail, sendLoanStatusEmail, sendLoanReturnEmail } from "@/lib/services/email";
-import { escapeHtml, isSafeHttpsUrl } from "@/lib/utils/html";
+import { escapeHtml } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -679,7 +679,7 @@ export async function POST(request, { params }) {
     const { data: loan, error: loanError } = await supabase
       .from("laptop_loan_requests")
       .select(
-        "*, users(id, email, display_name, mute_telegram, mute_emails), laptop_loan_items(laptop_id, laptops(name))",
+        "*, users(id, email, display_name, telegram_handle, mute_telegram, mute_emails), laptop_loan_items(laptop_id, laptops(name, cpu))",
       )
       .eq("id", id)
       .single();
@@ -880,16 +880,52 @@ export async function POST(request, { params }) {
     const safeLoanType = escapeHtml(loan.loan_type || "");
     const safeAdminNotes = admin_notes ? escapeHtml(admin_notes) : "";
 
+    const formatLoanDate = (dateStr) => {
+      if (!dateStr) return "N/A";
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return `${day} ${months[month - 1]} ${year}`;
+    };
+
+    const channelItems = loan.laptop_loan_items.map((item) => {
+      const name = escapeHtml(item.laptops?.name || "Unknown");
+      const cpu = item.laptops?.cpu ? ` (${escapeHtml(item.laptops.cpu)})` : "";
+      return `${name}${cpu}`;
+    });
+    const laptopLabel = channelItems.length > 1 ? "Laptops" : "Laptop";
+    const channelLaptopBlock = channelItems.length === 1
+      ? `<b>${laptopLabel}:</b> ${channelItems[0]}`
+      : `<b>${laptopLabel}:</b>\n${channelItems.map((l) => `• ${l}`).join("\n")}`;
+
+    const borrowerHandle = requester?.telegram_handle
+      ? `@${escapeHtml(requester.telegram_handle.replace(/^@/, ""))}`
+      : "no handle";
+    const safeDepartment = loan.department
+      ? `${escapeHtml(loan.department.toUpperCase())} Ministry`
+      : "N/A";
+    const safeRemarks = loan.remarks ? escapeHtml(loan.remarks) : "";
+    const datesLine = loan.end_date
+      ? `${formatLoanDate(loan.start_date)} → ${formatLoanDate(loan.end_date)}`
+      : formatLoanDate(loan.start_date);
+
     if (action === "approve") {
       sendAdminTelegramAlert(
         `💻 <b>Laptop Checked Out</b>\n<b>${adminActionActor}</b> approved laptop loan #${id}.\nBorrower: ${safeBorrower}\nLaptops: ${laptopList}\nPurpose: ${safePurpose}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
       ).catch((err) => console.error("laptop approve admin telegram failed:", err?.message || err));
+
+      sendChannelMessage(
+        `💻 <b>NEW LOAN</b>\n<i>Loaned to <b>${safeBorrower}</b> (${borrowerHandle}) from ${safeDepartment}</i>\n──────────────────\n<b>Loan ID:</b> #${id}\n\n${channelLaptopBlock}\n<b>Purpose:</b> ${safePurpose}\n<b>Dates:</b> ${datesLine}${safeRemarks ? `\n<b>Remarks:</b> ${safeRemarks}` : ""}`,
+      ).catch((err) => console.error("laptop approve channel telegram failed:", err?.message || err));
     }
 
     if (action === "return") {
       sendAdminTelegramAlert(
         `🔄 <b>Laptop Returned To Pool</b>\n<b>${adminActionActor}</b> marked laptop loan #${id} as returned.\nBorrower: ${safeBorrower}\nLaptops: ${laptopList}${safeAdminNotes ? `\nAdmin Notes: ${safeAdminNotes}` : ""}`,
       ).catch((err) => console.error("laptop return admin telegram failed:", err?.message || err));
+
+      sendChannelMessage(
+        `📥 <b>LAPTOP RETURNED</b>\n<i>Returned by <b>${safeBorrower}</b> (${borrowerHandle}) from ${safeDepartment}</i>\n──────────────────\n<b>Loan ID:</b> #${id}\n\n${channelLaptopBlock}\n<b>Return Date:</b> ${formatLoanDate(new Date().toISOString().slice(0, 10))}${safeAdminNotes ? `\n<b>Remarks:</b> ${safeAdminNotes}` : ""}`,
+      ).catch((err) => console.error("laptop return channel telegram failed:", err?.message || err));
     }
 
     if (requester) {
