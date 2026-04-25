@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/db/supabase";
 import { getCurrentUser } from "@/lib/utils/auth";
 import { sendLoanStatusEmail, sendLoanPendingEmail } from "@/lib/services/email";
-import { sendTelegramMessage } from "@/lib/services/telegram";
+import { sendTelegramMessage, sendChannelMessage } from "@/lib/services/telegram";
 import { isAppSettingEnabled } from "@/lib/utils/appSettings";
 import { getTodaySingaporeDateString } from "@/lib/utils/date";
 import { AUTO_APPROVE_ADMIN_NOTE } from "@/lib/constants";
@@ -448,7 +448,7 @@ export async function POST(request) {
 
   const { data: laptops } = await supabase
     .from("laptops")
-    .select("id, name, is_perm_loaned")
+    .select("id, name, cpu, is_perm_loaned")
     .in("id", allRequestedLaptopIds);
 
   const laptopMap = new Map(
@@ -609,7 +609,7 @@ export async function POST(request) {
 
     const { data: userRecord } = await supabase
       .from("users")
-      .select("email, display_name, mute_emails, mute_telegram")
+      .select("email, display_name, telegram_handle, mute_emails, mute_telegram")
       .eq("id", user.id)
       .single();
 
@@ -665,6 +665,41 @@ export async function POST(request) {
           ).catch((err) => console.error("laptop auto-approve admin telegram failed:", err?.message || err));
         }
       }
+    }
+
+    const fmtDate = (dateStr) => {
+      if (!dateStr) return null;
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return `${day} ${months[month - 1]} ${year}`;
+    };
+    const channelHandle = userRecord?.telegram_handle
+      ? `@${escapeHtml(userRecord.telegram_handle.replace(/^@/, ""))}`
+      : "no handle";
+    const channelDept = department?.trim()
+      ? `${escapeHtml(department.trim().toUpperCase())} Ministry`
+      : "N/A";
+
+    for (let i = 0; i < createdLoans.length; i++) {
+      const loan = createdLoans[i];
+      const group = normalizedGroups[i];
+      const groupItems = (group.laptop_ids || []).map((lid) => {
+        const l = laptopMap.get(String(lid));
+        const name = escapeHtml(l?.name || `Laptop ${lid}`);
+        const cpu = l?.cpu ? ` (${escapeHtml(l.cpu)})` : "";
+        return `${name}${cpu}`;
+      });
+      const laptopLabel = groupItems.length > 1 ? "Laptops" : "Laptop";
+      const laptopBlock = groupItems.length === 1
+        ? `<b>${laptopLabel}:</b> ${groupItems[0]}`
+        : `<b>${laptopLabel}:</b>\n${groupItems.map((l) => `• ${l}`).join("\n")}`;
+      const start = fmtDate(loan.start_date);
+      const end = fmtDate(loan.end_date);
+      const datesLine = end ? `${start} → ${end}` : start;
+
+      sendChannelMessage(
+        `💻 <b>NEW LOAN</b>\n<i>Loaned to <b>${requesterName}</b> (${channelHandle}) from ${channelDept}</i>\n──────────────────\n<b>Loan ID:</b> #${loan.id}\n\n${laptopBlock}\n<b>Purpose:</b> ${safePurpose}\n<b>Dates:</b> ${datesLine}${trimmedRemarks ? `\n<b>Remarks:</b> ${escapeHtml(trimmedRemarks)}` : ""}`,
+      ).catch((err) => console.error("laptop auto-approve channel telegram failed:", err?.message || err));
     }
   } else {
     const { data: userRecord } = await supabase

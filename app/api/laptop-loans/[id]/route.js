@@ -679,7 +679,7 @@ export async function POST(request, { params }) {
     const { data: loan, error: loanError } = await supabase
       .from("laptop_loan_requests")
       .select(
-        "*, users(id, email, display_name, telegram_handle, mute_telegram, mute_emails), laptop_loan_items(laptop_id, laptops(name, cpu))",
+        "*, users(id, email, display_name, mute_telegram, mute_emails), laptop_loan_items(laptop_id, laptops(name, cpu))",
       )
       .eq("id", id)
       .single();
@@ -897,8 +897,14 @@ export async function POST(request, { params }) {
       ? `<b>${laptopLabel}:</b> ${channelItems[0]}`
       : `<b>${laptopLabel}:</b>\n${channelItems.map((l) => `• ${l}`).join("\n")}`;
 
-    const borrowerHandle = requester?.telegram_handle
-      ? `@${escapeHtml(requester.telegram_handle.replace(/^@/, ""))}`
+    const { data: handleData } = await supabase
+      .from("users")
+      .select("telegram_handle")
+      .eq("id", requester?.id || loan.user_id)
+      .maybeSingle()
+      .catch(() => ({ data: null }));
+    const borrowerHandle = handleData?.telegram_handle
+      ? `@${escapeHtml(handleData.telegram_handle.replace(/^@/, ""))}`
       : "no handle";
     const safeDepartment = loan.department
       ? `${escapeHtml(loan.department.toUpperCase())} Ministry`
