@@ -609,9 +609,15 @@ export async function POST(request) {
 
     const { data: userRecord } = await supabase
       .from("users")
-      .select("email, display_name, telegram_handle, mute_emails, mute_telegram")
+      .select("email, display_name, mute_emails, mute_telegram")
       .eq("id", user.id)
       .single();
+
+    const { data: userHandleData } = await supabase
+      .from("users")
+      .select("telegram_handle")
+      .eq("id", user.id)
+      .maybeSingle();
 
     const itemsForEmail = allRequestedLaptopIds.map((laptopId) => ({
       item: laptopMap.get(String(laptopId))?.name || `Laptop ${laptopId}`,
@@ -673,8 +679,8 @@ export async function POST(request) {
       const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
       return `${day} ${months[month - 1]} ${year}`;
     };
-    const channelHandle = userRecord?.telegram_handle
-      ? `@${escapeHtml(userRecord.telegram_handle.replace(/^@/, ""))}`
+    const channelHandle = userHandleData?.telegram_handle
+      ? `@${escapeHtml(userHandleData.telegram_handle.replace(/^@/, ""))}`
       : "no handle";
     const channelDept = department?.trim()
       ? `${escapeHtml(department.trim().toUpperCase())} Ministry`
