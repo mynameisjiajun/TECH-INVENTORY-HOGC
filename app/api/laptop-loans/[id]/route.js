@@ -231,7 +231,7 @@ export async function PUT(request, { params }) {
 
     const { data: laptops, error: laptopsError } = await supabase
       .from("laptops")
-      .select("id, name, is_perm_loaned")
+      .select("id, name, cpu, is_perm_loaned")
       .in("id", normalizedLaptopIds);
 
     if (laptopsError) {
@@ -503,7 +503,7 @@ export async function PUT(request, { params }) {
         .from("users")
         .select("email, display_name, mute_emails")
         .eq("id", existingLoan.user_id)
-        .single();
+        .maybeSingle();
 
       await insertNotifications(
         [
@@ -563,7 +563,7 @@ export async function PUT(request, { params }) {
         .from("users")
         .select("email, display_name, mute_emails")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       const { data: admins, error: adminsError } = await supabase
         .from("users")
@@ -635,6 +635,64 @@ export async function PUT(request, { params }) {
           items: laptopItems,
         }).catch((err) => console.error("laptop-loans [id] route notification send failed:", err?.message || err));
       }
+    }
+
+    try {
+      const { data: borrowerForChannel } = await supabase
+        .from("users")
+        .select("display_name")
+        .eq("id", existingLoan.user_id)
+        .maybeSingle();
+
+      let channelBorrowerHandle = "no handle";
+      try {
+        const { data: handleData } = await supabase
+          .from("users")
+          .select("telegram_handle")
+          .eq("id", existingLoan.user_id)
+          .maybeSingle();
+        if (handleData?.telegram_handle) {
+          channelBorrowerHandle = `@${escapeHtml(handleData.telegram_handle.replace(/^@/, ""))}`;
+        }
+      } catch (_) {}
+
+      const formatModDate = (dateStr) => {
+        if (!dateStr) return "N/A";
+        const [year, month, day] = dateStr.split("-").map(Number);
+        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        return `${day} ${months[month - 1]} ${year}`;
+      };
+
+      const modChannelItems = (laptops || []).map((l) => {
+        const name = escapeHtml(l.name || "Unknown");
+        const cpu = l.cpu ? ` (${escapeHtml(l.cpu)})` : "";
+        return `${name}${cpu}`;
+      });
+      const modLaptopLabel = modChannelItems.length > 1 ? "Laptops" : "Laptop";
+      const modLaptopBlock = modChannelItems.length === 1
+        ? `<b>${modLaptopLabel}:</b> ${modChannelItems[0]}`
+        : `<b>${modLaptopLabel}:</b>\n${modChannelItems.map((l) => `• ${l}`).join("\n")}`;
+
+      const modBorrowerName = escapeHtml(borrowerForChannel?.display_name || "Unknown");
+      const modActor = escapeHtml(user.display_name || user.username || "Unknown");
+      const modDepartment = department?.trim()
+        ? `${escapeHtml(department.trim().toUpperCase())} Ministry`
+        : "N/A";
+      const modDatesLine = loan_type === "temporary" && end_date
+        ? `${formatModDate(start_date)} → ${formatModDate(end_date)}`
+        : formatModDate(start_date);
+      const modPurpose = escapeHtml(purpose?.trim() || "");
+      const modRemarks = remarks?.trim() ? escapeHtml(remarks.trim()) : "";
+
+      const actorLine = isAdminEditing
+        ? `Modified by admin <b>${modActor}</b> for <b>${modBorrowerName}</b> (${channelBorrowerHandle}) from ${modDepartment}`
+        : `Modified by <b>${modBorrowerName}</b> (${channelBorrowerHandle}) from ${modDepartment}`;
+
+      sendChannelMessage(
+        `📝 <b>LOAN MODIFIED</b>\n<i>${actorLine}</i>\n──────────────────\n<b>Loan ID:</b> #${id}\n\n${modLaptopBlock}\n<b>Purpose:</b> ${modPurpose}\n<b>Dates:</b> ${modDatesLine}${modRemarks ? `\n<b>Remarks:</b> ${modRemarks}` : ""}`,
+      ).catch((err) => console.error("laptop modify channel telegram failed:", err?.message || err));
+    } catch (channelErr) {
+      console.error("laptop modify channel message build failed:", channelErr?.message || channelErr);
     }
 
     return NextResponse.json(
@@ -897,15 +955,17 @@ export async function POST(request, { params }) {
       ? `<b>${laptopLabel}:</b> ${channelItems[0]}`
       : `<b>${laptopLabel}:</b>\n${channelItems.map((l) => `• ${l}`).join("\n")}`;
 
-    const { data: handleData } = await supabase
-      .from("users")
-      .select("telegram_handle")
-      .eq("id", requester?.id || loan.user_id)
-      .maybeSingle()
-      .catch(() => ({ data: null }));
-    const borrowerHandle = handleData?.telegram_handle
-      ? `@${escapeHtml(handleData.telegram_handle.replace(/^@/, ""))}`
-      : "no handle";
+    let borrowerHandle = "no handle";
+    try {
+      const { data: handleData } = await supabase
+        .from("users")
+        .select("telegram_handle")
+        .eq("id", requester?.id || loan.user_id)
+        .maybeSingle();
+      if (handleData?.telegram_handle) {
+        borrowerHandle = `@${escapeHtml(handleData.telegram_handle.replace(/^@/, ""))}`;
+      }
+    } catch (_) {}
     const safeDepartment = loan.department
       ? `${escapeHtml(loan.department.toUpperCase())} Ministry`
       : "N/A";

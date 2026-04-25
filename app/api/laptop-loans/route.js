@@ -613,11 +613,15 @@ export async function POST(request) {
       .eq("id", user.id)
       .single();
 
-    const { data: userHandleData } = await supabase
-      .from("users")
-      .select("telegram_handle")
-      .eq("id", user.id)
-      .maybeSingle();
+    let userHandleData = null;
+    try {
+      const { data: handleResult } = await supabase
+        .from("users")
+        .select("telegram_handle")
+        .eq("id", user.id)
+        .maybeSingle();
+      userHandleData = handleResult;
+    } catch (_) {}
 
     const itemsForEmail = allRequestedLaptopIds.map((laptopId) => ({
       item: laptopMap.get(String(laptopId))?.name || `Laptop ${laptopId}`,
