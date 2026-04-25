@@ -21,10 +21,10 @@ export async function GET() {
       .eq("read", false),
   ]);
 
-  return NextResponse.json({
-    notifications: notifications || [],
-    unreadCount: unreadCount || 0,
-  });
+  return NextResponse.json(
+    { notifications: notifications || [], unreadCount: unreadCount || 0 },
+    { headers: { "Cache-Control": "private, s-maxage=5, stale-while-revalidate=10" } },
+  );
 }
 
 export async function POST(request) {
@@ -41,16 +41,20 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-    await supabase
+    const { error } = await supabase
       .from("notifications")
       .update({ read: true })
       .eq("id", notification_id)
       .eq("user_id", user.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   } else if (action === "read_all") {
-    await supabase
+    const { error } = await supabase
       .from("notifications")
       .update({ read: true })
       .eq("user_id", user.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  } else {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true });

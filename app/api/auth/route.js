@@ -52,7 +52,7 @@ export async function POST(request) {
         .from("users")
         .select("id")
         .eq("username", normalizedUsername)
-        .single();
+        .maybeSingle();
       if (existing) {
         return NextResponse.json(
           { error: "Username already taken" },
@@ -130,7 +130,7 @@ export async function POST(request) {
         .from("users")
         .select("id, username, role, display_name, password_hash")
         .eq("username", normalizedUsername)
-        .single();
+        .maybeSingle();
 
       if (!user || !(await verifyPassword(password, user.password_hash))) {
         return NextResponse.json(

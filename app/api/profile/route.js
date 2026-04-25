@@ -181,7 +181,7 @@ export async function POST(request) {
       .from("users")
       .select("password_hash")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     if (!dbUser)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -214,7 +214,7 @@ export async function POST(request) {
       .from("users")
       .select("telegram_chat_id")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     if (!existing?.telegram_chat_id) {
       return NextResponse.json(

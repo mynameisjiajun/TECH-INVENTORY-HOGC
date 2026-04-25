@@ -97,7 +97,7 @@ async function handleStart(chatId, userId) {
     .from("users")
     .select("id, username, telegram_chat_id")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
   if (userError || !user) {
     return {
@@ -443,7 +443,7 @@ async function handleStatus(chatId, userId, loanIdStr) {
     .select(`*, users (display_name)`)
     .eq("id", loanId)
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
 
   if (!loan) {
     await reply(
@@ -578,7 +578,7 @@ export async function POST(request) {
       .from("users")
       .select("id, username")
       .eq("telegram_chat_id", String(chatId))
-      .single();
+      .maybeSingle();
 
     if (!user) {
       await reply(

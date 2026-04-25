@@ -134,7 +134,7 @@ export async function POST(request) {
       .from("users")
       .select("id, username")
       .eq("id", user_id)
-      .single();
+      .maybeSingle();
     if (!target)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -183,7 +183,7 @@ export async function POST(request) {
       .from("users")
       .select("id, username")
       .eq("id", user_id)
-      .single();
+      .maybeSingle();
     if (!target)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -224,7 +224,7 @@ export async function POST(request) {
       .from("users")
       .select("id, username")
       .eq("id", user_id)
-      .single();
+      .maybeSingle();
     if (!target)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -328,7 +328,7 @@ export async function POST(request) {
       .from("users")
       .select("id, username")
       .eq("id", user_id)
-      .single();
+      .maybeSingle();
     if (!target)
       return NextResponse.json({ error: "User not found" }, { status: 404 });
 

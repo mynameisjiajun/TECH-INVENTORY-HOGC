@@ -1,7 +1,7 @@
 import { getDb, startSyncIfNeeded, waitForSync } from "@/lib/db/db";
 import { supabase } from "@/lib/db/supabase";
 import { syncAuthoritativeStockToSheets } from "@/lib/services/inventorySheetSync";
-import { sendTelegramMessage } from "@/lib/services/telegram";
+import { sendTelegramMessage, sendChannelMessage } from "@/lib/services/telegram";
 import { invalidateAll } from "@/lib/utils/cache";
 import { escapeHtml, isSafeHttpsUrl } from "@/lib/utils/html";
 import { NextResponse } from "next/server";
@@ -37,7 +37,7 @@ export async function POST(request) {
       .from("guest_borrow_requests")
       .select("*")
       .eq("id", db_id)
-      .single();
+      .maybeSingle();
 
     if (fetchError || !requestRow) {
       return NextResponse.json(
@@ -46,9 +46,9 @@ export async function POST(request) {
       );
     }
 
-    const rowName = (requestRow.guest_name || "").toLowerCase();
-    const rowHandle = (requestRow.telegram_handle || "").toLowerCase();
-    if (!rowName.includes(identifier) && !rowHandle.includes(identifier)) {
+    const rowName = (requestRow.guest_name || "").trim().toLowerCase();
+    const rowHandle = (requestRow.telegram_handle || "").trim().toLowerCase();
+    if (rowName !== identifier && rowHandle !== identifier) {
       return NextResponse.json(
         { error: "You do not have permission to return this loan" },
         { status: 403 },
@@ -136,6 +136,10 @@ export async function POST(request) {
       invalidateAll();
     } catch (stockErr) {
       console.error("Guest return: failed to restore stock:", stockErr);
+      // Loan is already marked returned but stock wasn't restored — alert admins
+      sendChannelMessage(
+        `⚠️ <b>Stock Sync Failed</b>\nGuest loan #${db_id} (${escapeHtml(requestRow.guest_name || "Unknown")}) was marked returned but inventory stock could not be restored.\n\nManual stock correction required.\nError: ${escapeHtml(stockErr?.message || String(stockErr))}`,
+      ).catch(() => {});
     }
 
     // Notify admins via Telegram

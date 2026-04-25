@@ -296,21 +296,21 @@ export async function POST(request, { params }) {
       context: "user laptop return receipt",
     });
 
-    const { data: loanUserRecord } = await supabase
-      .from("users")
-      .select("email, display_name, mute_emails")
-      .eq("id", loan.user_id)
-      .maybeSingle();
-
-    let loanUserHandleData = null;
-    try {
-      const { data: handleResult } = await supabase
+    const [{ data: loanUserRecord }, loanUserHandleData] = await Promise.all([
+      supabase
+        .from("users")
+        .select("email, display_name, mute_emails")
+        .eq("id", loan.user_id)
+        .maybeSingle()
+        .then(({ data }) => ({ data })),
+      supabase
         .from("users")
         .select("telegram_handle")
         .eq("id", loan.user_id)
-        .maybeSingle();
-      loanUserHandleData = handleResult;
-    } catch (_) {}
+        .maybeSingle()
+        .then(({ data }) => data)
+        .catch(() => null),
+    ]);
 
     if (loanUserRecord?.email && !loanUserRecord?.mute_emails) {
       sendLoanReturnEmail({

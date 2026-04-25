@@ -332,15 +332,18 @@ export async function GET(request) {
     }
   }
 
-  return NextResponse.json({
-    loans,
-    pagination: {
-      page,
-      limit,
-      total: count || 0,
-      hasMore: offset + loans.length < (count || 0),
+  return NextResponse.json(
+    {
+      loans,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        hasMore: offset + loans.length < (count || 0),
+      },
     },
-  });
+    { headers: { "Cache-Control": "private, s-maxage=10, stale-while-revalidate=20" } },
+  );
 }
 
 export async function POST(request) {
@@ -607,21 +610,21 @@ export async function POST(request) {
       details: `Auto-approved ${createdLoans.length} laptop loan request(s) at submission by global setting.`,
     });
 
-    const { data: userRecord } = await supabase
-      .from("users")
-      .select("email, display_name, mute_emails, mute_telegram")
-      .eq("id", user.id)
-      .single();
-
-    let userHandleData = null;
-    try {
-      const { data: handleResult } = await supabase
+    const [{ data: userRecord }, userHandleData] = await Promise.all([
+      supabase
+        .from("users")
+        .select("email, display_name, mute_emails, mute_telegram")
+        .eq("id", user.id)
+        .maybeSingle()
+        .then(({ data }) => ({ data })),
+      supabase
         .from("users")
         .select("telegram_handle")
         .eq("id", user.id)
-        .maybeSingle();
-      userHandleData = handleResult;
-    } catch (_) {}
+        .maybeSingle()
+        .then(({ data }) => data)
+        .catch(() => null),
+    ]);
 
     const itemsForEmail = allRequestedLaptopIds.map((laptopId) => ({
       item: laptopMap.get(String(laptopId))?.name || `Laptop ${laptopId}`,
@@ -712,17 +715,17 @@ export async function POST(request) {
       ).catch((err) => console.error("laptop auto-approve channel telegram failed:", err?.message || err));
     }
   } else {
-    const { data: userRecord } = await supabase
-      .from("users")
-      .select("email, display_name, mute_emails, mute_telegram")
-      .eq("id", user.id)
-      .single();
-
-    // Notify admins
-    const { data: admins } = await supabase
-      .from("users")
-      .select("id, mute_telegram")
-      .eq("role", "admin");
+    const [{ data: userRecord }, { data: admins }] = await Promise.all([
+      supabase
+        .from("users")
+        .select("email, display_name, mute_emails, mute_telegram")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("users")
+        .select("id, mute_telegram")
+        .eq("role", "admin"),
+    ]);
 
     if (admins?.length) {
       await supabase.from("notifications").insert(

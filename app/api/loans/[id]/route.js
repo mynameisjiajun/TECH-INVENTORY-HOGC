@@ -781,7 +781,7 @@ export async function PUT(request, { params }) {
         .from("users")
         .select("email, display_name, mute_emails")
         .eq("id", existingLoan.user_id)
-        .single();
+        .maybeSingle();
 
       await insertRowsBestEffort({
         client: supabase,
@@ -841,16 +841,17 @@ export async function PUT(request, { params }) {
         context: "loan audit log",
       });
     } else {
-      const { data: userRecord } = await supabase
-        .from("users")
-        .select("email, display_name, mute_emails")
-        .eq("id", user.id)
-        .single();
-
-      const { data: admins } = await supabase
-        .from("users")
-        .select("id, mute_telegram")
-        .eq("role", "admin");
+      const [{ data: userRecord }, { data: admins }] = await Promise.all([
+        supabase
+          .from("users")
+          .select("email, display_name, mute_emails")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("users")
+          .select("id, mute_telegram")
+          .eq("role", "admin"),
+      ]);
 
       const adminLoanMsg = autoApproveLoans
         ? `${user.display_name} modified and auto-approved their ${loan_type} loan #${loanId}.`

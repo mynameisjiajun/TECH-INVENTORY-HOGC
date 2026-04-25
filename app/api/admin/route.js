@@ -123,7 +123,7 @@ export async function POST(request) {
       // Batch fetch all loan items
       const { data: allBulkItems } = await supabase
         .from("loan_items")
-        .select("loan_request_id, sheet_row, quantity")
+        .select("loan_request_id, sheet_row, item_name, quantity")
         .in("loan_request_id", validLoanIds);
 
       const itemsByLoan = new Map();
@@ -515,7 +515,7 @@ export async function POST(request) {
       .from("loan_requests")
       .select(TECH_LOAN_ADMIN_FIELDS)
       .eq("id", loan_id)
-      .single();
+      .maybeSingle();
 
     if (!loan) {
       return NextResponse.json({ error: "Loan not found" }, { status: 404 });
@@ -696,7 +696,7 @@ export async function POST(request) {
           "email, display_name, telegram_chat_id, mute_emails, mute_telegram",
         )
         .eq("id", loan.user_id)
-        .single();
+        .maybeSingle();
       const backgroundTasks = [];
       if (loanUser?.email && !loanUser?.mute_emails) {
         backgroundTasks.push(
@@ -802,7 +802,7 @@ export async function POST(request) {
           "email, display_name, telegram_chat_id, mute_emails, mute_telegram",
         )
         .eq("id", loan.user_id)
-        .single();
+        .maybeSingle();
       const { data: rejectItems } = await supabase
         .from("loan_items")
         .select("item_name, quantity")
@@ -862,7 +862,7 @@ export async function POST(request) {
           .from("users")
           .select("display_name, email, mute_emails")
           .eq("id", loan.user_id)
-          .single(),
+          .maybeSingle(),
       ]);
 
       const returnChanges = [];
@@ -1034,7 +1034,7 @@ async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
     .from("guest_borrow_requests")
     .select("*")
     .eq("id", loan_id)
-    .single();
+    .maybeSingle();
 
   if (reqErr) {
     console.error("Guest request fetch error:", reqErr);
@@ -1135,8 +1135,25 @@ async function handleGuestAction({ db, action, loan_id, admin_notes, user }) {
   }
 
   if (action === "delete") {
+    const restoreChanges = [];
+    if (request.status === "approved") {
+      const techItems = (request.items || []).filter(i => i.source === "tech" || !i.source);
+      for (const li of techItems) {
+        if (!li.sheet_row && !li.item_id) continue;
+        const si = li.sheet_row
+          ? db.prepare("SELECT id, sheet_row FROM storage_items WHERE sheet_row = ?").get(li.sheet_row)
+          : db.prepare("SELECT id, sheet_row FROM storage_items WHERE id = ?").get(li.item_id);
+        if (si) {
+          db.prepare("UPDATE storage_items SET current = current + ? WHERE id = ?").run(li.quantity, si.id);
+          restoreChanges.push({ sheetRow: si.sheet_row, delta: li.quantity });
+        }
+      }
+    }
+
     await supabase.from("guest_borrow_requests").delete().eq("id", loan_id);
-    await supabase.from("audit_log").insert({ user_id: user.id, action: "delete", target_type: "guest_request", target_id: loan_id, details: "Deleted guest request" });
+    await supabase.from("audit_log").insert({ user_id: user.id, action: "delete", target_type: "guest_request", target_id: loan_id, details: `Deleted guest request (was ${request.status})` });
+
+    if (restoreChanges.length > 0) await syncAuthoritativeStockToSheets(db, restoreChanges);
     invalidateAll();
     return NextResponse.json({ message: "Guest request deleted" });
   }

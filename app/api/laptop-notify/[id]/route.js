@@ -18,10 +18,19 @@ export async function POST(request, { params }) {
     .maybeSingle();
 
   if (existing) {
-    await supabase.from("laptop_notifications").delete().eq("id", existing.id);
+    const { error: deleteError } = await supabase
+      .from("laptop_notifications")
+      .delete()
+      .eq("id", existing.id);
+    if (deleteError)
+      return NextResponse.json({ error: "Failed to remove notification" }, { status: 500 });
     return NextResponse.json({ subscribed: false, message: "Notification removed" });
   }
 
-  await supabase.from("laptop_notifications").insert({ user_id: user.id, laptop_id: id });
+  const { error: insertError } = await supabase
+    .from("laptop_notifications")
+    .insert({ user_id: user.id, laptop_id: id });
+  if (insertError)
+    return NextResponse.json({ error: "Failed to set notification" }, { status: 500 });
   return NextResponse.json({ subscribed: true, message: "You'll be notified when this laptop is available" });
 }

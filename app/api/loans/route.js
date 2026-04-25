@@ -537,7 +537,7 @@ export async function POST(request) {
         .from("users")
         .select("email, display_name, mute_emails, mute_telegram")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       const itemListStr = resolvedItems
         .map((i) => `${escapeHtml(i.item_name)} × ${i.quantity}`)

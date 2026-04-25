@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
       .from("loan_requests")
       .select("return_photo_url, user_id")
       .eq("id", id)
-      .single();
+      .maybeSingle();
 
     if (!loan || !loan.return_photo_url) {
       return NextResponse.json({ error: "Photo not found" }, { status: 404 });

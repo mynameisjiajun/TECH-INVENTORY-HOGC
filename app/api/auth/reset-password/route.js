@@ -43,7 +43,7 @@ export async function POST(request) {
         .from("users")
         .select("id, username, display_name, email, password_hash")
         .eq("username", normalizedUsername)
-        .single();
+        .maybeSingle();
 
       // Don't reveal whether the user exists
       if (!user || !user.email) {
@@ -97,7 +97,7 @@ export async function POST(request) {
         .select("id, password_hash")
         .eq("id", claims.id)
         .eq("username", claims.username)
-        .single();
+        .maybeSingle();
 
       if (!user) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });

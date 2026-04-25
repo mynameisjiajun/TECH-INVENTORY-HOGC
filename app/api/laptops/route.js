@@ -148,7 +148,10 @@ export async function GET(request) {
     .sort((a, b) => (a.return_date > b.return_date ? 1 : -1))
     .slice(0, 10);
 
-  return NextResponse.json({ tiers: tiersWithLaptops, returningSoon });
+  return NextResponse.json(
+    { tiers: tiersWithLaptops, returningSoon },
+    { headers: { "Cache-Control": "private, s-maxage=20, stale-while-revalidate=40" } },
+  );
 }
 
 export async function POST(request) {

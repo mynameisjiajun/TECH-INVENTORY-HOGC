@@ -638,23 +638,25 @@ export async function PUT(request, { params }) {
     }
 
     try {
-      const { data: borrowerForChannel } = await supabase
-        .from("users")
-        .select("display_name")
-        .eq("id", existingLoan.user_id)
-        .maybeSingle();
-
-      let channelBorrowerHandle = "no handle";
-      try {
-        const { data: handleData } = await supabase
+      const [{ data: borrowerForChannel }, channelHandleData] = await Promise.all([
+        supabase
+          .from("users")
+          .select("display_name")
+          .eq("id", existingLoan.user_id)
+          .maybeSingle()
+          .then(({ data }) => ({ data })),
+        supabase
           .from("users")
           .select("telegram_handle")
           .eq("id", existingLoan.user_id)
-          .maybeSingle();
-        if (handleData?.telegram_handle) {
-          channelBorrowerHandle = `@${escapeHtml(handleData.telegram_handle.replace(/^@/, ""))}`;
-        }
-      } catch (_) {}
+          .maybeSingle()
+          .then(({ data }) => data)
+          .catch(() => null),
+      ]);
+
+      const channelBorrowerHandle = channelHandleData?.telegram_handle
+        ? `@${escapeHtml(channelHandleData.telegram_handle.replace(/^@/, ""))}`
+        : "no handle";
 
       const formatModDate = (dateStr) => {
         if (!dateStr) return "N/A";
@@ -1053,8 +1055,9 @@ export async function POST(request, { params }) {
       }
     }
 
+    const actionPast = action === "approve" ? "approved" : action === "reject" ? "rejected" : "returned";
     return NextResponse.json(
-      withWarnings({ message: `Loan ${action}d successfully` }, warnings),
+      withWarnings({ message: `Loan ${actionPast} successfully` }, warnings),
     );
   } catch (error) {
     return NextResponse.json(

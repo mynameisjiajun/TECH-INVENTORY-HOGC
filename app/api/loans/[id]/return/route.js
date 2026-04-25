@@ -309,7 +309,7 @@ export async function POST(request, { params }) {
         .from("users")
         .select("display_name, username")
         .eq("id", loan.user_id)
-        .single(),
+        .maybeSingle(),
       supabase.from("users").select("id").eq("role", "admin"),
     ]);
 
@@ -399,7 +399,7 @@ export async function POST(request, { params }) {
         .from("users")
         .select("email, mute_emails")
         .eq("id", loan.user_id)
-        .single();
+        .maybeSingle();
       if (loanUserFull?.email && !loanUserFull?.mute_emails) {
         sendLoanReturnEmail({
           to: loanUserFull.email,

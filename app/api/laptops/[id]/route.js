@@ -29,11 +29,14 @@ export async function PUT(request, { params }) {
     updateData.perm_loan_reason = is_perm_loaned ? (perm_loan_reason || null) : null;
   }
 
-  const { data: existingLaptop } = await supabase
+  const { data: existingLaptop, error: fetchError } = await supabase
     .from("laptops")
     .select("id, name, is_perm_loaned, perm_loan_person, perm_loan_reason")
     .eq("id", id)
-    .single();
+    .maybeSingle();
+
+  if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  if (!existingLaptop) return NextResponse.json({ error: "Laptop not found" }, { status: 404 });
 
   const { data, error } = await supabase
     .from("laptops")
