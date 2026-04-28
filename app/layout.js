@@ -7,6 +7,7 @@ import "./styles/mobile.css";
 import { AuthProvider } from "@/lib/context/AuthContext";
 import { CartProvider } from "@/lib/context/CartContext";
 import { ToastProvider } from "@/lib/context/ToastContext";
+import DevSwitcher from "@/components/DevSwitcher";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -185,6 +186,7 @@ export default async function RootLayout({ children }) {
           <CartProvider>
             <ToastProvider>{children}</ToastProvider>
           </CartProvider>
+          {process.env.NODE_ENV !== "production" && <DevSwitcher />}
         </AuthProvider>
         <script
           dangerouslySetInnerHTML={{
